@@ -15,6 +15,12 @@ variable "enable_compute" {
   default     = false
 }
 
+variable "os" {
+  type        = string
+  description = "OS image to use when enable_compute=true. Supported: debian12, al2023."
+  default     = "debian12"
+}
+
 variable "instance_type" {
   type        = string
   description = "EC2 instance type."

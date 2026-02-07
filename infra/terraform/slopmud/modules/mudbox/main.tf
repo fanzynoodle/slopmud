@@ -11,13 +11,37 @@ data "aws_subnets" "default" {
   }
 }
 
-data "aws_ssm_parameter" "ami" {
-  # AL2023 x86_64
+data "aws_ami" "debian12" {
+  count = var.os == "debian12" ? 1 : 0
+
+  most_recent = true
+  owners      = ["136693071363"] # Debian
+
+  filter {
+    name   = "name"
+    values = ["debian-12-amd64-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
+  }
+}
+
+data "aws_ssm_parameter" "al2023_ami" {
+  count = var.os == "al2023" ? 1 : 0
+
   name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
 }
 
 locals {
   subnet_ids = sort(data.aws_subnets.default.ids)
+  ami_id     = var.os == "al2023" ? data.aws_ssm_parameter.al2023_ami[0].value : data.aws_ami.debian12[0].id
   tags = {
     ManagedBy = "terraform"
     Stack     = var.name_prefix
@@ -125,7 +149,7 @@ resource "aws_key_pair" "this" {
 resource "aws_instance" "this" {
   count = var.enable_compute ? 1 : 0
 
-  ami                         = data.aws_ssm_parameter.ami.value
+  ami                         = local.ami_id
   instance_type               = var.instance_type
   subnet_id                   = element(local.subnet_ids, 0)
   vpc_security_group_ids      = [aws_security_group.this[0].id]
