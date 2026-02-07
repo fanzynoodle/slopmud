@@ -79,7 +79,6 @@ resource "aws_instance" "spot" {
   vpc_security_group_ids      = [aws_security_group.this.id]
   iam_instance_profile        = aws_iam_instance_profile.ssm.name
   associate_public_ip_address = var.associate_public_ip_address
-  instance_initiated_shutdown_behavior = "terminate"
 
   instance_market_options {
     market_type = "spot"

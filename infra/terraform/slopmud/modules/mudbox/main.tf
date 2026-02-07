@@ -157,8 +157,6 @@ resource "aws_instance" "this" {
   associate_public_ip_address = var.associate_public_ip_address
   key_name                    = var.ssh_public_key_path != "" ? aws_key_pair.this[0].key_name : null
 
-  instance_initiated_shutdown_behavior = "terminate"
-
   instance_market_options {
     market_type = "spot"
 
@@ -194,15 +192,16 @@ resource "aws_route53_zone" "this" {
 
 locals {
   hosted_zone_id = var.create_hosted_zone ? aws_route53_zone.this[0].zone_id : null
-  effective_cname_target = var.cname_target != "" ? var.cname_target : try(aws_instance.this[0].public_dns, "")
 }
 
 resource "aws_route53_record" "mud_cname" {
-  count = var.create_hosted_zone && local.effective_cname_target != "" ? 1 : 0
+  # Count cannot depend on resource attributes. If compute is enabled, we create the record
+  # and let the target resolve to the instance's public DNS after apply.
+  count = var.create_hosted_zone && (var.enable_compute || var.cname_target != "") ? 1 : 0
 
   zone_id = local.hosted_zone_id
   name    = "${var.record_name}.${trim(var.zone_name, ".")}"
   type    = "CNAME"
   ttl     = 60
-  records = [local.effective_cname_target]
+  records = [var.cname_target != "" ? var.cname_target : aws_instance.this[0].public_dns]
 }

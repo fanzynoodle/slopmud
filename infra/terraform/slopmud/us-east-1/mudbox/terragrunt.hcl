@@ -8,7 +8,8 @@ terraform {
 
 inputs = {
   name_prefix    = "mudbox"
-  enable_compute = false
+  enable_compute = true
+  os             = "debian12"
   instance_type  = "t3a.small"
   spot_max_price = ""
 
