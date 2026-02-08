@@ -17,7 +17,6 @@ NOTE:
   Must run as root (use sudo). Intended to be callable by the GitHub Actions runner user
   via a narrow sudoers rule.
 EOF
-  exit 2
 }
 
 if [[ "${EUID:-$(id -u)}" != "0" ]]; then
@@ -38,25 +37,32 @@ while [[ $# -gt 0 ]]; do
     --from-file)
       from_file="${2:-}"; shift 2 ;;
     -h|--help)
-      usage ;;
+      usage
+      exit 0
+      ;;
     *)
       echo "ERROR: unknown arg: $1" >&2
-      usage ;;
+      usage
+      exit 2
+      ;;
   esac
 done
 
 if [[ -z "$env_name" ]]; then
   echo "ERROR: --env is required" >&2
   usage
+  exit 2
 fi
 
 if [[ -n "$from_s3" && -n "$from_file" ]]; then
   echo "ERROR: choose only one of --from-s3 or --from-file" >&2
   usage
+  exit 2
 fi
 if [[ -z "$from_s3" && -z "$from_file" ]]; then
   echo "ERROR: one of --from-s3 or --from-file is required" >&2
   usage
+  exit 2
 fi
 
 case "$env_name" in
