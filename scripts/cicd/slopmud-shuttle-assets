@@ -134,8 +134,8 @@ if ! id -u slopmud >/dev/null 2>&1; then
   useradd --system --home /opt/slopmud --create-home --shell /usr/sbin/nologin slopmud
 fi
 
-install -d -m 0755 /opt/slopmud /opt/slopmud/bin
-chown -R slopmud:slopmud /opt/slopmud
+install -d -m 0755 /opt/slopmud /opt/slopmud/bin /opt/slopmud/assets
+chown slopmud:slopmud /opt/slopmud
 
 echo "Installing binary -> ${bin_dst}"
 install -m 0755 -o root -g root "$bin_src" "$bin_dst"
