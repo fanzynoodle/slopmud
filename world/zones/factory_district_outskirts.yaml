@@ -1,0 +1,93 @@
+version: 1
+zone_id: factory_district_outskirts
+zone_name: "Factory District (Outskirts)"
+
+area_id: A01
+level_band: [7, 10]
+target_rooms: 120
+
+anchor:
+  x: 15
+  y: 6
+
+# Global cartesian bounds for planning and validation only.
+bounds:
+  min:
+    x: 13
+    y: 4
+  max:
+    x: 18
+    y: 10
+
+clusters:
+  - id: CL_FACTORY_GATE
+    rooms: 20
+  - id: CL_FACTORY_SWITCHROOM
+    rooms: 10
+  - id: CL_FACTORY_CONVEYORS
+    rooms: 40
+  - id: CL_FACTORY_FOUNDRY
+    rooms: 30
+  - id: CL_FACTORY_FOREMAN_ARENA
+    rooms: 20
+
+portals:
+  - id: P_FACTORY_LIBRARY
+    cluster: CL_FACTORY_GATE
+  - id: P_FACTORY_RESERVOIR
+    cluster: CL_FACTORY_GATE
+  - id: P_FACTORY_UNDERRAIL
+    cluster: CL_FACTORY_SWITCHROOM
+
+protoadventures:
+  - q7-conveyor-war
+
+hubs:
+  - HUB_FACTORY_SWITCHROOM
+
+cluster_edges:
+  - a: CL_FACTORY_GATE
+    b: CL_FACTORY_SWITCHROOM
+    kind: spine
+  - a: CL_FACTORY_SWITCHROOM
+    b: CL_FACTORY_CONVEYORS
+    kind: spine
+  - a: CL_FACTORY_CONVEYORS
+    b: CL_FACTORY_FOUNDRY
+    kind: spine
+  - a: CL_FACTORY_FOUNDRY
+    b: CL_FACTORY_FOREMAN_ARENA
+    kind: gate
+    gate: q.q7_conveyor_war.lines_disabled>=3
+
+key_rooms:
+  - id: R_FAC_GATE_01
+    cluster: CL_FACTORY_GATE
+    proto: q7-conveyor-war
+    tags: [portal.P_FACTORY_LIBRARY, portal.P_FACTORY_RESERVOIR]
+  - id: R_FAC_SWITCH_01
+    cluster: CL_FACTORY_SWITCHROOM
+    proto: q7-conveyor-war
+    tags: [HUB_FACTORY_SWITCHROOM, portal.P_FACTORY_UNDERRAIL]
+  - id: R_FAC_LINE1_01
+    cluster: CL_FACTORY_CONVEYORS
+    proto: q7-conveyor-war
+    tags: [setpiece.q7.line_shutdown_1]
+  - id: R_FAC_LINE2_01
+    cluster: CL_FACTORY_CONVEYORS
+    proto: q7-conveyor-war
+    tags: [setpiece.q7.line_shutdown_2]
+  - id: R_FAC_LINE3_01
+    cluster: CL_FACTORY_CONVEYORS
+    proto: q7-conveyor-war
+    tags: [setpiece.q7.line_shutdown_3]
+  - id: R_FAC_FOUNDRY_01
+    cluster: CL_FACTORY_FOUNDRY
+    proto: q7-conveyor-war
+  - id: R_FAC_ARENA_01
+    cluster: CL_FACTORY_FOREMAN_ARENA
+    proto: q7-conveyor-war
+    tags: [setpiece.q7.foreman_clank_arena]
+
+notes:
+  - "Factory navigation needs a consistent signage grammar (line IDs, color bands, arrows)."

@@ -1,0 +1,86 @@
+version: 1
+zone_id: the_reservoir
+zone_name: "The Reservoir"
+
+area_id: A01
+level_band: [8, 11]
+target_rooms: 110
+
+anchor:
+  x: 15
+  y: 9
+
+# Global cartesian bounds for planning and validation only.
+bounds:
+  min:
+    x: 13
+    y: 6
+  max:
+    x: 19
+    y: 12
+
+clusters:
+  - id: CL_RES_PUMP_STATION
+    rooms: 10
+  - id: CL_RES_SHORES
+    rooms: 30
+  - id: CL_RES_TUNNELS
+    rooms: 30
+  - id: CL_RES_CONTROL_NODES
+    rooms: 20
+  - id: CL_RES_FLOW_REGULATOR
+    rooms: 20
+
+portals:
+  - id: P_RESERVOIR_LIBRARY
+    cluster: CL_RES_SHORES
+  - id: P_RESERVOIR_FACTORY
+    cluster: CL_RES_SHORES
+  - id: P_RESERVOIR_UNDERRAIL
+    cluster: CL_RES_TUNNELS
+
+protoadventures:
+  - q8-flow-treaty
+
+hubs:
+  - HUB_RES_PUMP_STATION
+
+cluster_edges:
+  - a: CL_RES_PUMP_STATION
+    b: CL_RES_SHORES
+    kind: spine
+  - a: CL_RES_SHORES
+    b: CL_RES_TUNNELS
+    kind: loop
+  - a: CL_RES_SHORES
+    b: CL_RES_CONTROL_NODES
+    kind: setpiece
+  - a: CL_RES_CONTROL_NODES
+    b: CL_RES_FLOW_REGULATOR
+    kind: gate
+    gate: q.q8_flow_treaty.controls_restored>=3
+
+key_rooms:
+  - id: R_RES_PUMP_01
+    cluster: CL_RES_PUMP_STATION
+    proto: q8-flow-treaty
+    tags: [HUB_RES_PUMP_STATION]
+  - id: R_RES_SHORE_01
+    cluster: CL_RES_SHORES
+    proto: q8-flow-treaty
+    tags: [portal.P_RESERVOIR_LIBRARY, portal.P_RESERVOIR_FACTORY]
+  - id: R_RES_TUNNEL_01
+    cluster: CL_RES_TUNNELS
+    proto: q8-flow-treaty
+    tags: [portal.P_RESERVOIR_UNDERRAIL]
+  - id: R_RES_NODE1_01
+    cluster: CL_RES_CONTROL_NODES
+    proto: q8-flow-treaty
+    tags: [setpiece.q8.control_node_1]
+  - id: R_RES_REG_CHAMBER_01
+    cluster: CL_RES_FLOW_REGULATOR
+    proto: q8-flow-treaty
+    tags: [setpiece.q8.flow_regulator_chamber]
+
+notes:
+  - "Shore fights should have clear cover pockets; tunnels punish sloppy pulls."

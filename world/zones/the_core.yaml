@@ -1,0 +1,74 @@
+version: 1
+zone_id: the_core
+zone_name: "The Core"
+
+area_id: A01
+level_band: [15, 17]
+target_rooms: 150
+
+anchor:
+  x: 30
+  y: 7
+
+# Global cartesian bounds for planning and validation only.
+bounds:
+  min:
+    x: 35
+    y: 5
+  max:
+    x: 40
+    y: 9
+
+clusters:
+  - id: CL_CORE_GATE_RING
+    rooms: 15
+  - id: CL_CORE_APPROACH
+    rooms: 35
+  - id: CL_CORE_INNERWORKS
+    rooms: 50
+  - id: CL_CORE_AUDITOR_ARENA
+    rooms: 50
+
+portals:
+  - id: P_CORE_GARDENS
+    cluster: CL_CORE_GATE_RING
+  - id: P_CORE_SEAM
+    cluster: CL_CORE_GATE_RING
+
+protoadventures:
+  - q13-heart-of-the-machine
+
+hubs:
+  - HUB_CORE_GATE
+
+cluster_edges:
+  - a: CL_CORE_GATE_RING
+    b: CL_CORE_APPROACH
+    kind: spine
+  - a: CL_CORE_APPROACH
+    b: CL_CORE_INNERWORKS
+    kind: spine
+  - a: CL_CORE_INNERWORKS
+    b: CL_CORE_AUDITOR_ARENA
+    kind: gate
+    gate: q.q13_heart_machine.locks>=3
+
+key_rooms:
+  - id: R_CORE_GATE_01
+    cluster: CL_CORE_GATE_RING
+    proto: q13-heart-of-the-machine
+    tags: [HUB_CORE_GATE, portal.P_CORE_GARDENS, portal.P_CORE_SEAM]
+  - id: R_CORE_APPROACH_01
+    cluster: CL_CORE_APPROACH
+    proto: q13-heart-of-the-machine
+  - id: R_CORE_LOCK_1_01
+    cluster: CL_CORE_INNERWORKS
+    proto: q13-heart-of-the-machine
+    tags: [setpiece.q13.lock_1_precision]
+  - id: R_CORE_AUDITOR_01
+    cluster: CL_CORE_AUDITOR_ARENA
+    proto: q13-heart-of-the-machine
+    tags: [setpiece.q13.core_auditor_arena]
+
+notes:
+  - "Core is a coordination exam: safe-square language and reset pockets must be consistent."

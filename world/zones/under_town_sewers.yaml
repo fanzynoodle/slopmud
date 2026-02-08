@@ -1,0 +1,122 @@
+version: 1
+zone_id: under_town_sewers
+zone_name: "Under-Town Sewers"
+
+area_id: A01
+level_band: [3, 4]
+target_rooms: 110
+
+anchor:
+  x: 3
+  y: 3
+
+# Global cartesian bounds for planning and validation only.
+bounds:
+  min:
+    x: 0
+    y: -1
+  max:
+    x: 6
+    y: 5
+
+clusters:
+  - id: CL_SEWERS_ENTRY
+    rooms: 15
+  - id: CL_SEWERS_JUNCTION
+    rooms: 20
+  - id: CL_SEWERS_VALVE_RUN
+    rooms: 35
+  - id: CL_SEWERS_SLUDGE_LOOPS
+    rooms: 20
+  - id: CL_SEWERS_GREASE_KING
+    rooms: 20
+
+portals:
+  - id: P_SEWERS_TOWN
+    cluster: CL_SEWERS_ENTRY
+  - id: P_SEWERS_MEADOW
+    cluster: CL_SEWERS_ENTRY
+  - id: P_SEWERS_ORCHARD
+    cluster: CL_SEWERS_ENTRY
+  - id: P_SEWERS_QUARRY
+    cluster: CL_SEWERS_JUNCTION
+    gate: gate.sewers.shortcut_to_quarry
+    note: "Visible, but sealed until Q3 unlocks the shortcut."
+
+protoadventures:
+  - q3-sewer-valves
+  - side-sewer-drone-rescue
+notes:
+  - "Junction is the stable routing hub: show valve progress + clear signposts."
+  - "Entry should converge quickly from Town/Meadow/Orchard portals to reduce aimless wandering."
+  - "Sludge loops are optional grind + status hazard; include at least one explicit safe pocket."
+
+hubs:
+  - HUB_SEWERS_JUNCTION
+
+# Planning hint: how clusters connect inside the zone.
+# This is not an engine schema yet; it is used to keep authoring consistent.
+cluster_edges:
+  - a: CL_SEWERS_ENTRY
+    b: CL_SEWERS_JUNCTION
+    kind: spine
+    note: "Main tunnel; surface portals should funnel here quickly."
+  - a: CL_SEWERS_JUNCTION
+    b: CL_SEWERS_VALVE_RUN
+    kind: spokes
+    note: "Three short valve spokes; each returns to the junction safe pocket."
+  - a: CL_SEWERS_JUNCTION
+    b: CL_SEWERS_SLUDGE_LOOPS
+    kind: loop
+    note: "Optional grind/reset loop with status hazards; side-drone-rescue lives here."
+  - a: CL_SEWERS_JUNCTION
+    b: CL_SEWERS_GREASE_KING
+    kind: gate
+    gate: q.q3_sewer_valves.valves_opened>=3
+    note: "Boss path sealed until valves are complete."
+
+# Planning hint: stable room IDs we already use in protoadventures.
+key_rooms:
+  - id: R_SEW_ENTRY_01
+    cluster: CL_SEWERS_ENTRY
+    proto: q3-sewer-valves
+    tags: [portal.P_SEWERS_TOWN]
+    note: "Town maintenance entry landing; readable signage back to Town."
+  - id: R_SEW_JUNC_01
+    cluster: CL_SEWERS_JUNCTION
+    proto: q3-sewer-valves
+    tags: [HUB_SEWERS_JUNCTION]
+    note: "Safe pocket. Must show valve counter + which spokes remain."
+  - id: R_SEW_VALVE1_02
+    cluster: CL_SEWERS_VALVE_RUN
+    proto: q3-sewer-valves
+    tags: [setpiece.q3.valve_room_1]
+  - id: R_SEW_VALVE2_02
+    cluster: CL_SEWERS_VALVE_RUN
+    proto: q3-sewer-valves
+    tags: [setpiece.q3.valve_room_2]
+  - id: R_SEW_VALVE3_02
+    cluster: CL_SEWERS_VALVE_RUN
+    proto: q3-sewer-valves
+    tags: [setpiece.q3.valve_room_3]
+  - id: R_SEW_BOSS_02
+    cluster: CL_SEWERS_GREASE_KING
+    proto: q3-sewer-valves
+    tags: [setpiece.q3.grease_king_arena]
+  - id: R_SEW_SHORTCUT_01
+    cluster: CL_SEWERS_JUNCTION
+    proto: q3-sewer-valves
+    tags: [gate.sewers.shortcut_to_quarry]
+    note: "Shortcut tunnel to the Quarry portal; sealed until unlocked."
+  - id: R_SEW_WING_02
+    cluster: CL_SEWERS_SLUDGE_LOOPS
+    proto: side-sewer-drone-rescue
+    tags: [setpiece.side.drone_extract]
+  - id: R_SEW_SAFE_01
+    cluster: CL_SEWERS_SLUDGE_LOOPS
+    proto: side-sewer-drone-rescue
+    tags: [safe_pocket]
+  - id: R_SEW_KEYCARD_DOOR_01
+    cluster: CL_SEWERS_SLUDGE_LOOPS
+    proto: side-sewer-drone-rescue
+    tags: [setpiece.side.keycard_shortcut]

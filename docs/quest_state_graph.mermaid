@@ -1,0 +1,263 @@
+flowchart TD
+  %% Quest state graph (high-level). States are stable IDs; transitions label which state key changes.
+  %%
+  %% Legend:
+  %% - Q#_* nodes are quest states (named states).
+  %% - HUB_* nodes are shared world "graph points" that map to actual room clusters.
+  %% - gate.* keys unlock travel and area access.
+
+  %% Shared hubs (real places in A01)
+  HUB_NS_ORIENTATION[HUB: Newbie School Orientation Wing]
+  HUB_NS_LABS[HUB: Newbie School Combat Labs]
+  HUB_TOWN_GATE[HUB: Town Gaia Gate]
+  HUB_TOWN_JOB_BOARD[HUB: Town Job Board]
+  HUB_TOWN_MAINT[HUB: Town Maintenance Office]
+  HUB_SEWERS_JUNCTION[HUB: Sewers Junction]
+  HUB_QUARRY_FOREMAN[HUB: Quarry Foreman Shack]
+  HUB_CHECKPOINT_GATEHOUSE[HUB: Old Road Checkpoint Gatehouse]
+  HUB_HILLFORT_COMMAND[HUB: Hillfort Command Bunker]
+  HUB_RAIL_TERMINAL[HUB: Rail Spur Terminal Shed]
+  HUB_RUSTWOOD_RANGER[HUB: Rustwood Ranger Camp]
+  HUB_LIB_ANTECHAMBER[HUB: Sunken Library Antechamber]
+  HUB_FACTORY_SWITCHROOM[HUB: Factory Switchroom]
+  HUB_RES_PUMP_STATION[HUB: Reservoir Pump Station]
+  HUB_UNDERRAIL_PLATFORM[HUB: Underrail Platform]
+  HUB_SKYBRIDGE_ANCHORHOUSE[HUB: Skybridge Anchorhouse]
+  HUB_WASTES_OUTPOST[HUB: Glass Wastes Outpost]
+  HUB_GARDENS_GREENHOUSE[HUB: Crater Gardens Greenhouse]
+  HUB_CORE_GATE[HUB: The Core Gate Ring]
+  HUB_SEAM_EDGE[HUB: Seam Edge Station]
+
+  %% ---------------- Q1 ----------------
+  subgraph Q1[Q1: First Day on Gaia]
+    Q1_UNSTARTED[q.q1_first_day.state=unstarted]
+    Q1_ORIENTATION[q.q1_first_day.state=orientation]
+    Q1_BADGE[q.q1_first_day.state=badge]
+    Q1_VERBS[q.q1_first_day.state=verbs]
+    Q1_COMBAT[q.q1_first_day.state=combat]
+    Q1_TOWN_PASS[q.q1_first_day.state=town_pass]
+    Q1_DONE[q.q1_first_day.state=complete]
+  end
+
+  Q1_UNSTARTED -->|talk instructor| HUB_NS_ORIENTATION
+  HUB_NS_ORIENTATION -->|set state=orientation| Q1_ORIENTATION
+  Q1_ORIENTATION -->|issue badge| Q1_BADGE
+  Q1_BADGE -->|complete verb drills| Q1_VERBS
+  Q1_VERBS -->|enter labs| HUB_NS_LABS
+  HUB_NS_LABS -->|set state=combat| Q1_COMBAT
+  Q1_COMBAT -->|reach town| HUB_TOWN_GATE
+  HUB_TOWN_GATE -->|set state=town_pass| Q1_TOWN_PASS
+  Q1_TOWN_PASS -->|pick kit, accept rules| Q1_DONE
+
+  %% ---------------- Q2 ----------------
+  subgraph Q2[Q2: The Job Board Never Sleeps]
+    Q2_UNSTARTED[q.q2_job_board.state=unstarted]
+    Q2_C1[q.q2_job_board.state=contract_1]
+    Q2_C2[q.q2_job_board.state=contract_2]
+    Q2_C3[q.q2_job_board.state=contract_3]
+    Q2_CHOICE[q.q2_job_board.state=choice]
+    Q2_REPEAT[q.q2_job_board.state=repeatables]
+    Q2_DONE[q.q2_job_board.state=complete]
+  end
+
+  Q1_DONE -->|arrive town| HUB_TOWN_JOB_BOARD
+  HUB_TOWN_JOB_BOARD -->|accept| Q2_C1
+  Q2_C1 -->|contracts_done=1| Q2_C2
+  Q2_C2 -->|contracts_done=2| Q2_C3
+  Q2_C3 -->|contracts_done=3| Q2_CHOICE
+  Q2_CHOICE -->|set faction=civic| Q2_REPEAT
+  Q2_CHOICE -->|set faction=industrial| Q2_REPEAT
+  Q2_CHOICE -->|set faction=green| Q2_REPEAT
+  Q2_REPEAT -->|repeatables_unlocked=1| Q2_DONE
+
+  %% ---------------- Q3 ----------------
+  subgraph Q3[Q3: Sewer Valves]
+    Q3_UNSTARTED[q.q3_sewer_valves.state=unstarted]
+    Q3_VALVES[q.q3_sewer_valves.state=valves]
+    Q3_BOSS[q.q3_sewer_valves.state=boss]
+    Q3_RESOLVED[q.q3_sewer_valves.state=resolved]
+    Q3_DONE[q.q3_sewer_valves.state=complete]
+  end
+
+  Q2_DONE -->|gate.sewers.entry=1| HUB_TOWN_MAINT
+  HUB_TOWN_MAINT -->|accept| Q3_VALVES
+  Q3_VALVES -->|valves_opened=3| HUB_SEWERS_JUNCTION
+  HUB_SEWERS_JUNCTION -->|trigger boss| Q3_BOSS
+  Q3_BOSS -->|defeat Grease King| Q3_RESOLVED
+  Q3_RESOLVED -->|gate.sewers.shortcut_to_quarry=1| Q3_DONE
+
+  %% ---------------- Q4 ----------------
+  subgraph Q4[Q4: Quarry Rights]
+    Q4_UNSTARTED[q.q4_quarry_rights.state=unstarted]
+    Q4_CLEAR[q.q4_quarry_rights.state=clear_dig]
+    Q4_CHOICE[q.q4_quarry_rights.state=choice]
+    Q4_ELITE[q.q4_quarry_rights.state=elite]
+    Q4_DONE[q.q4_quarry_rights.state=complete]
+  end
+
+  Q2_DONE -->|gate.quarry.entry=1| HUB_QUARRY_FOREMAN
+  Q3_DONE -->|shortcut open| HUB_QUARRY_FOREMAN
+  HUB_QUARRY_FOREMAN -->|accept| Q4_CLEAR
+  Q4_CLEAR -->|illegal_dig_cleared=1| Q4_CHOICE
+  Q4_CHOICE -->|side=union| Q4_ELITE
+  Q4_CHOICE -->|side=foreman| Q4_ELITE
+  Q4_ELITE -->|defeat Breaker-7| HUB_CHECKPOINT_GATEHOUSE
+  HUB_CHECKPOINT_GATEHOUSE -->|gate.checkpoint.access=1| Q4_DONE
+
+  %% ---------------- Q5 ----------------
+  subgraph Q5[Q5: The Sunken Index]
+    Q5_UNSTARTED[q.q5_sunken_index.state=unstarted]
+    Q5_PLATES[q.q5_sunken_index.state=plates]
+    Q5_DECODE[q.q5_sunken_index.state=decode]
+    Q5_CHOICE[q.q5_sunken_index.state=choose_unlock]
+    Q5_DONE[q.q5_sunken_index.state=complete]
+  end
+
+  Q4_DONE -->|travel unlocked| HUB_LIB_ANTECHAMBER
+  HUB_LIB_ANTECHAMBER -->|accept| Q5_PLATES
+  Q5_PLATES -->|plates=4| Q5_DECODE
+  Q5_DECODE -->|decoded=1| Q5_CHOICE
+  Q5_CHOICE -->|first_unlock=factory, gate.factory.entry=1| Q5_DONE
+  Q5_CHOICE -->|first_unlock=reservoir, gate.reservoir.entry=1| Q5_DONE
+
+  %% ---------------- Q6 ----------------
+  subgraph Q6[Q6: Hillfort Signal]
+    Q6_UNSTARTED[q.q6_hillfort_signal.state=unstarted]
+    Q6_ENTER[q.q6_hillfort_signal.state=enter]
+    Q6_PYLONS[q.q6_hillfort_signal.state=pylons]
+    Q6_BOSS[q.q6_hillfort_signal.state=boss]
+    Q6_RESOLVED[q.q6_hillfort_signal.state=resolved]
+    Q6_DONE[q.q6_hillfort_signal.state=complete]
+  end
+
+  Q4_DONE -->|optional patrol| HUB_HILLFORT_COMMAND
+  HUB_HILLFORT_COMMAND -->|accept| Q6_ENTER
+  Q6_ENTER -->|light pylons| Q6_PYLONS
+  Q6_PYLONS -->|pylons_lit=3| Q6_BOSS
+  Q6_BOSS -->|defeat Banner-Eater| Q6_RESOLVED
+  Q6_RESOLVED -->|gate.hillfort.safehouse=1| Q6_DONE
+  Q6_DONE -->|gate.rail_spur.pass=1| HUB_RAIL_TERMINAL
+
+  %% ---------------- Q7 ----------------
+  subgraph Q7[Q7: Conveyor War (Factory)]
+    Q7_UNSTARTED[q.q7_conveyor_war.state=unstarted]
+    Q7_ENTRY[q.q7_conveyor_war.state=entry]
+    Q7_SHUTDOWN[q.q7_conveyor_war.state=shutdown]
+    Q7_BOSS[q.q7_conveyor_war.state=boss]
+    Q7_DONE[q.q7_conveyor_war.state=complete]
+  end
+
+  Q5_DONE -->|if gate.factory.entry=1| HUB_FACTORY_SWITCHROOM
+  HUB_FACTORY_SWITCHROOM -->|accept| Q7_ENTRY
+  Q7_ENTRY -->|lines_disabled=3| Q7_SHUTDOWN
+  Q7_SHUTDOWN -->|enter arena| Q7_BOSS
+  Q7_BOSS -->|defeat Foreman Clank| Q7_DONE
+  Q7_DONE -->|gate.underrail.entry=1| HUB_UNDERRAIL_PLATFORM
+
+  %% ---------------- Q8 ----------------
+  subgraph Q8[Q8: Flow Treaty (Reservoir)]
+    Q8_UNSTARTED[q.q8_flow_treaty.state=unstarted]
+    Q8_ENTRY[q.q8_flow_treaty.state=entry]
+    Q8_CONTROLS[q.q8_flow_treaty.state=controls]
+    Q8_BOSS[q.q8_flow_treaty.state=boss]
+    Q8_DONE[q.q8_flow_treaty.state=complete]
+  end
+
+  Q5_DONE -->|if gate.reservoir.entry=1| HUB_RES_PUMP_STATION
+  HUB_RES_PUMP_STATION -->|accept| Q8_ENTRY
+  Q8_ENTRY -->|controls_restored=3| Q8_CONTROLS
+  Q8_CONTROLS -->|enter chamber| Q8_BOSS
+  Q8_BOSS -->|defeat Flow Regulator| Q8_DONE
+  Q8_DONE -->|gate.underrail.entry=1| HUB_UNDERRAIL_PLATFORM
+
+  %% ---------------- Q9 ----------------
+  subgraph Q9[Q9: Beacon Protocol (Underrail)]
+    Q9_UNSTARTED[q.q9_beacon_protocol.state=unstarted]
+    Q9_PLATFORM[q.q9_beacon_protocol.state=platform]
+    Q9_BEACONS[q.q9_beacon_protocol.state=beacons]
+    Q9_BOSS[q.q9_beacon_protocol.state=boss]
+    Q9_DONE[q.q9_beacon_protocol.state=complete]
+  end
+
+  HUB_UNDERRAIL_PLATFORM -->|accept| Q9_PLATFORM
+  Q9_PLATFORM -->|enter tunnels| Q9_BEACONS
+  Q9_BEACONS -->|beacons_lit=4| Q9_BOSS
+  Q9_BOSS -->|defeat Platform Warden| Q9_DONE
+  Q9_DONE -->|gate.skybridge.entry=1| HUB_SKYBRIDGE_ANCHORHOUSE
+
+  %% ---------------- Q10 ----------------
+  subgraph Q10[Q10: Anchor the Wind (Skybridge)]
+    Q10_UNSTARTED[q.q10_anchor_wind.state=unstarted]
+    Q10_ANCHORS[q.q10_anchor_wind.state=anchors]
+    Q10_RESCUE[q.q10_anchor_wind.state=rescue]
+    Q10_BOSS[q.q10_anchor_wind.state=boss]
+    Q10_DONE[q.q10_anchor_wind.state=complete]
+  end
+
+  HUB_SKYBRIDGE_ANCHORHOUSE -->|accept| Q10_ANCHORS
+  Q10_ANCHORS -->|anchors_calibrated=3| Q10_RESCUE
+  Q10_RESCUE -->|rescue complete| Q10_BOSS
+  Q10_BOSS -->|defeat Wind Marshal| Q10_DONE
+  Q10_DONE -->|gate.glass_wastes.entry=1| HUB_WASTES_OUTPOST
+
+  %% ---------------- Q11 ----------------
+  subgraph Q11[Q11: Stormglass Route (Glass Wastes)]
+    Q11_UNSTARTED[q.q11_stormglass_route.state=unstarted]
+    Q11_OUTPOST[q.q11_stormglass_route.state=outpost]
+    Q11_WAYPOINTS[q.q11_stormglass_route.state=waypoints]
+    Q11_STORM[q.q11_stormglass_route.state=storm]
+    Q11_DONE[q.q11_stormglass_route.state=complete]
+  end
+
+  HUB_WASTES_OUTPOST -->|accept| Q11_OUTPOST
+  Q11_OUTPOST -->|mark route| Q11_WAYPOINTS
+  Q11_WAYPOINTS -->|waypoints_marked=3| Q11_STORM
+  Q11_STORM -->|survive storm| Q11_DONE
+  Q11_DONE -->|gate.crater_gardens.entry=1| HUB_GARDENS_GREENHOUSE
+
+  %% ---------------- Q12 ----------------
+  subgraph Q12[Q12: Bloom Contract (Crater Gardens)]
+    Q12_UNSTARTED[q.q12_bloom_contract.state=unstarted]
+    Q12_SAMPLES[q.q12_bloom_contract.state=samples]
+    Q12_CHOICE[q.q12_bloom_contract.state=choice]
+    Q12_BOSS[q.q12_bloom_contract.state=boss]
+    Q12_DONE[q.q12_bloom_contract.state=complete]
+  end
+
+  HUB_GARDENS_GREENHOUSE -->|accept| Q12_SAMPLES
+  Q12_SAMPLES -->|samples=3| Q12_CHOICE
+  Q12_CHOICE -->|side=green| Q12_BOSS
+  Q12_CHOICE -->|side=industrial| Q12_BOSS
+  Q12_BOSS -->|defeat Root Engine| Q12_DONE
+  Q12_DONE -->|gate.core.entry=1| HUB_CORE_GATE
+
+  %% ---------------- Q13 ----------------
+  subgraph Q13[Q13: Heart of the Machine (Core)]
+    Q13_UNSTARTED[q.q13_heart_machine.state=unstarted]
+    Q13_KEYPIECES[q.q13_heart_machine.state=keypieces]
+    Q13_GATE[q.q13_heart_machine.state=gate]
+    Q13_BOSS[q.q13_heart_machine.state=boss]
+    Q13_DONE[q.q13_heart_machine.state=complete]
+  end
+
+  HUB_CORE_GATE -->|accept| Q13_KEYPIECES
+  Q13_KEYPIECES -->|keypieces=3| Q13_GATE
+  Q13_GATE -->|open ring| Q13_BOSS
+  Q13_BOSS -->|defeat Core Auditor| Q13_DONE
+  Q13_DONE -->|gate.seam.entry=1| HUB_SEAM_EDGE
+
+  %% ---------------- Q14 ----------------
+  subgraph Q14[Q14: Stabilize the Boundary (Seam)]
+    Q14_UNSTARTED[q.q14_stabilize_boundary.state=unstarted]
+    Q14_RIFTS[q.q14_stabilize_boundary.state=rifts]
+    Q14_CHOICE[q.q14_stabilize_boundary.state=choice]
+    Q14_FINAL[q.q14_stabilize_boundary.state=final]
+    Q14_DONE[q.q14_stabilize_boundary.state=complete]
+  end
+
+  HUB_SEAM_EDGE -->|accept| Q14_RIFTS
+  Q14_RIFTS -->|rifts=4| Q14_CHOICE
+  Q14_CHOICE -->|reinforce=red_shift| Q14_FINAL
+  Q14_CHOICE -->|reinforce=blue_noise| Q14_FINAL
+  Q14_CHOICE -->|reinforce=glass_choir| Q14_FINAL
+  Q14_FINAL -->|stabilizer online| Q14_DONE

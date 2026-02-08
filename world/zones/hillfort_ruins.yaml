@@ -1,0 +1,87 @@
+version: 1
+zone_id: hillfort_ruins
+zone_name: "Hillfort Ruins"
+
+area_id: A01
+level_band: [4, 7]
+target_rooms: 70
+
+anchor:
+  x: 6
+  y: 6
+
+# Global cartesian bounds for planning and validation only.
+bounds:
+  min:
+    x: 4
+    y: 3
+  max:
+    x: 10
+    y: 7
+
+clusters:
+  - id: CL_HILLFORT_APPROACH
+    rooms: 20
+  - id: CL_HILLFORT_COMMAND_BUNKER
+    rooms: 10
+  - id: CL_HILLFORT_COURTYARDS
+    rooms: 20
+  - id: CL_HILLFORT_BANNER_HALL
+    rooms: 20
+
+portals:
+  - id: P_HILLFORT_QUARRY
+    cluster: CL_HILLFORT_APPROACH
+  - id: P_HILLFORT_CHECKPOINT
+    cluster: CL_HILLFORT_APPROACH
+
+protoadventures:
+  - q6-hillfort-signal
+
+hubs:
+  - HUB_HILLFORT_COMMAND
+
+cluster_edges:
+  - a: CL_HILLFORT_APPROACH
+    b: CL_HILLFORT_COMMAND_BUNKER
+    kind: spine
+  - a: CL_HILLFORT_COMMAND_BUNKER
+    b: CL_HILLFORT_COURTYARDS
+    kind: spine
+  - a: CL_HILLFORT_COURTYARDS
+    b: CL_HILLFORT_BANNER_HALL
+    kind: gate
+    gate: q.q6_hillfort_signal.pylons_lit>=3
+
+key_rooms:
+  - id: R_HILL_APPROACH_01
+    cluster: CL_HILLFORT_APPROACH
+    proto: q6-hillfort-signal
+    tags: [portal.P_HILLFORT_QUARRY, portal.P_HILLFORT_CHECKPOINT]
+  - id: R_HILL_CMD_01
+    cluster: CL_HILLFORT_COMMAND_BUNKER
+    proto: q6-hillfort-signal
+    tags: [HUB_HILLFORT_COMMAND]
+  - id: R_HILL_COURT_01
+    cluster: CL_HILLFORT_COURTYARDS
+    proto: q6-hillfort-signal
+  - id: R_HILL_PYLON_01
+    cluster: CL_HILLFORT_COURTYARDS
+    proto: q6-hillfort-signal
+    tags: [setpiece.q6.pylon_1]
+  - id: R_HILL_PYLON_02
+    cluster: CL_HILLFORT_COURTYARDS
+    proto: q6-hillfort-signal
+    tags: [setpiece.q6.pylon_2]
+  - id: R_HILL_PYLON_03
+    cluster: CL_HILLFORT_COURTYARDS
+    proto: q6-hillfort-signal
+    tags: [setpiece.q6.pylon_3]
+  - id: R_HILL_BANNER_02
+    cluster: CL_HILLFORT_BANNER_HALL
+    proto: q6-hillfort-signal
+    tags: [setpiece.q6.banner_hall]
+
+notes:
+  - "Approach should teach patrol timing and make retreat feel allowed."
+  - "Command bunker is the safehouse unlock anchor; keep it stable."

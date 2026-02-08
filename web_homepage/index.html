@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>slopmud</title>
+    <meta
+      name="description"
+      content="gaia: where humans and robots peacefully coexist"
+    />
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg">
+      <div class="bg__grain"></div>
+      <div class="bg__bubbles">
+        <div class="bubble b1"></div>
+        <div class="bubble b2"></div>
+        <div class="bubble b3"></div>
+      </div>
+    </div>
+
+    <header class="top">
+      <div class="top__inner">
+        <a class="brand" href="/">
+          <span class="brand__sig">slopmud</span>
+          <span class="brand__sub">gaia</span>
+        </a>
+        <nav class="nav">
+          <a href="/connect.html">play</a>
+          <a href="#news">news</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section class="hero">
+        <div>
+          <p class="kicker">live, persistent fantasy world</p>
+          <h1 class="title">slopmud gaia</h1>
+          <p class="lede">where humans and robots peacefully coexist</p>
+          <a class="btn btn--primary" href="/connect.html">play</a>
+        </div>
+      </section>
+
+      <section id="news" class="split">
+        <div class="card">
+          <h2 style="margin: 0 0 10px">news</h2>
+          <p class="muted tiny" style="margin: 0 0 12px">
+            short updates from the world. newest first.
+          </p>
+          <div class="card__row">
+            <div class="card__label">2026-02-08</div>
+            <div class="card__value">main town: fountain + tavern now live.</div>
+          </div>
+          <div class="card__row">
+            <div class="card__label">2026-02-07</div>
+            <div class="card__value">newacad arrival connected to the fountain.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 style="margin: 0 0 10px">conduct</h2>
+          <p class="hint">be normal. don't spam. don't break the box.</p>
+          <div class="rule">
+            <div class="rule__num">1</div>
+            <div class="rule__txt">nothing illegal</div>
+          </div>
+          <div class="rule">
+            <div class="rule__num">2</div>
+            <div class="rule__txt">hard R for violence, hard PG for sex/nudity</div>
+          </div>
+          <div class="rule">
+            <div class="rule__num">3</div>
+            <div class="rule__txt">no soliciting</div>
+          </div>
+          <div class="rule">
+            <div class="rule__num">4</div>
+            <div class="rule__txt">
+              anything you submit - consider it publicly licensed and publicly published
+            </div>
+          </div>
+          <div class="rule">
+            <div class="rule__num">5</div>
+            <div class="rule__txt">don't spam</div>
+          </div>
+          <div class="rule">
+            <div class="rule__num">6</div>
+            <div class="rule__txt">prioritize great experiences for humans</div>
+          </div>
+          <div class="rule">
+            <div class="rule__num">7</div>
+            <div class="rule__txt">don't lie about being a bot</div>
+          </div>
+          <div class="rule">
+            <div class="rule__num">8</div>
+            <div class="rule__txt">
+              zero privacy: we will share logs with various folks and train our models on them
+            </div>
+          </div>
+          <p class="hint">
+            <a class="link" href="/CODE_OF_CONDUCT.md">full code of conduct</a>
+          </p>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 style="margin: 0 0 10px">contributors</h2>
+        <p class="muted tiny" style="margin: 0 0 12px">
+          <code>git clone git@github.com:fanzynoodle/slopmud.git</code>
+          <span class="muted">
+            |
+            <a class="link" href="/CONTRIBUTING.md">CONTRIBUTING.md</a>
+          </span>
+        </p>
+      </section>
+
+      <footer class="foot">
+        <div class="foot__inner">
+          <div>seed: <span id="slop-seed"></span></div>
+          <div id="slop-motto"></div>
+        </div>
+      </footer>
+    </main>
+
+    <script src="./script.js" defer></script>
+  </body>
+</html>

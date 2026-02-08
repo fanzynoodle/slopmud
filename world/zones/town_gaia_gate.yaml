@@ -1,0 +1,117 @@
+version: 1
+zone_id: town_gaia_gate
+zone_name: "Town: Gaia Gate"
+
+area_id: A01
+level_band: [1, 4]
+target_rooms: 120
+
+anchor:
+  x: 0
+  y: 0
+
+# Global cartesian bounds for planning and validation only.
+bounds:
+  min:
+    x: -2
+    y: -2
+  max:
+    x: 3
+    y: 3
+
+clusters:
+  - id: CL_TOWN_GATE_PLAZA
+    rooms: 20
+  - id: CL_TOWN_JOB_BOARD
+    rooms: 10
+  - id: CL_TOWN_MARKET_ROW
+    rooms: 20
+  - id: CL_TOWN_BANK_CLINIC
+    rooms: 20
+  - id: CL_TOWN_MAINT_OFFICE
+    rooms: 10
+  - id: CL_TOWN_ALLEYS
+    rooms: 20
+  - id: CL_TOWN_EDGE
+    rooms: 20
+
+portals:
+  - id: P_TOWN_NS
+    cluster: CL_TOWN_GATE_PLAZA
+  - id: P_TOWN_MEADOW
+    cluster: CL_TOWN_EDGE
+  - id: P_TOWN_ORCHARD
+    cluster: CL_TOWN_EDGE
+  - id: P_TOWN_SEWERS
+    cluster: CL_TOWN_MAINT_OFFICE
+
+protoadventures:
+  - q1-first-day-on-gaia
+  - q2-job-board-never-sleeps
+  - q3-sewer-valves
+  - side-alley-fence
+
+cluster_edges:
+  - a: CL_TOWN_GATE_PLAZA
+    b: CL_TOWN_JOB_BOARD
+  - a: CL_TOWN_GATE_PLAZA
+    b: CL_TOWN_MARKET_ROW
+  - a: CL_TOWN_GATE_PLAZA
+    b: CL_TOWN_EDGE
+  - a: CL_TOWN_JOB_BOARD
+    b: CL_TOWN_MARKET_ROW
+  - a: CL_TOWN_JOB_BOARD
+    b: CL_TOWN_ALLEYS
+  - a: CL_TOWN_MARKET_ROW
+    b: CL_TOWN_BANK_CLINIC
+  - a: CL_TOWN_MARKET_ROW
+    b: CL_TOWN_ALLEYS
+  - a: CL_TOWN_ALLEYS
+    b: CL_TOWN_MAINT_OFFICE
+  - a: CL_TOWN_ALLEYS
+    b: CL_TOWN_EDGE
+  - a: CL_TOWN_MAINT_OFFICE
+    b: CL_TOWN_EDGE
+
+key_rooms:
+  - id: R_TOWN_GATE_01
+    cluster: CL_TOWN_GATE_PLAZA
+    proto: q1-first-day-on-gaia
+    tags: [HUB_TOWN_GATE]
+  - id: R_TOWN_GATE_02
+    cluster: CL_TOWN_GATE_PLAZA
+    proto: q1-first-day-on-gaia
+  - id: R_TOWN_JOBBOARD_TEASER
+    cluster: CL_TOWN_JOB_BOARD
+    proto: q1-first-day-on-gaia
+  - id: R_TOWN_JOB_01
+    cluster: CL_TOWN_JOB_BOARD
+    proto: q2-job-board-never-sleeps
+    tags: [HUB_TOWN_JOB_BOARD]
+  - id: R_TOWN_MARKET_01
+    cluster: CL_TOWN_MARKET_ROW
+    proto: q2-job-board-never-sleeps
+  - id: R_TOWN_CLINIC_01
+    cluster: CL_TOWN_BANK_CLINIC
+    proto: q2-job-board-never-sleeps
+  - id: R_TOWN_MAINT_01
+    cluster: CL_TOWN_MAINT_OFFICE
+    proto: q3-sewer-valves
+    tags: [HUB_TOWN_MAINT]
+  - id: R_TOWN_ALLEY_01
+    cluster: CL_TOWN_ALLEYS
+    proto: q2-job-board-never-sleeps
+  - id: R_TOWN_ALLEY_02
+    cluster: CL_TOWN_ALLEYS
+    proto: q2-job-board-never-sleeps
+  - id: R_TOWN_EDGE_01
+    cluster: CL_TOWN_EDGE
+    proto: q2-job-board-never-sleeps
+  - id: R_TOWN_FENCE_BACKROOM_01
+    cluster: CL_TOWN_ALLEYS
+    proto: side-alley-fence
+
+notes:
+  - "Gate Plaza should be the shortest path to Job Board + Market Row (new players follow landmarks, not maps)."
+  - "Edge gates should be loud: show which exits are live (Meadow/Orchard) vs blocked (future areas)."
+  - "Maintenance Office is the sewer access hub; place it adjacent to alleys (shady) and edge (service routes)."

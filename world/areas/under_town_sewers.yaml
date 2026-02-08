@@ -1,0 +1,315 @@
+version: 1
+zone_id: under_town_sewers
+zone_name: "Under-Town Sewers"
+area_id: A01
+level_band: [3, 4]
+
+# Not a player spawn zone, but set for reachability warnings in validation.
+start_room: P_SEWERS_TOWN
+
+rooms:
+  # ---------------- CL_SEWERS_ENTRY (15 rooms) ----------------
+  - id: P_SEWERS_TOWN
+    name: "Town Maintenance Ladder"
+    cluster: CL_SEWERS_ENTRY
+    tags: [portal.P_SEWERS_TOWN]
+    desc: |
+      A rusted ladder rises into the maintenance office above.
+      Fresh paint stripes and bolted arrows point deeper into the tunnels.
+    exits:
+      - { dir: up, to: P_TOWN_SEWERS, len: 1 }
+      - { dir: down, to: R_SEW_ENTRY_01, len: 1 }
+
+  - id: P_SEWERS_MEADOW
+    name: "Meadowline Grate"
+    cluster: CL_SEWERS_ENTRY
+    tags: [portal.P_SEWERS_MEADOW]
+    desc: |
+      A low grate lets in grass-scented air.
+      Water trickles along the channel, and every sound turns into an echo.
+    exits:
+      - { dir: up, to: P_MEADOW_SEWERS, len: 1 }
+      - { dir: down, to: R_SEW_ENTRY_02, len: 1 }
+
+  - id: P_SEWERS_ORCHARD
+    name: "Orchard Pipeway"
+    cluster: CL_SEWERS_ENTRY
+    tags: [portal.P_SEWERS_ORCHARD]
+    desc: |
+      A tilted pipeway hums under the roots.
+      The air smells faintly of coolant and wet metal.
+    exits:
+      - { dir: up, to: P_ORCHARD_SEWERS, len: 1 }
+      - { dir: down, to: R_SEW_ENTRY_03, len: 1 }
+
+  - id: R_SEW_ENTRY_01
+    name: "Wet Concrete Landing"
+    cluster: CL_SEWERS_ENTRY
+    tags: [portal.P_SEWERS_TOWN]
+    desc: |
+      The ladder ends on slick concrete. A maintenance placard reads:
+      "JUNCTION: KEEP MOVING. DON'T PANIC."
+    exits:
+      - { dir: up, to: P_SEWERS_TOWN, len: 1 }
+      - { dir: east, to: R_SEW_ENTRY_02, len: 1 }
+
+  - id: R_SEW_ENTRY_02
+    name: "Painted Arrow Fork"
+    cluster: CL_SEWERS_ENTRY
+    desc: |
+      Painted arrows and bolted signage point toward the junction.
+      Side channels breathe warm air like something is waiting.
+    exits:
+      - { dir: west, to: R_SEW_ENTRY_01, len: 1 }
+      - { dir: east, to: R_SEW_ENTRY_03, len: 1 }
+      - { dir: up, to: P_SEWERS_MEADOW, len: 1 }
+      - { dir: junction, to: R_SEW_JUNC_01, len: 1 }
+
+  - id: R_SEW_ENTRY_03
+    name: "Cable-Root Channel"
+    cluster: CL_SEWERS_ENTRY
+    tags: [portal.P_SEWERS_ORCHARD]
+    desc: |
+      Loose cabling vanishes into the dark beneath tangled roots.
+      The floor slopes down toward the junction, wet with runoff.
+    exits:
+      - { dir: up, to: P_SEWERS_ORCHARD, len: 1 }
+      - { dir: west, to: R_SEW_ENTRY_02, len: 1 }
+
+  # ---------------- CL_SEWERS_JUNCTION (20 rooms) ----------------
+  - id: R_SEW_JUNC_01
+    name: "Sewers Junction"
+    cluster: CL_SEWERS_JUNCTION
+    tags: [HUB_SEWERS_JUNCTION]
+    desc: |
+      A wide chamber with bolted signage and chalk marks for valve progress.
+      Routes branch toward three valve spokes, an optional wing, and a sealed boss slope.
+      This is a safe regroup pocket: waiting here is explicitly safe.
+    exits:
+      - { dir: entry, to: R_SEW_ENTRY_02, len: 1 }
+      - { dir: valves, to: R_SEW_VALVES_01, len: 1 }
+      - { dir: wing, to: R_SEW_WING_01, len: 1 }
+      - { dir: boss, to: R_SEW_BOSS_01, len: 1, state: sealed, gate: "q.q3_sewer_valves.valves_opened>=3" }
+
+  # ---------------- CL_SEWERS_VALVE_RUN (35 rooms) ----------------
+  - id: R_SEW_VALVES_01
+    name: "Valve Access Tunnels"
+    cluster: CL_SEWERS_VALVE_RUN
+    desc: |
+      Three marked spokes lead to valve rooms.
+      The air is warmer here and the pipes answer with a slow ticking.
+    exits:
+      - { dir: junction, to: R_SEW_JUNC_01, len: 1 }
+      - { dir: v1, to: R_SEW_VALVE1_01, len: 1 }
+      - { dir: v2, to: R_SEW_VALVE2_01, len: 1 }
+      - { dir: v3, to: R_SEW_VALVE3_01, len: 1 }
+
+  - id: R_SEW_VALVE1_01
+    name: "Valve One Corridor"
+    cluster: CL_SEWERS_VALVE_RUN
+    desc: |
+      A tight pipe corridor with knee-high runoff.
+      Footprints suggest this corridor punishes people who rush.
+    exits:
+      - { dir: south, to: R_SEW_VALVES_01, len: 1 }
+      - { dir: north, to: R_SEW_VALVE1_02, len: 1 }
+
+  - id: R_SEW_VALVE1_02
+    name: "Valve Room One"
+    cluster: CL_SEWERS_VALVE_RUN
+    tags: [setpiece.q3.valve_room_1]
+    desc: |
+      A heavy wheel sits on a stubborn seal.
+      Turning it feels like doing work while something watches.
+    exits:
+      - { dir: south, to: R_SEW_VALVE1_01, len: 1 }
+
+  - id: R_SEW_VALVE2_01
+    name: "Sludge Channel"
+    cluster: CL_SEWERS_VALVE_RUN
+    desc: |
+      A shallow channel of slow sludge forces you to keep moving.
+      The walls are painted with hazard stripes that are not entirely honest.
+    exits:
+      - { dir: east, to: R_SEW_VALVES_01, len: 1 }
+      - { dir: west, to: R_SEW_VALVE2_02, len: 1 }
+
+  - id: R_SEW_VALVE2_02
+    name: "Valve Room Two"
+    cluster: CL_SEWERS_VALVE_RUN
+    tags: [setpiece.q3.valve_room_2]
+    desc: |
+      A split pipe hisses softly into a drain.
+      The valve housing is caked with mineral crust and something that looks like tar.
+    exits:
+      - { dir: east, to: R_SEW_VALVE2_01, len: 1 }
+
+  - id: R_SEW_VALVE3_01
+    name: "Grate Walk"
+    cluster: CL_SEWERS_VALVE_RUN
+    desc: |
+      A maintenance catwalk runs behind metal grates.
+      Ranged attackers have angles; corners are your answer.
+    exits:
+      - { dir: west, to: R_SEW_VALVES_01, len: 1 }
+      - { dir: east, to: R_SEW_VALVE3_02, len: 1 }
+
+  - id: R_SEW_VALVE3_02
+    name: "Valve Room Three"
+    cluster: CL_SEWERS_VALVE_RUN
+    tags: [setpiece.q3.valve_room_3]
+    desc: |
+      A narrow service bay with a grated catwalk and terrible sightlines.
+      The valve wheel is reachable, but the room makes every movement feel cramped.
+    exits:
+      - { dir: west, to: R_SEW_VALVE3_01, len: 1 }
+
+  # ---------------- CL_SEWERS_GREASE_KING (20 rooms) ----------------
+  - id: R_SEW_BOSS_01
+    name: "Grease Slope"
+    cluster: CL_SEWERS_GREASE_KING
+    desc: |
+      The tunnels widen and the stink thickens.
+      Slick residue gathers in patches where it should not, like it is fed.
+    exits:
+      - { dir: junction, to: R_SEW_JUNC_01, len: 1 }
+      - { dir: south, to: R_SEW_BOSS_02, len: 1 }
+
+  - id: R_SEW_BOSS_02
+    name: "Grease King Arena"
+    cluster: CL_SEWERS_GREASE_KING
+    tags: [setpiece.q3.grease_king_arena]
+    desc: |
+      A round chamber coated in slick residue.
+      Broken pipes drip in uneven cadence. Something watches from the shine.
+    exits:
+      - { dir: north, to: R_SEW_REWARD_01, len: 1 }
+
+  - id: R_SEW_REWARD_01
+    name: "Quarry Bypass Control"
+    cluster: CL_SEWERS_JUNCTION
+    desc: |
+      A control box is bolted into the wall. A lever is stamped: QUARRY BYPASS.
+      When it moves, it should feel like the world shifted.
+    exits:
+      - { dir: south, to: R_SEW_BOSS_02, len: 1 }
+      - { dir: north, to: R_SEW_JUNC_01, len: 1 }
+      - { dir: east, to: R_SEW_SHORTCUT_01, len: 1, gate: gate.sewers.shortcut_to_quarry }
+
+  - id: R_SEW_SHORTCUT_01
+    name: "Shortcut Tunnel"
+    cluster: CL_SEWERS_JUNCTION
+    tags: [gate.sewers.shortcut_to_quarry]
+    desc: |
+      Clear signage points toward the quarry.
+      The air ahead is colder, and the stone feels less damp.
+    exits:
+      - { dir: west, to: R_SEW_REWARD_01, len: 1 }
+      - { dir: east, to: R_SEW_SHORTCUT_02, len: 1 }
+
+  - id: R_SEW_SHORTCUT_02
+    name: "Reinforced Bulkhead"
+    cluster: CL_SEWERS_JUNCTION
+    desc: |
+      A reinforced bulkhead is stamped: QUARRY ACCESS.
+      The lock mechanism looks dormant, but not broken.
+    exits:
+      - { dir: west, to: R_SEW_SHORTCUT_01, len: 1 }
+      - { dir: east, to: P_SEWERS_QUARRY, len: 1, state: sealed, gate: gate.sewers.shortcut_to_quarry }
+
+  - id: P_SEWERS_QUARRY
+    name: "Quarry Gate Portal"
+    cluster: CL_SEWERS_JUNCTION
+    tags: [portal.P_SEWERS_QUARRY]
+    desc: |
+      Beyond the bulkhead, cold air carries grit and distant hammering.
+      Work lights flicker across broken stone.
+    exits:
+      - { dir: west, to: R_SEW_SHORTCUT_02, len: 1 }
+      - { dir: east, to: P_QUARRY_SEWERS, len: 1 }
+
+  # ---------------- CL_SEWERS_SLUDGE_LOOPS (20 rooms) ----------------
+  - id: R_SEW_WING_01
+    name: "Optional Wing Approach"
+    cluster: CL_SEWERS_SLUDGE_LOOPS
+    desc: |
+      A side sign reads: "OPTIONAL WING: DRONE RECOVERY."
+      The corridor narrows and the sludge deepens.
+    exits:
+      - { dir: west, to: R_SEW_JUNC_01, len: 1 }
+      - { dir: east, to: R_SEW_WING_02, len: 1 }
+      - { dir: south, to: R_SEW_SAFE_01, len: 1 }
+
+  - id: R_SEW_WING_02
+    name: "Collapsed Drone Bay"
+    cluster: CL_SEWERS_SLUDGE_LOOPS
+    tags: [setpiece.side.drone_extract]
+    desc: |
+      A maintenance drone blinks from under debris.
+      Its casing is dented, its light frantic, and the way out is narrow and messy.
+    exits:
+      - { dir: west, to: R_SEW_WING_01, len: 1 }
+
+  - id: R_SEW_SAFE_01
+    name: "Dry Maintenance Alcove"
+    cluster: CL_SEWERS_SLUDGE_LOOPS
+    tags: [safe_pocket]
+    desc: |
+      A dry alcove with a bolted bench and a humming panel.
+      Painted stripes mark a safe lane. Waiting here is explicitly safe.
+    exits:
+      - { dir: north, to: R_SEW_WING_01, len: 1 }
+      - { dir: south, to: R_SEW_FLOOD_01, len: 1 }
+      - { dir: east, to: R_SEW_KEYCARD_01, len: 1 }
+      - { dir: west, to: R_SEW_RETURN_01, len: 1 }
+
+  - id: R_SEW_FLOOD_01
+    name: "Flooded Approach"
+    cluster: CL_SEWERS_SLUDGE_LOOPS
+    desc: |
+      Standing water hides uneven footing and stings like a warning.
+      This lane is survivable, but it punishes parties who stop thinking.
+    exits:
+      - { dir: north, to: R_SEW_SAFE_01, len: 1 }
+      - { dir: south, to: R_SEW_FLOOD_VALVES_01, len: 1 }
+
+  - id: R_SEW_FLOOD_VALVES_01
+    name: "Flooded Valve Sequence"
+    cluster: CL_SEWERS_SLUDGE_LOOPS
+    tags: [setpiece.side.flooded_valve_sequence]
+    desc: |
+      Two small valves must be flipped in sequence under pressure.
+      The feedback needs to be loud: correct, incorrect, complete.
+    exits:
+      - { dir: north, to: R_SEW_FLOOD_01, len: 1 }
+      - { dir: west, to: R_SEW_RETURN_01, len: 1 }
+
+  - id: R_SEW_KEYCARD_01
+    name: "Maintenance Console"
+    cluster: CL_SEWERS_SLUDGE_LOOPS
+    desc: |
+      A console offers a one-use keycard at an explicit cost.
+      The UI should make this feel like an opt-in shortcut choice.
+    exits:
+      - { dir: west, to: R_SEW_SAFE_01, len: 1 }
+      - { dir: east, to: R_SEW_KEYCARD_DOOR_01, len: 1 }
+
+  - id: R_SEW_KEYCARD_DOOR_01
+    name: "Keycard Door"
+    cluster: CL_SEWERS_SLUDGE_LOOPS
+    tags: [setpiece.side.keycard_shortcut]
+    desc: |
+      A reinforced door with a dead reader. Someone scratched:
+      "CARD STILL WORKS, IF YOU FIND IT."
+    exits:
+      - { dir: west, to: R_SEW_RETURN_01, len: 1 }
+
+  - id: R_SEW_RETURN_01
+    name: "Return Corridor"
+    cluster: CL_SEWERS_SLUDGE_LOOPS
+    desc: |
+      A last corridor that punishes players who sprint an escort through uncleared rooms.
+      It is a room for discipline, not damage.
+    exits:
+      - { dir: east, to: R_SEW_SAFE_01, len: 1 }
+      - { dir: west, to: R_SEW_JUNC_01, len: 1 }

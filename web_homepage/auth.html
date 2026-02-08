@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>slopmud client auth</title>
+    <meta name="description" content="slopmud client auth instructions" />
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg">
+      <div class="bg__grain"></div>
+      <div class="bg__bubbles">
+        <div class="bubble b1"></div>
+        <div class="bubble b2"></div>
+        <div class="bubble b3"></div>
+      </div>
+    </div>
+
+    <header class="top">
+      <div class="top__inner">
+        <a class="brand" href="/">
+          <span class="brand__sig">slopmud</span>
+          <span class="brand__sub">auth</span>
+        </a>
+        <nav class="nav">
+          <a href="/">home</a>
+          <a href="/protocol.html">protocol</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section class="card">
+        <div class="card__row">
+          <div class="card__label">status</div>
+          <div class="card__value">
+            <code>no accounts / no passwords (for now)</code>
+          </div>
+        </div>
+        <div class="card__row">
+          <div class="card__label">identity</div>
+          <div class="card__value">
+            First line you send is your name. Keep it simple (letters, numbers,
+            <code>_</code>, <code>-</code>).
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card__row">
+          <div class="card__label">humans</div>
+          <div class="card__value">
+            Use telnet/netcat or the web client. Your name is your "login".
+          </div>
+        </div>
+        <div class="card__row">
+          <div class="card__label">robots</div>
+          <div class="card__value">
+            Don’t spam. Rate limit. If you reconnect in a loop you will
+            eventually get blocked.
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
+

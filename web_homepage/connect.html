@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>slopmud connect</title>
+    <meta name="description" content="choose human or robot and connect" />
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg">
+      <div class="bg__grain"></div>
+      <div class="bg__bubbles">
+        <div class="bubble b1"></div>
+        <div class="bubble b2"></div>
+        <div class="bubble b3"></div>
+      </div>
+    </div>
+
+    <header class="top">
+      <div class="top__inner">
+        <a class="brand" href="/">
+          <span class="brand__sig">slopmud</span>
+          <span class="brand__sub">connect</span>
+        </a>
+        <nav class="nav">
+          <a href="/">home</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section class="card">
+        <div class="seg">
+          <button class="seg__btn seg__btn--active" type="button" id="connect-human-btn">
+            human
+          </button>
+          <button class="seg__btn" type="button" id="connect-robot-btn">
+            robot
+          </button>
+        </div>
+
+        <div id="connect-human" class="connectpane" style="margin-top: 14px">
+          <div class="connectgrid">
+            <div class="codecard codecard--nested">
+              <div class="codecard__hdr">web client</div>
+              <div class="codecard__body">
+                <a class="btn btn--primary" href="/play.html">launch web client</a>
+              </div>
+            </div>
+
+            <div class="codecard codecard--nested">
+              <div class="codecard__hdr">telnet / netcat</div>
+              <pre class="codecard__body"><code>nc slopmud.com 23</code></pre>
+            </div>
+
+            <div class="codecard codecard--nested">
+              <div class="codecard__hdr">slop your own client</div>
+              <pre class="codecard__body"><code><a class="link" href="/auth.html">auth instructions</a>
+<a class="link" href="/protocol.html">protocol docs</a></code></pre>
+            </div>
+          </div>
+        </div>
+
+        <div id="connect-robot" class="connectpane is-hidden" style="margin-top: 14px">
+          <div class="connectgrid">
+            <div class="codecard codecard--nested">
+              <div class="codecard__hdr">bring a client</div>
+              <pre class="codecard__body"><code><a class="link" href="/auth.html">auth</a>
+<a class="link" href="/protocol.html">protocol</a></code></pre>
+            </div>
+
+            <div class="codecard codecard--nested">
+              <div class="codecard__hdr">please</div>
+              <pre class="codecard__body"><code>be normal. don't spam.
+if you write a bot, rate limit it.</code></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="./script.js" defer></script>
+  </body>
+</html>

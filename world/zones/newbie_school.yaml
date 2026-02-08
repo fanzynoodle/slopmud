@@ -1,0 +1,73 @@
+version: 1
+zone_id: newbie_school
+zone_name: "Newbie School"
+
+area_id: A01
+level_band: [1, 2]
+target_rooms: 50
+
+anchor:
+  x: 0
+  y: -2
+
+# Global cartesian bounds for planning and validation only.
+bounds:
+  min:
+    x: -2
+    y: -3
+  max:
+    x: 2
+    y: 1
+
+clusters:
+  - id: CL_NS_ORIENTATION
+    rooms: 12
+  - id: CL_NS_DORMS
+    rooms: 10
+  - id: CL_NS_LABS
+    rooms: 16
+  - id: CL_NS_SIM_YARD
+    rooms: 12
+
+portals:
+  - id: P_NS_TOWN
+    cluster: CL_NS_ORIENTATION
+
+protoadventures:
+  - q1-first-day-on-gaia
+
+hubs:
+  - HUB_NS_ORIENTATION
+  - HUB_NS_LABS
+
+cluster_edges:
+  - a: CL_NS_ORIENTATION
+    b: CL_NS_DORMS
+  - a: CL_NS_DORMS
+    b: CL_NS_LABS
+  - a: CL_NS_LABS
+    b: CL_NS_SIM_YARD
+
+key_rooms:
+  - id: R_NS_ORIENT_01
+    cluster: CL_NS_ORIENTATION
+    proto: q1-first-day-on-gaia
+    tags: [HUB_NS_ORIENTATION]
+  - id: R_NS_DORMS_01
+    cluster: CL_NS_DORMS
+    proto: q1-first-day-on-gaia
+  - id: R_NS_LABS_01
+    cluster: CL_NS_LABS
+    proto: q1-first-day-on-gaia
+    tags: [HUB_NS_LABS]
+  - id: R_NS_SIMYARD_01
+    cluster: CL_NS_SIM_YARD
+    proto: q1-first-day-on-gaia
+  - id: P_NS_TOWN
+    cluster: CL_NS_ORIENTATION
+    proto: q1-first-day-on-gaia
+    tags: [portal.P_NS_TOWN]
+
+notes:
+  - "Orientation should be a safe, obvious hub. The Town portal should be visible from here."
+  - "Sim Yard is the last tutorial beat: teach aggro/disengage and then handoff to Town."

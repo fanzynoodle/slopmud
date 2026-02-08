@@ -1,0 +1,75 @@
+version: 1
+zone_id: skybridge
+zone_name: "Skybridge"
+
+area_id: A01
+level_band: [11, 13]
+target_rooms: 100
+
+anchor:
+  x: 21
+  y: 7
+
+# Global cartesian bounds for planning and validation only.
+bounds:
+  min:
+    x: 21
+    y: 5
+  max:
+    x: 26
+    y: 9
+
+clusters:
+  - id: CL_SKY_ANCHORHOUSE
+    rooms: 10
+  - id: CL_SKY_SPANS
+    rooms: 50
+  - id: CL_SKY_ANCHORS
+    rooms: 20
+  - id: CL_SKY_WIND_MARSHAL
+    rooms: 20
+
+portals:
+  - id: P_SKYBRIDGE_UNDERRAIL
+    cluster: CL_SKY_ANCHORHOUSE
+  - id: P_SKYBRIDGE_WASTES
+    cluster: CL_SKY_SPANS
+
+protoadventures:
+  - q10-anchor-the-wind
+
+hubs:
+  - HUB_SKYBRIDGE_ANCHORHOUSE
+
+cluster_edges:
+  - a: CL_SKY_ANCHORHOUSE
+    b: CL_SKY_SPANS
+    kind: spine
+  - a: CL_SKY_SPANS
+    b: CL_SKY_ANCHORS
+    kind: setpiece
+  - a: CL_SKY_ANCHORS
+    b: CL_SKY_WIND_MARSHAL
+    kind: gate
+    gate: q.q10_anchor_wind.anchors_repaired>=3
+
+key_rooms:
+  - id: R_SKY_ANCHOR_01
+    cluster: CL_SKY_ANCHORHOUSE
+    proto: q10-anchor-the-wind
+    tags: [HUB_SKYBRIDGE_ANCHORHOUSE, portal.P_SKYBRIDGE_UNDERRAIL]
+  - id: R_SKY_SPAN_01
+    cluster: CL_SKY_SPANS
+    proto: q10-anchor-the-wind
+    tags: [portal.P_SKYBRIDGE_WASTES]
+  - id: R_SKY_A1_01
+    cluster: CL_SKY_ANCHORS
+    proto: q10-anchor-the-wind
+    tags: [setpiece.q10.anchor_1]
+  - id: R_SKY_MARSHAL_01
+    cluster: CL_SKY_WIND_MARSHAL
+    proto: q10-anchor-the-wind
+    tags: [setpiece.q10.wind_marshal_span]
+
+notes:
+  - "Span pacing must include explicit safe pockets; gust timing needs a consistent text grammar."

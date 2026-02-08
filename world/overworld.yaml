@@ -1,0 +1,564 @@
+version: 1
+generated_at_utc: "2026-02-08T12:49:13+00:00"
+generated_from: "docs/overworld_cartesian_layout.md"
+units:
+  coord_unit: planning-grid
+  len_unit: movement-cost
+zones:
+  - id: newbie_school
+    name: "Newbie School"
+    anchor:
+      x: 0
+      y: -2
+  - id: town_gaia_gate
+    name: "Town: Gaia Gate"
+    anchor:
+      x: 0
+      y: 0
+  - id: meadowline
+    name: "Meadowline"
+    anchor:
+      x: 3
+      y: 0
+  - id: scrap_orchard
+    name: "Scrap Orchard"
+    anchor:
+      x: 0
+      y: 3
+  - id: under_town_sewers
+    name: "Under-Town Sewers"
+    anchor:
+      x: 3
+      y: 3
+  - id: quarry
+    name: "Quarry"
+    anchor:
+      x: 6
+      y: 3
+  - id: hillfort_ruins
+    name: "Hillfort Ruins"
+    anchor:
+      x: 6
+      y: 6
+  - id: old_road_checkpoint
+    name: "Old Road Checkpoint"
+    anchor:
+      x: 9
+      y: 4
+  - id: rail_spur
+    name: "Rail Spur"
+    anchor:
+      x: 12
+      y: 4
+  - id: rustwood
+    name: "Rustwood"
+    anchor:
+      x: 9
+      y: 7
+  - id: sunken_library
+    name: "Sunken Library"
+    anchor:
+      x: 12
+      y: 7
+  - id: factory_district_outskirts
+    name: "Factory District (Outskirts)"
+    anchor:
+      x: 15
+      y: 6
+  - id: the_reservoir
+    name: "The Reservoir"
+    anchor:
+      x: 15
+      y: 9
+  - id: the_underrail
+    name: "The Underrail"
+    anchor:
+      x: 18
+      y: 7
+  - id: skybridge
+    name: "Skybridge"
+    anchor:
+      x: 21
+      y: 7
+  - id: glass_wastes
+    name: "Glass Wastes"
+    anchor:
+      x: 24
+      y: 7
+  - id: crater_gardens
+    name: "Crater Gardens"
+    anchor:
+      x: 27
+      y: 7
+  - id: the_core
+    name: "The Core"
+    anchor:
+      x: 30
+      y: 7
+  - id: the_seam
+    name: "The Seam"
+    anchor:
+      x: 33
+      y: 7
+portals:
+  - id: P_NS_TOWN
+    zone_id: newbie_school
+    zone_name: "Newbie School"
+    cluster_hint: CL_NS_ORIENTATION
+    connects_to: P_TOWN_NS
+    pos:
+      x: 0
+      y: -1
+  - id: P_TOWN_NS
+    zone_id: town_gaia_gate
+    zone_name: "Town: Gaia Gate"
+    cluster_hint: CL_TOWN_GATE_PLAZA
+    connects_to: P_NS_TOWN
+    pos:
+      x: 0
+      y: 0
+  - id: P_TOWN_MEADOW
+    zone_id: town_gaia_gate
+    zone_name: "Town: Gaia Gate"
+    cluster_hint: CL_TOWN_EDGE
+    connects_to: P_MEADOW_TOWN
+    pos:
+      x: 1
+      y: 0
+  - id: P_MEADOW_TOWN
+    zone_id: meadowline
+    zone_name: "Meadowline"
+    cluster_hint: CL_MEADOW_TRAILS
+    connects_to: P_TOWN_MEADOW
+    pos:
+      x: 2
+      y: 0
+  - id: P_TOWN_ORCHARD
+    zone_id: town_gaia_gate
+    zone_name: "Town: Gaia Gate"
+    cluster_hint: CL_TOWN_EDGE
+    connects_to: P_ORCHARD_TOWN
+    pos:
+      x: 0
+      y: 1
+  - id: P_ORCHARD_TOWN
+    zone_id: scrap_orchard
+    zone_name: "Scrap Orchard"
+    cluster_hint: CL_ORCHARD_GROVE
+    connects_to: P_TOWN_ORCHARD
+    pos:
+      x: 0
+      y: 2
+  - id: P_TOWN_SEWERS
+    zone_id: town_gaia_gate
+    zone_name: "Town: Gaia Gate"
+    cluster_hint: CL_TOWN_MAINT_OFFICE
+    connects_to: P_SEWERS_TOWN
+    pos:
+      x: 1
+      y: 1
+  - id: P_SEWERS_TOWN
+    zone_id: under_town_sewers
+    zone_name: "Under-Town Sewers"
+    cluster_hint: CL_SEWERS_ENTRY
+    connects_to: P_TOWN_SEWERS
+    pos:
+      x: 2
+      y: 1
+  - id: P_MEADOW_SEWERS
+    zone_id: meadowline
+    zone_name: "Meadowline"
+    cluster_hint: CL_MEADOW_SEWER_GRATE
+    connects_to: P_SEWERS_MEADOW
+    pos:
+      x: 3
+      y: 1
+  - id: P_SEWERS_MEADOW
+    zone_id: under_town_sewers
+    zone_name: "Under-Town Sewers"
+    cluster_hint: CL_SEWERS_ENTRY
+    connects_to: P_MEADOW_SEWERS
+    pos:
+      x: 3
+      y: 2
+  - id: P_ORCHARD_SEWERS
+    zone_id: scrap_orchard
+    zone_name: "Scrap Orchard"
+    cluster_hint: CL_ORCHARD_PIPEWAY
+    connects_to: P_SEWERS_ORCHARD
+    pos:
+      x: 1
+      y: 3
+  - id: P_SEWERS_ORCHARD
+    zone_id: under_town_sewers
+    zone_name: "Under-Town Sewers"
+    cluster_hint: CL_SEWERS_ENTRY
+    connects_to: P_ORCHARD_SEWERS
+    pos:
+      x: 2
+      y: 3
+  - id: P_SEWERS_QUARRY
+    zone_id: under_town_sewers
+    zone_name: "Under-Town Sewers"
+    cluster_hint: CL_SEWERS_JUNCTION
+    connects_to: P_QUARRY_SEWERS
+    pos:
+      x: 4
+      y: 3
+  - id: P_QUARRY_SEWERS
+    zone_id: quarry
+    zone_name: "Quarry"
+    cluster_hint: CL_QUARRY_FOOTHILLS
+    connects_to: P_SEWERS_QUARRY
+    pos:
+      x: 5
+      y: 3
+  - id: P_QUARRY_CHECKPOINT
+    zone_id: quarry
+    zone_name: "Quarry"
+    cluster_hint: CL_QUARRY_FOOTHILLS
+    connects_to: P_CHECKPOINT_QUARRY
+    pos:
+      x: 6
+      y: 2
+  - id: P_CHECKPOINT_QUARRY
+    zone_id: old_road_checkpoint
+    zone_name: "Old Road Checkpoint"
+    cluster_hint: CL_CHECKPOINT_ROAD
+    connects_to: P_QUARRY_CHECKPOINT
+    pos:
+      x: 7
+      y: 2
+  - id: P_QUARRY_HILLFORT
+    zone_id: quarry
+    zone_name: "Quarry"
+    cluster_hint: CL_QUARRY_FOOTHILLS
+    connects_to: P_HILLFORT_QUARRY
+    pos:
+      x: 6
+      y: 4
+  - id: P_HILLFORT_QUARRY
+    zone_id: hillfort_ruins
+    zone_name: "Hillfort Ruins"
+    cluster_hint: CL_HILLFORT_APPROACH
+    connects_to: P_QUARRY_HILLFORT
+    pos:
+      x: 6
+      y: 5
+  - id: P_HILLFORT_CHECKPOINT
+    zone_id: hillfort_ruins
+    zone_name: "Hillfort Ruins"
+    cluster_hint: CL_HILLFORT_APPROACH
+    connects_to: P_CHECKPOINT_HILLFORT
+    pos:
+      x: 8
+      y: 5
+  - id: P_CHECKPOINT_HILLFORT
+    zone_id: old_road_checkpoint
+    zone_name: "Old Road Checkpoint"
+    cluster_hint: CL_CHECKPOINT_ROAD
+    connects_to: P_HILLFORT_CHECKPOINT
+    pos:
+      x: 9
+      y: 5
+  - id: P_CHECKPOINT_RAIL
+    zone_id: old_road_checkpoint
+    zone_name: "Old Road Checkpoint"
+    cluster_hint: CL_CHECKPOINT_ROAD
+    connects_to: P_RAIL_CHECKPOINT
+    pos:
+      x: 10
+      y: 4
+  - id: P_RAIL_CHECKPOINT
+    zone_id: rail_spur
+    zone_name: "Rail Spur"
+    cluster_hint: CL_RAIL_TERMINAL
+    connects_to: P_CHECKPOINT_RAIL
+    pos:
+      x: 12
+      y: 4
+  - id: P_CHECKPOINT_RUSTWOOD
+    zone_id: old_road_checkpoint
+    zone_name: "Old Road Checkpoint"
+    cluster_hint: CL_CHECKPOINT_ROAD
+    connects_to: P_RUSTWOOD_CHECKPOINT
+    pos:
+      x: 9
+      y: 6
+  - id: P_RUSTWOOD_CHECKPOINT
+    zone_id: rustwood
+    zone_name: "Rustwood"
+    cluster_hint: CL_RUSTWOOD_TRAILS
+    connects_to: P_CHECKPOINT_RUSTWOOD
+    pos:
+      x: 9
+      y: 8
+  - id: P_RUSTWOOD_LIBRARY
+    zone_id: rustwood
+    zone_name: "Rustwood"
+    cluster_hint: CL_RUSTWOOD_TRAILS
+    connects_to: P_LIB_RUSTWOOD
+    pos:
+      x: 11
+      y: 8
+  - id: P_LIB_RUSTWOOD
+    zone_id: sunken_library
+    zone_name: "Sunken Library"
+    cluster_hint: CL_LIB_ANTECHAMBER
+    connects_to: P_RUSTWOOD_LIBRARY
+    pos:
+      x: 13
+      y: 8
+  - id: P_LIB_FACTORY
+    zone_id: sunken_library
+    zone_name: "Sunken Library"
+    cluster_hint: CL_LIB_DECODER_CHAMBER
+    connects_to: P_FACTORY_LIBRARY
+    pos:
+      x: 13
+      y: 7
+  - id: P_FACTORY_LIBRARY
+    zone_id: factory_district_outskirts
+    zone_name: "Factory District (Outskirts)"
+    cluster_hint: CL_FACTORY_GATE
+    connects_to: P_LIB_FACTORY
+    pos:
+      x: 15
+      y: 7
+  - id: P_LIB_RESERVOIR
+    zone_id: sunken_library
+    zone_name: "Sunken Library"
+    cluster_hint: CL_LIB_DECODER_CHAMBER
+    connects_to: P_RESERVOIR_LIBRARY
+    pos:
+      x: 13
+      y: 9
+  - id: P_RESERVOIR_LIBRARY
+    zone_id: the_reservoir
+    zone_name: "The Reservoir"
+    cluster_hint: CL_RES_SHORES
+    connects_to: P_LIB_RESERVOIR
+    pos:
+      x: 15
+      y: 9
+  - id: P_FACTORY_RESERVOIR
+    zone_id: factory_district_outskirts
+    zone_name: "Factory District (Outskirts)"
+    cluster_hint: CL_FACTORY_GATE
+    connects_to: P_RESERVOIR_FACTORY
+    pos:
+      x: 16
+      y: 8
+  - id: P_RESERVOIR_FACTORY
+    zone_id: the_reservoir
+    zone_name: "The Reservoir"
+    cluster_hint: CL_RES_SHORES
+    connects_to: P_FACTORY_RESERVOIR
+    pos:
+      x: 17
+      y: 8
+  - id: P_FACTORY_UNDERRAIL
+    zone_id: factory_district_outskirts
+    zone_name: "Factory District (Outskirts)"
+    cluster_hint: CL_FACTORY_SWITCHROOM
+    connects_to: P_UNDERRAIL_FACTORY
+    pos:
+      x: 16
+      y: 6
+  - id: P_UNDERRAIL_FACTORY
+    zone_id: the_underrail
+    zone_name: "The Underrail"
+    cluster_hint: CL_UNDERRAIL_PLATFORM
+    connects_to: P_FACTORY_UNDERRAIL
+    pos:
+      x: 18
+      y: 6
+  - id: P_RESERVOIR_UNDERRAIL
+    zone_id: the_reservoir
+    zone_name: "The Reservoir"
+    cluster_hint: CL_RES_TUNNELS
+    connects_to: P_UNDERRAIL_RESERVOIR
+    pos:
+      x: 16
+      y: 10
+  - id: P_UNDERRAIL_RESERVOIR
+    zone_id: the_underrail
+    zone_name: "The Underrail"
+    cluster_hint: CL_UNDERRAIL_PLATFORM
+    connects_to: P_RESERVOIR_UNDERRAIL
+    pos:
+      x: 18
+      y: 10
+  - id: P_UNDERRAIL_SKYBRIDGE
+    zone_id: the_underrail
+    zone_name: "The Underrail"
+    cluster_hint: CL_UNDERRAIL_PLATFORM
+    connects_to: P_SKYBRIDGE_UNDERRAIL
+    pos:
+      x: 20
+      y: 7
+  - id: P_SKYBRIDGE_UNDERRAIL
+    zone_id: skybridge
+    zone_name: "Skybridge"
+    cluster_hint: CL_SKY_ANCHORHOUSE
+    connects_to: P_UNDERRAIL_SKYBRIDGE
+    pos:
+      x: 23
+      y: 7
+  - id: P_SKYBRIDGE_WASTES
+    zone_id: skybridge
+    zone_name: "Skybridge"
+    cluster_hint: CL_SKY_SPANS
+    connects_to: P_WASTES_SKYBRIDGE
+    pos:
+      x: 24
+      y: 7
+  - id: P_WASTES_SKYBRIDGE
+    zone_id: glass_wastes
+    zone_name: "Glass Wastes"
+    cluster_hint: CL_WASTES_OUTPOST
+    connects_to: P_SKYBRIDGE_WASTES
+    pos:
+      x: 27
+      y: 7
+  - id: P_WASTES_GARDENS
+    zone_id: glass_wastes
+    zone_name: "Glass Wastes"
+    cluster_hint: CL_WASTES_OUTPOST
+    connects_to: P_GARDENS_WASTES
+    pos:
+      x: 28
+      y: 7
+  - id: P_GARDENS_WASTES
+    zone_id: crater_gardens
+    zone_name: "Crater Gardens"
+    cluster_hint: CL_GARDENS_GREENHOUSE
+    connects_to: P_WASTES_GARDENS
+    pos:
+      x: 31
+      y: 7
+  - id: P_GARDENS_CORE
+    zone_id: crater_gardens
+    zone_name: "Crater Gardens"
+    cluster_hint: CL_GARDENS_GREENHOUSE
+    connects_to: P_CORE_GARDENS
+    pos:
+      x: 33
+      y: 7
+  - id: P_CORE_GARDENS
+    zone_id: the_core
+    zone_name: "The Core"
+    cluster_hint: CL_CORE_GATE_RING
+    connects_to: P_GARDENS_CORE
+    pos:
+      x: 37
+      y: 7
+  - id: P_CORE_SEAM
+    zone_id: the_core
+    zone_name: "The Core"
+    cluster_hint: CL_CORE_GATE_RING
+    connects_to: P_SEAM_CORE
+    pos:
+      x: 38
+      y: 7
+  - id: P_SEAM_CORE
+    zone_id: the_seam
+    zone_name: "The Seam"
+    cluster_hint: CL_SEAM_EDGE_STATION
+    connects_to: P_CORE_SEAM
+    pos:
+      x: 42
+      y: 7
+edges:
+  - a: P_NS_TOWN
+    b: P_TOWN_NS
+    len: 1
+    notes: "newbie frictionless"
+  - a: P_TOWN_MEADOW
+    b: P_MEADOW_TOWN
+    len: 1
+    notes: "newbie frictionless"
+  - a: P_TOWN_ORCHARD
+    b: P_ORCHARD_TOWN
+    len: 1
+    notes: "newbie frictionless"
+  - a: P_TOWN_SEWERS
+    b: P_SEWERS_TOWN
+    len: 1
+    notes: "newbie frictionless"
+  - a: P_MEADOW_SEWERS
+    b: P_SEWERS_MEADOW
+    len: 1
+    notes: "newbie frictionless"
+  - a: P_ORCHARD_SEWERS
+    b: P_SEWERS_ORCHARD
+    len: 1
+    notes: "newbie frictionless"
+  - a: P_SEWERS_QUARRY
+    b: P_QUARRY_SEWERS
+    len: 1
+    notes: "still early-game"
+  - a: P_QUARRY_CHECKPOINT
+    b: P_CHECKPOINT_QUARRY
+    len: 1
+    notes: "still early-game"
+  - a: P_QUARRY_HILLFORT
+    b: P_HILLFORT_QUARRY
+    len: 1
+    notes: "still early-game"
+  - a: P_HILLFORT_CHECKPOINT
+    b: P_CHECKPOINT_HILLFORT
+    len: 1
+    notes: "still early-game"
+  - a: P_CHECKPOINT_RAIL
+    b: P_RAIL_CHECKPOINT
+    len: 2
+    notes: "road travel begins to matter"
+  - a: P_CHECKPOINT_RUSTWOOD
+    b: P_RUSTWOOD_CHECKPOINT
+    len: 2
+    notes: "road travel begins to matter"
+  - a: P_RUSTWOOD_LIBRARY
+    b: P_LIB_RUSTWOOD
+    len: 2
+    notes: "regional travel"
+  - a: P_LIB_FACTORY
+    b: P_FACTORY_LIBRARY
+    len: 2
+    notes: "regional travel"
+  - a: P_LIB_RESERVOIR
+    b: P_RESERVOIR_LIBRARY
+    len: 2
+    notes: "regional travel"
+  - a: P_FACTORY_RESERVOIR
+    b: P_RESERVOIR_FACTORY
+    len: 1
+    notes: "adjacent districts"
+  - a: P_FACTORY_UNDERRAIL
+    b: P_UNDERRAIL_FACTORY
+    len: 2
+    notes: "elevator/entry"
+  - a: P_RESERVOIR_UNDERRAIL
+    b: P_UNDERRAIL_RESERVOIR
+    len: 2
+    notes: "tunnel/entry"
+  - a: P_UNDERRAIL_SKYBRIDGE
+    b: P_SKYBRIDGE_UNDERRAIL
+    len: 3
+    notes: "long transit segment"
+  - a: P_SKYBRIDGE_WASTES
+    b: P_WASTES_SKYBRIDGE
+    len: 3
+    notes: "harsh travel"
+  - a: P_WASTES_GARDENS
+    b: P_GARDENS_WASTES
+    len: 3
+    notes: "harsh travel"
+  - a: P_GARDENS_CORE
+    b: P_CORE_GARDENS
+    len: 4
+    notes: "endgame travel"
+  - a: P_CORE_SEAM
+    b: P_SEAM_CORE
+    len: 4
+    notes: "endgame travel"

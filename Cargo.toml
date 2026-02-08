@@ -1,5 +1,14 @@
 [workspace]
 resolver = "2"
 members = [
+  "apps/internal_oidc",
+  "apps/shard_01",
+  "apps/static_web",
+  "apps/ws_gateway",
+  "apps/bot_party",
+  "crates/fanzylog",
+  "crates/mudproto",
   "crates/slopmud",
+  "crates/slopio",
+  "apps/slopmud_web",
 ]

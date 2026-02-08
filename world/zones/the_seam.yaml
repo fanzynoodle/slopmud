@@ -1,0 +1,69 @@
+version: 1
+zone_id: the_seam
+zone_name: "The Seam"
+
+area_id: A01
+level_band: [17, 20]
+target_rooms: 200
+
+anchor:
+  x: 33
+  y: 7
+
+# Global cartesian bounds for planning and validation only.
+bounds:
+  min:
+    x: 40
+    y: 5
+  max:
+    x: 44
+    y: 9
+
+clusters:
+  - id: CL_SEAM_EDGE_STATION
+    rooms: 15
+  - id: CL_SEAM_RIFTS
+    rooms: 80
+  - id: CL_SEAM_MAZE
+    rooms: 60
+  - id: CL_SEAM_STABILIZER_NEXUS
+    rooms: 45
+
+portals:
+  - id: P_SEAM_CORE
+    cluster: CL_SEAM_EDGE_STATION
+
+protoadventures:
+  - q14-stabilize-the-boundary
+
+hubs:
+  - HUB_SEAM_EDGE
+
+cluster_edges:
+  - a: CL_SEAM_EDGE_STATION
+    b: CL_SEAM_RIFTS
+    kind: spine
+  - a: CL_SEAM_RIFTS
+    b: CL_SEAM_MAZE
+    kind: spine
+    note: "Maze rooms are endgame loops; protoadventure focuses on rifts + nexus."
+  - a: CL_SEAM_MAZE
+    b: CL_SEAM_STABILIZER_NEXUS
+    kind: gate
+
+key_rooms:
+  - id: R_SEAM_EDGE_01
+    cluster: CL_SEAM_EDGE_STATION
+    proto: q14-stabilize-the-boundary
+    tags: [HUB_SEAM_EDGE, portal.P_SEAM_CORE]
+  - id: R_SEAM_RIFT1_01
+    cluster: CL_SEAM_RIFTS
+    proto: q14-stabilize-the-boundary
+    tags: [setpiece.q14.rift_1]
+  - id: R_SEAM_NEXUS_01
+    cluster: CL_SEAM_STABILIZER_NEXUS
+    proto: q14-stabilize-the-boundary
+    tags: [setpiece.q14.stabilizer_nexus]
+
+notes:
+  - "Rule changes must be named and readable; otherwise they feel like bugs."

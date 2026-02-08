@@ -2,8 +2,9 @@
 
 Terragrunt stack that creates:
 - Public Route53 hosted zone `slopmud.com` and a `CNAME` record `mud.slopmud.com` -> instance public DNS
+- `CNAME` record `www.slopmud.com` -> same target as `mud.slopmud.com` (overrideable via `www_cname_target`)
 
-Currently configured to create **Route53 only** (compute disabled) so you can get DNS set up first.
+If you want DNS set up first, set `enable_compute=false` to create **Route53 only**.
 
 ## One-time setup
 

@@ -19,4 +19,7 @@ inputs = {
 
   # Set this when you know what you want mud.slopmud.com to point at.
   # cname_target = "example.com"
+
+  # Optional: override www.slopmud.com target. Defaults to the same as mud (or the instance public DNS).
+  # www_cname_target = "example.com"
 }

@@ -1,0 +1,8 @@
+// Room data for slopmud. This file is for documentation and tooling.
+// The Rust bindings in `src/rooms_fb.rs` are handwritten to avoid a build-time flatc dependency.
+//
+// table Exit { dir:string; to:string; }
+// table Room { id:string; name:string; description:string; exits:[Exit]; area:string; }
+// table Area { id:string; name:string; rooms:[Room]; }
+// table World { areas:[Area]; }
+// root_type World;

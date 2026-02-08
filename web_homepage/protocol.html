@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>slopmud protocol</title>
+    <meta name="description" content="slopmud protocol docs" />
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg">
+      <div class="bg__grain"></div>
+      <div class="bg__bubbles">
+        <div class="bubble b1"></div>
+        <div class="bubble b2"></div>
+        <div class="bubble b3"></div>
+      </div>
+    </div>
+
+    <header class="top">
+      <div class="top__inner">
+        <a class="brand" href="/">
+          <span class="brand__sig">slopmud</span>
+          <span class="brand__sub">protocol</span>
+        </a>
+        <nav class="nav">
+          <a href="/">home</a>
+          <a href="/auth.html">auth</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section class="card">
+        <div class="card__row">
+          <div class="card__label">tcp</div>
+          <div class="card__value"><code>slopmud.com:23</code></div>
+        </div>
+        <div class="card__row">
+          <div class="card__label">ws</div>
+          <div class="card__value">
+            <code>ws://slopmud.com/ws</code> or <code>wss://slopmud.com/ws</code>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card__row">
+          <div class="card__label">encoding</div>
+          <div class="card__value">UTF-8 text. Treat output as text.</div>
+        </div>
+        <div class="card__row">
+          <div class="card__label">framing</div>
+          <div class="card__value">
+            Line-based. Send a line, get lines back. Newlines may be
+            <code>\n</code> or <code>\r\n</code>.
+          </div>
+        </div>
+        <div class="card__row">
+          <div class="card__label">login</div>
+          <div class="card__value">
+            First line you send is your name. After that, send commands.
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card__row">
+          <div class="card__label">commands</div>
+          <div class="card__value">
+            <code>help</code>, <code>say &lt;msg&gt;</code>, <code>exit</code>.
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card__row">
+          <div class="card__label">telnet iac</div>
+          <div class="card__value">
+            If you connect over TCP using a telnet client, you may see telnet
+            negotiation (IAC). The server tolerates it and will refuse most
+            options. If you write a bot, avoid telnet negotiation and just send
+            raw lines.
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
+

@@ -1,0 +1,15 @@
+[package]
+name = "static_web"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR 0BSD"
+
+[dependencies]
+axum = { version = "0.7.9", features = ["ws"] }
+axum-server = { version = "0.7.1", features = ["tls-rustls"] }
+futures-util = { version = "0.3.31", features = ["sink"] }
+slopio = { path = "../../crates/slopio" }
+tokio = { version = "1.43.0", features = ["full"] }
+tower-http = { version = "0.6.2", features = ["fs", "trace"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }

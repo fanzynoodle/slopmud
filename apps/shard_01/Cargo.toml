@@ -1,0 +1,17 @@
+[package]
+name = "shard_01"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR 0BSD"
+
+[dependencies]
+anyhow = "1.0.96"
+bytes = "1.10.1"
+flatbuffers = "25.12.19"
+mudproto = { path = "../../crates/mudproto" }
+slopio = { path = "../../crates/slopio" }
+tokio = { version = "1.43.0", features = ["full"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+serde = { version = "1.0.218", features = ["derive"] }
+serde_yaml = "0.9.34"

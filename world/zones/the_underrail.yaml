@@ -1,0 +1,75 @@
+version: 1
+zone_id: the_underrail
+zone_name: "The Underrail"
+
+area_id: A01
+level_band: [9, 12]
+target_rooms: 120
+
+anchor:
+  x: 18
+  y: 7
+
+# Global cartesian bounds for planning and validation only.
+bounds:
+  min:
+    x: 16
+    y: 4
+  max:
+    x: 22
+    y: 12
+
+clusters:
+  - id: CL_UNDERRAIL_PLATFORM
+    rooms: 15
+  - id: CL_UNDERRAIL_TUNNELS
+    rooms: 45
+  - id: CL_UNDERRAIL_SWITCHYARD
+    rooms: 30
+  - id: CL_UNDERRAIL_WARDEN_ARENA
+    rooms: 30
+
+portals:
+  - id: P_UNDERRAIL_FACTORY
+    cluster: CL_UNDERRAIL_PLATFORM
+  - id: P_UNDERRAIL_RESERVOIR
+    cluster: CL_UNDERRAIL_PLATFORM
+  - id: P_UNDERRAIL_SKYBRIDGE
+    cluster: CL_UNDERRAIL_PLATFORM
+
+protoadventures:
+  - q9-beacon-protocol
+
+hubs:
+  - HUB_UNDERRAIL_PLATFORM
+
+cluster_edges:
+  - a: CL_UNDERRAIL_PLATFORM
+    b: CL_UNDERRAIL_TUNNELS
+    kind: spine
+  - a: CL_UNDERRAIL_TUNNELS
+    b: CL_UNDERRAIL_SWITCHYARD
+    kind: spine
+  - a: CL_UNDERRAIL_SWITCHYARD
+    b: CL_UNDERRAIL_WARDEN_ARENA
+    kind: gate
+    gate: q.q9_beacon_protocol.beacons_lit>=4
+
+key_rooms:
+  - id: R_UR_PLATFORM_01
+    cluster: CL_UNDERRAIL_PLATFORM
+    proto: q9-beacon-protocol
+    tags: [HUB_UNDERRAIL_PLATFORM, portal.P_UNDERRAIL_FACTORY, portal.P_UNDERRAIL_RESERVOIR, portal.P_UNDERRAIL_SKYBRIDGE]
+  - id: R_UR_TUNNEL_01
+    cluster: CL_UNDERRAIL_TUNNELS
+    proto: q9-beacon-protocol
+  - id: R_UR_SWITCH_01
+    cluster: CL_UNDERRAIL_SWITCHYARD
+    proto: q9-beacon-protocol
+  - id: R_UR_WARDEN_01
+    cluster: CL_UNDERRAIL_WARDEN_ARENA
+    proto: q9-beacon-protocol
+    tags: [setpiece.q9.platform_warden_arena]
+
+notes:
+  - "Platform is the stable hub; tunnels and switchyard are traversal pressure; arena is the spike."

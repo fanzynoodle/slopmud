@@ -1,0 +1,71 @@
+version: 1
+zone_id: meadowline
+zone_name: "Meadowline"
+
+area_id: A01
+level_band: [2, 3]
+target_rooms: 90
+
+anchor:
+  x: 3
+  y: 0
+
+# Global cartesian bounds for planning and validation only.
+bounds:
+  min:
+    x: 0
+    y: -2
+  max:
+    x: 5
+    y: 3
+
+clusters:
+  - id: CL_MEADOW_TRAILS
+    rooms: 30
+  - id: CL_MEADOW_PONDS
+    rooms: 20
+  - id: CL_MEADOW_PEST_FIELDS
+    rooms: 30
+  - id: CL_MEADOW_SEWER_GRATE
+    rooms: 10
+
+portals:
+  - id: P_MEADOW_TOWN
+    cluster: CL_MEADOW_TRAILS
+  - id: P_MEADOW_SEWERS
+    cluster: CL_MEADOW_SEWER_GRATE
+
+protoadventures:
+  - q2-job-board-never-sleeps
+
+cluster_edges:
+  - a: CL_MEADOW_TRAILS
+    b: CL_MEADOW_PONDS
+    kind: spine
+  - a: CL_MEADOW_PONDS
+    b: CL_MEADOW_PEST_FIELDS
+    kind: spine
+  - a: CL_MEADOW_PEST_FIELDS
+    b: CL_MEADOW_SEWER_GRATE
+    kind: teaser
+    note: "Soft gate to Sewers; landmark first, traversal later."
+
+key_rooms:
+  - id: R_MEADOW_TRAIL_01
+    cluster: CL_MEADOW_TRAILS
+    proto: q2-job-board-never-sleeps
+    tags: [portal.P_MEADOW_TOWN]
+  - id: R_MEADOW_POND_01
+    cluster: CL_MEADOW_PONDS
+    proto: q2-job-board-never-sleeps
+  - id: R_MEADOW_PEST_01
+    cluster: CL_MEADOW_PEST_FIELDS
+    proto: q2-job-board-never-sleeps
+  - id: R_MEADOW_GRATE_01
+    cluster: CL_MEADOW_SEWER_GRATE
+    proto: q2-job-board-never-sleeps
+    tags: [portal.P_MEADOW_SEWERS]
+
+notes:
+  - "Trails must breadcrumb back to Town with loud, consistent signage."
+  - "Ponds are the first terrain/hazard teaching space: keep footing language consistent."

@@ -1,0 +1,213 @@
+version: 1
+zone_id: quarry
+zone_name: "Quarry"
+area_id: A01
+level_band: [4, 6]
+
+# Not a player spawn zone, but set for reachability warnings in validation.
+start_room: P_QUARRY_SEWERS
+
+rooms:
+  # ---------------- CL_QUARRY_FOOTHILLS (15 rooms) ----------------
+  - id: P_QUARRY_SEWERS
+    name: "Sewer Bypass Mouth"
+    cluster: CL_QUARRY_FOOTHILLS
+    tags: [portal.P_QUARRY_SEWERS]
+    desc: |
+      Cold air carries grit and distant hammering.
+      A rough tunnel slopes back toward the sewers.
+    exits:
+      - { dir: west, to: P_SEWERS_QUARRY, len: 1 }
+      - { dir: east, to: R_QUARRY_FOOTHILLS_01, len: 1 }
+
+  - id: P_QUARRY_CHECKPOINT
+    name: "Old Road Transfer"
+    cluster: CL_QUARRY_FOOTHILLS
+    tags: [portal.P_QUARRY_CHECKPOINT]
+    desc: |
+      A concrete ramp leads toward a gatehouse silhouette and the cracked old road beyond.
+      The wind up there feels like a different game.
+    exits:
+      - { dir: east, to: P_CHECKPOINT_QUARRY, len: 1 }
+      - { dir: west, to: R_QUARRY_FOOTHILLS_01, len: 1 }
+
+  - id: P_QUARRY_HILLFORT
+    name: "Hillfort Spur"
+    cluster: CL_QUARRY_FOOTHILLS
+    tags: [portal.P_QUARRY_HILLFORT]
+    desc: |
+      A narrow spur climbs toward broken stone and old banners.
+      The path looks survivable, but not forgiving.
+    exits:
+      - { dir: north, to: P_HILLFORT_QUARRY, len: 1 }
+      - { dir: south, to: R_QUARRY_FOOTHILLS_01, len: 1 }
+
+  - id: R_QUARRY_FOOTHILLS_01
+    name: "Quarry Foothills"
+    cluster: CL_QUARRY_FOOTHILLS
+    desc: |
+      Rocky foothills with warning flags and painted arrows:
+      "WORKS" one way, "SEWERS" the other. Dust hangs in the air like a habit.
+    exits:
+      - { dir: works, to: R_QUARRY_WORKS_01, len: 1 }
+      - { dir: sewers, to: P_QUARRY_SEWERS, len: 1 }
+      - { dir: checkpoint, to: P_QUARRY_CHECKPOINT, len: 1, state: sealed, gate: gate.checkpoint.access }
+      - { dir: hillfort, to: P_QUARRY_HILLFORT, len: 1 }
+
+  # ---------------- CL_QUARRY_WORKS (15 rooms) ----------------
+  - id: R_QUARRY_WORKS_01
+    name: "Foreman Works"
+    cluster: CL_QUARRY_WORKS
+    tags: [HUB_QUARRY_FOREMAN]
+    desc: |
+      A foreman shack, clipboard tyranny, and a vending crate of ore masks.
+      A board lists hazards in blunt terms: WORMS. NETS. SLAMS.
+    exits:
+      - { dir: foothills, to: R_QUARRY_FOOTHILLS_01, len: 1 }
+      - { dir: pits, to: R_QUARRY_PITS_01, len: 1 }
+      - { dir: night, to: R_QUARRY_NIGHT_01, len: 1 }
+
+  # ---------------- CL_QUARRY_PITS (20 rooms) ----------------
+  - id: R_QUARRY_PITS_01
+    name: "Open Pits"
+    cluster: CL_QUARRY_PITS
+    desc: |
+      Open cuts in the earth with sparse cover.
+      Heavy hits land here. Pull carefully or pay.
+    exits:
+      - { dir: west, to: R_QUARRY_WORKS_01, len: 1 }
+      - { dir: east, to: R_QUARRY_PITS_02, len: 1 }
+
+  - id: R_QUARRY_PITS_02
+    name: "Worm Tell Shelf"
+    cluster: CL_QUARRY_PITS
+    desc: |
+      The ground here has a pattern of cracks that do not feel natural.
+      A few stones tremble like something is practicing.
+    exits:
+      - { dir: west, to: R_QUARRY_PITS_01, len: 1 }
+      - { dir: east, to: R_QUARRY_DIG_01, len: 1 }
+
+  # ---------------- CL_QUARRY_ILLEGAL_DIG (20 rooms) ----------------
+  - id: R_QUARRY_DIG_01
+    name: "Illegal Dig Site"
+    cluster: CL_QUARRY_ILLEGAL_DIG
+    tags: [setpiece.q4.illegal_dig_site]
+    desc: |
+      An illegal dig with makeshift scaffolds and three nervous crews.
+      Net-throwers circle the edges like they own the air.
+    exits:
+      - { dir: west, to: R_QUARRY_PITS_02, len: 1 }
+      - { dir: north, to: R_QUARRY_CHOICE_01, len: 1 }
+
+  - id: R_QUARRY_CHOICE_01
+    name: "Union Or Foreman"
+    cluster: CL_QUARRY_ILLEGAL_DIG
+    desc: |
+      The union rep and the foreman arrive at the same time and start talking past each other.
+      The choice needs to be explicit, summarized, and confirmed.
+    exits:
+      - { dir: south, to: R_QUARRY_DIG_01, len: 1 }
+      - { dir: east, to: R_QUARRY_ELITE_01, len: 1 }
+
+  - id: R_QUARRY_ELITE_01
+    name: "Breaker-7 Approach"
+    cluster: CL_QUARRY_ILLEGAL_DIG
+    desc: |
+      The tunnel narrows. A rhythmic impact repeats like a metronome.
+      Dust falls in time.
+    exits:
+      - { dir: west, to: R_QUARRY_CHOICE_01, len: 1 }
+      - { dir: east, to: R_QUARRY_ELITE_02, len: 1 }
+
+  - id: R_QUARRY_ELITE_02
+    name: "Breaker-7 Arena"
+    cluster: CL_QUARRY_ILLEGAL_DIG
+    tags: [setpiece.q4.breaker7_arena]
+    desc: |
+      A wide arena where displacement matters and edges are dangerous on purpose.
+      The slam is slow and huge. The shove is faster and cruel.
+    exits:
+      - { dir: west, to: R_QUARRY_ELITE_01, len: 1 }
+      - { dir: works, to: R_QUARRY_WORKS_01, len: 1 }
+      - { dir: checkpoint, to: R_QUARRY_FOOTHILLS_01, len: 1, gate: gate.checkpoint.access }
+
+  # ---------------- Quarry Night Shift (Event stubs) ----------------
+  - id: R_QUARRY_NIGHT_01
+    name: "Night Shift Start"
+    cluster: CL_QUARRY_WORKS
+    tags: [setpiece.e19.shift_start]
+    desc: |
+      A bell rings and the quarry becomes a different place.
+      Visibility drops, the objective panel should be loud, and patrols start to matter.
+    exits:
+      - { dir: works, to: R_QUARRY_WORKS_01, len: 1 }
+      - { dir: workers, to: R_QUARRY_WORKER_01, len: 1 }
+      - { dir: cache, to: R_QUARRY_CACHE_01, len: 1 }
+      - { dir: catwalk, to: R_QUARRY_CATWALK_01, len: 1 }
+      - { dir: shortcut, to: R_QUARRY_SHORTCUT_01, len: 1 }
+
+  - id: R_QUARRY_WORKER_01
+    name: "Worker Evac Lane"
+    cluster: CL_QUARRY_PITS
+    tags: [setpiece.e19.worker_evac]
+    desc: |
+      Workers move to lamplit shelters while patrols pressure them.
+      Safe lane markers should read even in low light.
+    exits:
+      - { dir: back, to: R_QUARRY_NIGHT_01, len: 1 }
+      - { dir: shelter, to: R_QUARRY_SHELTER_01, len: 1 }
+
+  - id: R_QUARRY_CACHE_01
+    name: "Rare Cache Window"
+    cluster: CL_QUARRY_ILLEGAL_DIG
+    tags: [setpiece.e19.rare_cache]
+    desc: |
+      A cache opens for a short window.
+      The risk and the reward should both be explicit.
+    exits:
+      - { dir: back, to: R_QUARRY_NIGHT_01, len: 1 }
+      - { dir: deeper, to: R_QUARRY_NIGHT_ELITE_01, len: 1 }
+
+  - id: R_QUARRY_SHORTCUT_01
+    name: "Collapsed Tunnel Shortcut"
+    cluster: CL_QUARRY_PITS
+    desc: |
+      A collapsed tunnel connects objectives.
+      Opening it is loud and fast: time saved, patrol heat gained.
+    exits:
+      - { dir: back, to: R_QUARRY_NIGHT_01, len: 1 }
+      - { dir: workers, to: R_QUARRY_WORKER_01, len: 1 }
+      - { dir: cache, to: R_QUARRY_CACHE_01, len: 1 }
+      - { dir: elite, to: R_QUARRY_NIGHT_ELITE_01, len: 1 }
+
+  - id: R_QUARRY_CATWALK_01
+    name: "Maintenance Catwalk"
+    cluster: CL_QUARRY_WORKS
+    desc: |
+      A ladder chain and catwalk that bypasses one patrol choke.
+      This route rewards movement mastery, not brute force.
+    exits:
+      - { dir: back, to: R_QUARRY_NIGHT_01, len: 1 }
+      - { dir: workers, to: R_QUARRY_WORKER_01, len: 1 }
+      - { dir: cache, to: R_QUARRY_CACHE_01, len: 1 }
+
+  - id: R_QUARRY_NIGHT_ELITE_01
+    name: "Night Elite"
+    cluster: CL_QUARRY_PITS
+    tags: [setpiece.e19.night_elite]
+    desc: |
+      An event elite prowls for ore and tries to escape with it.
+      The flee tell needs to be loud: audio plus a clear marker lane.
+    exits:
+      - { dir: back, to: R_QUARRY_NIGHT_01, len: 1 }
+      - { dir: shelter, to: R_QUARRY_SHELTER_01, len: 1 }
+
+  - id: R_QUARRY_SHELTER_01
+    name: "Lamplit Shelter"
+    cluster: CL_QUARRY_WORKS
+    desc: |
+      A lamplit shelter where waiting is explicitly safe.
+      For small and under-leveled parties, this is the permission to breathe.
+    exits:
+      - { dir: back, to: R_QUARRY_NIGHT_01, len: 1 }

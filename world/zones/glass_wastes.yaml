@@ -1,0 +1,72 @@
+version: 1
+zone_id: glass_wastes
+zone_name: "Glass Wastes"
+
+area_id: A01
+level_band: [12, 15]
+target_rooms: 160
+
+anchor:
+  x: 24
+  y: 7
+
+# Global cartesian bounds for planning and validation only.
+bounds:
+  min:
+    x: 25
+    y: 5
+  max:
+    x: 30
+    y: 9
+
+clusters:
+  - id: CL_WASTES_OUTPOST
+    rooms: 10
+  - id: CL_WASTES_DUNES
+    rooms: 60
+  - id: CL_WASTES_GLASSFIELDS
+    rooms: 50
+  - id: CL_WASTES_STORM_EYE
+    rooms: 40
+
+portals:
+  - id: P_WASTES_SKYBRIDGE
+    cluster: CL_WASTES_OUTPOST
+  - id: P_WASTES_GARDENS
+    cluster: CL_WASTES_OUTPOST
+
+protoadventures:
+  - q11-stormglass-route
+
+hubs:
+  - HUB_WASTES_OUTPOST
+
+cluster_edges:
+  - a: CL_WASTES_OUTPOST
+    b: CL_WASTES_DUNES
+    kind: spine
+  - a: CL_WASTES_DUNES
+    b: CL_WASTES_GLASSFIELDS
+    kind: spine
+  - a: CL_WASTES_GLASSFIELDS
+    b: CL_WASTES_STORM_EYE
+    kind: gate
+
+key_rooms:
+  - id: R_WASTES_OUTPOST_01
+    cluster: CL_WASTES_OUTPOST
+    proto: q11-stormglass-route
+    tags: [HUB_WASTES_OUTPOST, portal.P_WASTES_SKYBRIDGE, portal.P_WASTES_GARDENS]
+  - id: R_WASTES_DUNE_01
+    cluster: CL_WASTES_DUNES
+    proto: q11-stormglass-route
+  - id: R_WASTES_GLASS_01
+    cluster: CL_WASTES_GLASSFIELDS
+    proto: q11-stormglass-route
+  - id: R_WASTES_EYE_02
+    cluster: CL_WASTES_STORM_EYE
+    proto: q11-stormglass-route
+    tags: [setpiece.q11.storm_eye_event]
+
+notes:
+  - "Shelters are the real checkpoints; getting lost should be a player mistake, not parser ambiguity."

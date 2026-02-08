@@ -19,6 +19,7 @@
 # Misc
 .DS_Store
 .env
+/env/*.env
 
 # Python
 **/__pycache__/

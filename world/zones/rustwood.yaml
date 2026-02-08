@@ -1,0 +1,78 @@
+version: 1
+zone_id: rustwood
+zone_name: "Rustwood"
+
+area_id: A01
+level_band: [5, 8]
+target_rooms: 120
+
+anchor:
+  x: 9
+  y: 7
+
+# Global cartesian bounds for planning and validation only.
+bounds:
+  min:
+    x: 7
+    y: 6
+  max:
+    x: 13
+    y: 10
+
+clusters:
+  - id: CL_RUSTWOOD_RANGER_CAMP
+    rooms: 10
+  - id: CL_RUSTWOOD_TRAILS
+    rooms: 40
+  - id: CL_RUSTWOOD_PYLONS
+    rooms: 30
+  - id: CL_RUSTWOOD_GROVES
+    rooms: 40
+
+portals:
+  - id: P_RUSTWOOD_CHECKPOINT
+    cluster: CL_RUSTWOOD_TRAILS
+  - id: P_RUSTWOOD_LIBRARY
+    cluster: CL_RUSTWOOD_TRAILS
+
+protoadventures:
+  - hunt-rustwood-stump-stalker
+  - q5-sunken-index
+
+hubs:
+  - HUB_RUSTWOOD_RANGER
+
+cluster_edges:
+  - a: CL_RUSTWOOD_RANGER_CAMP
+    b: CL_RUSTWOOD_TRAILS
+    kind: spine
+  - a: CL_RUSTWOOD_TRAILS
+    b: CL_RUSTWOOD_PYLONS
+    kind: spine
+    note: "Pylon line is the readable route to the Library threshold."
+  - a: CL_RUSTWOOD_TRAILS
+    b: CL_RUSTWOOD_GROVES
+    kind: loop
+    note: "Hunt/grind loop; should reconnect to trails reliably."
+
+key_rooms:
+  - id: R_RUST_CAMP_01
+    cluster: CL_RUSTWOOD_RANGER_CAMP
+    proto: q5-sunken-index
+    tags: [HUB_RUSTWOOD_RANGER]
+  - id: R_RUST_PYLON_01
+    cluster: CL_RUSTWOOD_PYLONS
+    proto: q5-sunken-index
+  - id: R_RUST_PYLON_02
+    cluster: CL_RUSTWOOD_PYLONS
+    proto: q5-sunken-index
+  - id: R_RUST_HUNT_START_01
+    cluster: CL_RUSTWOOD_TRAILS
+    proto: hunt-rustwood-stump-stalker
+  - id: R_RUST_STUMP_RING_01
+    cluster: CL_RUSTWOOD_GROVES
+    proto: hunt-rustwood-stump-stalker
+    tags: [setpiece.h18.stump_ring_finish]
+
+notes:
+  - "Pylons are the sightline tutoring space: make distance and cover pockets legible in text."

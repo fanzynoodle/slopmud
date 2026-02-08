@@ -1,0 +1,102 @@
+{
+  "edge_count": 23,
+  "generated_at_utc": "2026-02-08T12:49:13+00:00",
+  "portal_count": 46,
+  "zones": [
+    {
+      "id": "newbie_school",
+      "name": "Newbie School",
+      "portal_count": 1
+    },
+    {
+      "id": "town_gaia_gate",
+      "name": "Town: Gaia Gate",
+      "portal_count": 4
+    },
+    {
+      "id": "meadowline",
+      "name": "Meadowline",
+      "portal_count": 2
+    },
+    {
+      "id": "scrap_orchard",
+      "name": "Scrap Orchard",
+      "portal_count": 2
+    },
+    {
+      "id": "under_town_sewers",
+      "name": "Under-Town Sewers",
+      "portal_count": 4
+    },
+    {
+      "id": "quarry",
+      "name": "Quarry",
+      "portal_count": 3
+    },
+    {
+      "id": "hillfort_ruins",
+      "name": "Hillfort Ruins",
+      "portal_count": 2
+    },
+    {
+      "id": "old_road_checkpoint",
+      "name": "Old Road Checkpoint",
+      "portal_count": 4
+    },
+    {
+      "id": "rail_spur",
+      "name": "Rail Spur",
+      "portal_count": 1
+    },
+    {
+      "id": "rustwood",
+      "name": "Rustwood",
+      "portal_count": 2
+    },
+    {
+      "id": "sunken_library",
+      "name": "Sunken Library",
+      "portal_count": 3
+    },
+    {
+      "id": "factory_district_outskirts",
+      "name": "Factory District (Outskirts)",
+      "portal_count": 3
+    },
+    {
+      "id": "the_reservoir",
+      "name": "The Reservoir",
+      "portal_count": 3
+    },
+    {
+      "id": "the_underrail",
+      "name": "The Underrail",
+      "portal_count": 3
+    },
+    {
+      "id": "skybridge",
+      "name": "Skybridge",
+      "portal_count": 2
+    },
+    {
+      "id": "glass_wastes",
+      "name": "Glass Wastes",
+      "portal_count": 2
+    },
+    {
+      "id": "crater_gardens",
+      "name": "Crater Gardens",
+      "portal_count": 2
+    },
+    {
+      "id": "the_core",
+      "name": "The Core",
+      "portal_count": 2
+    },
+    {
+      "id": "the_seam",
+      "name": "The Seam",
+      "portal_count": 1
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+version: 1
+zone_id: quarry
+zone_name: "Quarry"
+
+area_id: A01
+level_band: [4, 6]
+target_rooms: 70
+
+anchor:
+  x: 6
+  y: 3
+
+# Global cartesian bounds for planning and validation only.
+bounds:
+  min:
+    x: 3
+    y: 0
+  max:
+    x: 8
+    y: 6
+
+clusters:
+  - id: CL_QUARRY_FOOTHILLS
+    rooms: 15
+  - id: CL_QUARRY_WORKS
+    rooms: 15
+  - id: CL_QUARRY_PITS
+    rooms: 20
+  - id: CL_QUARRY_ILLEGAL_DIG
+    rooms: 20
+
+portals:
+  - id: P_QUARRY_SEWERS
+    cluster: CL_QUARRY_FOOTHILLS
+  - id: P_QUARRY_CHECKPOINT
+    cluster: CL_QUARRY_FOOTHILLS
+  - id: P_QUARRY_HILLFORT
+    cluster: CL_QUARRY_FOOTHILLS
+
+protoadventures:
+  - event-quarry-night-shift
+  - q4-quarry-rights
+
+hubs:
+  - HUB_QUARRY_FOREMAN
+
+cluster_edges:
+  - a: CL_QUARRY_FOOTHILLS
+    b: CL_QUARRY_WORKS
+    kind: spine
+  - a: CL_QUARRY_WORKS
+    b: CL_QUARRY_PITS
+    kind: spine
+  - a: CL_QUARRY_PITS
+    b: CL_QUARRY_ILLEGAL_DIG
+    kind: setpiece
+
+key_rooms:
+  - id: R_QUARRY_FOOTHILLS_01
+    cluster: CL_QUARRY_FOOTHILLS
+    proto: q4-quarry-rights
+  - id: R_QUARRY_WORKS_01
+    cluster: CL_QUARRY_WORKS
+    proto: q4-quarry-rights
+    tags: [HUB_QUARRY_FOREMAN]
+  - id: R_QUARRY_PITS_01
+    cluster: CL_QUARRY_PITS
+    proto: q4-quarry-rights
+  - id: R_QUARRY_DIG_01
+    cluster: CL_QUARRY_ILLEGAL_DIG
+    proto: q4-quarry-rights
+    tags: [setpiece.q4.illegal_dig_site]
+
+notes:
+  - "Foothills is the zone connective tissue: portals should have obvious signposts to WORKS and back out."

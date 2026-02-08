@@ -1,0 +1,73 @@
+flowchart LR
+  %% Gaia overworld map (high-level). Node names are stable IDs we can reuse in code later.
+  %% Portal coordinates + exit lengths (movement costs) are tracked in docs/overworld_cartesian_layout.md.
+
+  subgraph STARTER[Starter Region (L1-L5)]
+    NS[Newbie School]
+    TOWN[Town: Gaia Gate]
+    MEADOW[Meadowline]
+    ORCHARD[Scrap Orchard]
+    SEWERS[Under-Town Sewers]
+    QUARRY[Quarry]
+    HILLFORT[Hillfort Ruins]
+    CHECKPOINT[Old Road Checkpoint]
+  end
+
+  subgraph MID[Midgame (L5-L10)]
+    RAIL[Rail Spur]
+    RUSTWOOD[Rustwood]
+    LIB[Sunken Library]
+    FACTORY[Factory District]
+    RES[Reservoir]
+    UNDERRAIL[The Underrail]
+  end
+
+  subgraph LATE[High / Late (L11-L20)]
+    SKY[Skybridge]
+    WASTES[Glass Wastes]
+    GARDENS[Crater Gardens]
+    CORE[The Core]
+    SEAM[The Seam]
+  end
+
+  subgraph FUTURE[Future Areas (A02-A50, placeholders)]
+    R1[A02-A10 Tier 1]
+    R2[A11-A25 Tier 2]
+    R3[A26-A40 Tier 3]
+    R4[A41-A50 Tier 4]
+  end
+
+  %% Starter connections
+  NS --> TOWN
+  TOWN --> MEADOW
+  TOWN --> ORCHARD
+  TOWN --> SEWERS
+  MEADOW --> SEWERS
+  ORCHARD --> SEWERS
+  SEWERS --> QUARRY
+  QUARRY --> CHECKPOINT
+  QUARRY --> HILLFORT
+  HILLFORT --> CHECKPOINT
+
+  %% Midgame connections
+  CHECKPOINT --> RAIL
+  CHECKPOINT --> RUSTWOOD
+  RUSTWOOD --> LIB
+  LIB --> FACTORY
+  LIB --> RES
+  FACTORY --> RES
+  FACTORY --> UNDERRAIL
+  RES --> UNDERRAIL
+  UNDERRAIL --> SKY
+
+  %% Late connections
+  SKY --> WASTES
+  WASTES --> GARDENS
+  GARDENS --> CORE
+  CORE --> SEAM
+
+  %% Future gates (ship as blocked exits for now)
+  TOWN -.->|blocked| R1
+  CHECKPOINT -.->|blocked| R2
+  SKY -.->|blocked| R3
+  SEAM -.->|blocked| R4

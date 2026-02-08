@@ -1,0 +1,74 @@
+version: 1
+zone_id: crater_gardens
+zone_name: "Crater Gardens"
+
+area_id: A01
+level_band: [13, 16]
+target_rooms: 130
+
+anchor:
+  x: 27
+  y: 7
+
+# Global cartesian bounds for planning and validation only.
+bounds:
+  min:
+    x: 29
+    y: 5
+  max:
+    x: 35
+    y: 9
+
+clusters:
+  - id: CL_GARDENS_GREENHOUSE
+    rooms: 10
+  - id: CL_GARDENS_WILDS
+    rooms: 50
+  - id: CL_GARDENS_BLOOM_GROVES
+    rooms: 40
+  - id: CL_GARDENS_ROOT_ENGINE
+    rooms: 30
+
+portals:
+  - id: P_GARDENS_WASTES
+    cluster: CL_GARDENS_GREENHOUSE
+  - id: P_GARDENS_CORE
+    cluster: CL_GARDENS_GREENHOUSE
+
+protoadventures:
+  - q12-bloom-contract
+
+hubs:
+  - HUB_GARDENS_GREENHOUSE
+
+cluster_edges:
+  - a: CL_GARDENS_GREENHOUSE
+    b: CL_GARDENS_WILDS
+    kind: spine
+  - a: CL_GARDENS_WILDS
+    b: CL_GARDENS_BLOOM_GROVES
+    kind: setpiece
+  - a: CL_GARDENS_BLOOM_GROVES
+    b: CL_GARDENS_ROOT_ENGINE
+    kind: gate
+    gate: q.q12_bloom_contract.samples>=3
+
+key_rooms:
+  - id: R_GARDENS_GREENHOUSE_01
+    cluster: CL_GARDENS_GREENHOUSE
+    proto: q12-bloom-contract
+    tags: [HUB_GARDENS_GREENHOUSE, portal.P_GARDENS_WASTES, portal.P_GARDENS_CORE]
+  - id: R_GARDENS_WILDS_01
+    cluster: CL_GARDENS_WILDS
+    proto: q12-bloom-contract
+  - id: R_GARDENS_GROVE_1_01
+    cluster: CL_GARDENS_BLOOM_GROVES
+    proto: q12-bloom-contract
+    tags: [setpiece.q12.bloom_grove_1]
+  - id: R_GARDENS_ENGINE_01
+    cluster: CL_GARDENS_ROOT_ENGINE
+    proto: q12-bloom-contract
+    tags: [setpiece.q12.root_engine_arena]
+
+notes:
+  - "Greenhouse is the stable hub; decon pockets must be loud and consistent."

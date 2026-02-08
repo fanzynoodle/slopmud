@@ -1,0 +1,24 @@
+a	b	len	ax	ay	bx	by	a_zone	b_zone	notes
+P_NS_TOWN	P_TOWN_NS	1	0	-1	0	0	Newbie School	Town: Gaia Gate	newbie frictionless
+P_TOWN_MEADOW	P_MEADOW_TOWN	1	1	0	2	0	Town: Gaia Gate	Meadowline	newbie frictionless
+P_TOWN_ORCHARD	P_ORCHARD_TOWN	1	0	1	0	2	Town: Gaia Gate	Scrap Orchard	newbie frictionless
+P_TOWN_SEWERS	P_SEWERS_TOWN	1	1	1	2	1	Town: Gaia Gate	Under-Town Sewers	newbie frictionless
+P_MEADOW_SEWERS	P_SEWERS_MEADOW	1	3	1	3	2	Meadowline	Under-Town Sewers	newbie frictionless
+P_ORCHARD_SEWERS	P_SEWERS_ORCHARD	1	1	3	2	3	Scrap Orchard	Under-Town Sewers	newbie frictionless
+P_SEWERS_QUARRY	P_QUARRY_SEWERS	1	4	3	5	3	Under-Town Sewers	Quarry	still early-game
+P_QUARRY_CHECKPOINT	P_CHECKPOINT_QUARRY	1	6	2	7	2	Quarry	Old Road Checkpoint	still early-game
+P_QUARRY_HILLFORT	P_HILLFORT_QUARRY	1	6	4	6	5	Quarry	Hillfort Ruins	still early-game
+P_HILLFORT_CHECKPOINT	P_CHECKPOINT_HILLFORT	1	8	5	9	5	Hillfort Ruins	Old Road Checkpoint	still early-game
+P_CHECKPOINT_RAIL	P_RAIL_CHECKPOINT	2	10	4	12	4	Old Road Checkpoint	Rail Spur	road travel begins to matter
+P_CHECKPOINT_RUSTWOOD	P_RUSTWOOD_CHECKPOINT	2	9	6	9	8	Old Road Checkpoint	Rustwood	road travel begins to matter
+P_RUSTWOOD_LIBRARY	P_LIB_RUSTWOOD	2	11	8	13	8	Rustwood	Sunken Library	regional travel
+P_LIB_FACTORY	P_FACTORY_LIBRARY	2	13	7	15	7	Sunken Library	Factory District (Outskirts)	regional travel
+P_LIB_RESERVOIR	P_RESERVOIR_LIBRARY	2	13	9	15	9	Sunken Library	The Reservoir	regional travel
+P_FACTORY_RESERVOIR	P_RESERVOIR_FACTORY	1	16	8	17	8	Factory District (Outskirts)	The Reservoir	adjacent districts
+P_FACTORY_UNDERRAIL	P_UNDERRAIL_FACTORY	2	16	6	18	6	Factory District (Outskirts)	The Underrail	elevator/entry
+P_RESERVOIR_UNDERRAIL	P_UNDERRAIL_RESERVOIR	2	16	10	18	10	The Reservoir	The Underrail	tunnel/entry
+P_UNDERRAIL_SKYBRIDGE	P_SKYBRIDGE_UNDERRAIL	3	20	7	23	7	The Underrail	Skybridge	long transit segment
+P_SKYBRIDGE_WASTES	P_WASTES_SKYBRIDGE	3	24	7	27	7	Skybridge	Glass Wastes	harsh travel
+P_WASTES_GARDENS	P_GARDENS_WASTES	3	28	7	31	7	Glass Wastes	Crater Gardens	harsh travel
+P_GARDENS_CORE	P_CORE_GARDENS	4	33	7	37	7	Crater Gardens	The Core	endgame travel
+P_CORE_SEAM	P_SEAM_CORE	4	38	7	42	7	The Core	The Seam	endgame travel

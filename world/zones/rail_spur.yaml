@@ -1,0 +1,66 @@
+version: 1
+zone_id: rail_spur
+zone_name: "Rail Spur"
+
+area_id: A01
+level_band: [5, 7]
+target_rooms: 50
+
+anchor:
+  x: 12
+  y: 4
+
+# Global cartesian bounds for planning and validation only.
+bounds:
+  min:
+    x: 10
+    y: 2
+  max:
+    x: 14
+    y: 6
+
+clusters:
+  - id: CL_RAIL_TERMINAL
+    rooms: 15
+  - id: CL_RAIL_YARDS
+    rooms: 15
+  - id: CL_RAIL_LINE
+    rooms: 20
+
+portals:
+  - id: P_RAIL_CHECKPOINT
+    cluster: CL_RAIL_TERMINAL
+
+protoadventures:
+  - event-rail-runaway-cargo-bot
+  - q6-hillfort-signal
+
+hubs:
+  - HUB_RAIL_TERMINAL
+
+cluster_edges:
+  - a: CL_RAIL_TERMINAL
+    b: CL_RAIL_YARDS
+    kind: spine
+  - a: CL_RAIL_YARDS
+    b: CL_RAIL_LINE
+    kind: spine
+    note: "Event nodes live along the line; keep route reconnections obvious."
+
+key_rooms:
+  - id: R_RAIL_TERM_01
+    cluster: CL_RAIL_TERMINAL
+    proto: q6-hillfort-signal
+    tags: [HUB_RAIL_TERMINAL, portal.P_RAIL_CHECKPOINT]
+  - id: R_RAIL_EVENT_01
+    cluster: CL_RAIL_YARDS
+    proto: event-rail-runaway-cargo-bot
+    tags: [setpiece.e17.chase_start]
+  - id: R_RAIL_TERMINAL_02
+    cluster: CL_RAIL_TERMINAL
+    proto: event-rail-runaway-cargo-bot
+    tags: [setpiece.e17.brake_node_final]
+
+notes:
+  - "Terminal is the travel/event dispatcher hub; it must be stable and readable."
+  - "Yards teach geometry and safe lanes; the line hosts timed events and route splits."

@@ -1,0 +1,70 @@
+version: 1
+zone_id: old_road_checkpoint
+zone_name: "Old Road Checkpoint"
+
+area_id: A01
+level_band: [4, 6]
+target_rooms: 30
+
+anchor:
+  x: 9
+  y: 4
+
+# Global cartesian bounds for planning and validation only.
+bounds:
+  min:
+    x: 5
+    y: 0
+  max:
+    x: 12
+    y: 8
+
+clusters:
+  - id: CL_CHECKPOINT_GATEHOUSE
+    rooms: 15
+  - id: CL_CHECKPOINT_ROAD
+    rooms: 10
+  - id: CL_CHECKPOINT_AMBUSH_SPUR
+    rooms: 5
+
+portals:
+  - id: P_CHECKPOINT_QUARRY
+    cluster: CL_CHECKPOINT_ROAD
+  - id: P_CHECKPOINT_HILLFORT
+    cluster: CL_CHECKPOINT_ROAD
+  - id: P_CHECKPOINT_RAIL
+    cluster: CL_CHECKPOINT_ROAD
+  - id: P_CHECKPOINT_RUSTWOOD
+    cluster: CL_CHECKPOINT_ROAD
+
+protoadventures:
+  - q4-quarry-rights
+
+hubs:
+  - HUB_CHECKPOINT_GATEHOUSE
+
+cluster_edges:
+  - a: CL_CHECKPOINT_GATEHOUSE
+    b: CL_CHECKPOINT_ROAD
+    kind: spine
+  - a: CL_CHECKPOINT_ROAD
+    b: CL_CHECKPOINT_AMBUSH_SPUR
+    kind: spike
+
+key_rooms:
+  - id: R_CHECK_GATE_01
+    cluster: CL_CHECKPOINT_GATEHOUSE
+    proto: q4-quarry-rights
+    tags: [HUB_CHECKPOINT_GATEHOUSE]
+  - id: R_CHECK_ROAD_01
+    cluster: CL_CHECKPOINT_ROAD
+    proto: q4-quarry-rights
+    tags: [portal.P_CHECKPOINT_QUARRY, portal.P_CHECKPOINT_HILLFORT, portal.P_CHECKPOINT_RAIL, portal.P_CHECKPOINT_RUSTWOOD]
+  - id: R_CHECK_AMBUSH_01
+    cluster: CL_CHECKPOINT_AMBUSH_SPUR
+    proto: q4-quarry-rights
+    tags: [travel_spike]
+
+notes:
+  - "Road cluster is where portals live; make the four directions feel distinct via signage, not maps."
+  - "Gatehouse should be a reset pocket so ambush wipes don't feel like road tax."

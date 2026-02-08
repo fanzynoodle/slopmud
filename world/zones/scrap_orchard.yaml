@@ -1,0 +1,70 @@
+version: 1
+zone_id: scrap_orchard
+zone_name: "Scrap Orchard"
+
+area_id: A01
+level_band: [2, 3]
+target_rooms: 90
+
+anchor:
+  x: 0
+  y: 3
+
+# Global cartesian bounds for planning and validation only.
+bounds:
+  min:
+    x: -2
+    y: 0
+  max:
+    x: 3
+    y: 5
+
+clusters:
+  - id: CL_ORCHARD_GROVE
+    rooms: 30
+  - id: CL_ORCHARD_ROOTWORKS
+    rooms: 20
+  - id: CL_ORCHARD_DRONE_NESTS
+    rooms: 30
+  - id: CL_ORCHARD_PIPEWAY
+    rooms: 10
+
+portals:
+  - id: P_ORCHARD_TOWN
+    cluster: CL_ORCHARD_GROVE
+  - id: P_ORCHARD_SEWERS
+    cluster: CL_ORCHARD_PIPEWAY
+
+protoadventures:
+  - q2-job-board-never-sleeps
+
+cluster_edges:
+  - a: CL_ORCHARD_GROVE
+    b: CL_ORCHARD_ROOTWORKS
+    kind: spine
+  - a: CL_ORCHARD_ROOTWORKS
+    b: CL_ORCHARD_DRONE_NESTS
+    kind: spine
+  - a: CL_ORCHARD_DRONE_NESTS
+    b: CL_ORCHARD_PIPEWAY
+    kind: teaser
+    note: "Pipeway is the sewer-adjacent route; readable landmarking matters."
+
+key_rooms:
+  - id: R_ORCHARD_TRAIL_01
+    cluster: CL_ORCHARD_GROVE
+    proto: q2-job-board-never-sleeps
+    tags: [portal.P_ORCHARD_TOWN]
+  - id: R_ORCHARD_TRAIL_02
+    cluster: CL_ORCHARD_ROOTWORKS
+    proto: q2-job-board-never-sleeps
+  - id: R_ORCHARD_NEST_01
+    cluster: CL_ORCHARD_DRONE_NESTS
+    proto: q2-job-board-never-sleeps
+  - id: R_ORCHARD_PIPE_01
+    cluster: CL_ORCHARD_PIPEWAY
+    proto: q2-job-board-never-sleeps
+    tags: [portal.P_ORCHARD_SEWERS]
+
+notes:
+  - "Rootworks should teach line-of-sight breaks and tight-path pulls before drone nests add ranged pressure."

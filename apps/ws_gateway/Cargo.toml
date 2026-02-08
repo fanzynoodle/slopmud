@@ -1,0 +1,20 @@
+[package]
+name = "ws_gateway"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR 0BSD"
+
+[dependencies]
+anyhow = "1"
+bytes = "1"
+futures-util = "0.3"
+getrandom = "0.2"
+mudproto = { path = "../../crates/mudproto" }
+slopio = { path = "../../crates/slopio" }
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.24"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+flatbuffers = "25.12.19"

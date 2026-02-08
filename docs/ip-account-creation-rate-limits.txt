@@ -1,0 +1,104 @@
+# Account-Creation Rate Limits By Network (IPv4 + IPv6)
+#
+# Goal
+# - Make mass account creation expensive while keeping "normal" residential/cellular users
+#   able to create accounts even under abuse.
+# - Do this by rate-limiting on aggregated network keys, not individual IPs.
+#
+# Notes / Warnings
+# - IP ownership changes. Prefer dynamic classification (IP -> ASN) over static CIDR lists.
+# - IPv6: per-IP limits do not work; attackers can generate limitless /128s. Aggregate at /64
+#   or (better) /56-/48 depending on your users and carrier behavior.
+# - This file is a *reference + starter config*, not an exhaustive map of the Internet.
+#
+# Matching Strategy (recommended)
+# - Compute 2-3 "keys" and require tokens from all of them:
+#   1) ip_prefix_key: IPv4 /24, IPv6 /56 (tune to your audience)
+#   2) asn_key: ASN for the source IP (requires IP->ASN lookup)
+#   3) global_key: a small global safety bucket for extreme abuse events
+# - Apply "most specific wins" for CIDR rules (longest-prefix match).
+# - Apply ASN rules when ASN is known; fall back to CIDR defaults otherwise.
+#
+# Format (one rule per line)
+# - Blank lines and lines starting with '#' are ignored.
+# - Columns:
+#     <kind> <value> <per_hour> <per_day> <tag> <notes...>
+#   kind: cidr4 | cidr6 | asn
+#   value: CIDR (e.g. 15.0.0.0/8, 2001:db8::/32) or ASN (e.g. AS16509)
+#   per_hour/per_day: integer token budgets (0 means block)
+#
+# ---------------------------------------------------------------------------
+# Defaults (unknown / residential-ish)
+#
+cidr4 0.0.0.0/0  6 20 default "Fallback for IPv4 when no other rule matches"
+cidr6 ::/0       6 20 default "Fallback for IPv6 when no other rule matches"
+#
+# ---------------------------------------------------------------------------
+# Reserved / invalid / unroutable (block account creation)
+#
+cidr4 0.0.0.0/8          0 0 reserved "IANA: software / 'this network'"
+cidr4 10.0.0.0/8         0 0 reserved "RFC1918 private"
+cidr4 100.64.0.0/10      0 0 reserved "CGNAT (should not appear from clients)"
+cidr4 127.0.0.0/8        0 0 reserved "Loopback"
+cidr4 169.254.0.0/16     0 0 reserved "Link-local"
+cidr4 172.16.0.0/12      0 0 reserved "RFC1918 private"
+cidr4 192.0.0.0/24       0 0 reserved "IETF protocol assignments"
+cidr4 192.0.2.0/24       0 0 reserved "TEST-NET-1"
+cidr4 192.168.0.0/16     0 0 reserved "RFC1918 private"
+cidr4 198.18.0.0/15      0 0 reserved "Benchmark testing"
+cidr4 198.51.100.0/24    0 0 reserved "TEST-NET-2"
+cidr4 203.0.113.0/24     0 0 reserved "TEST-NET-3"
+cidr4 224.0.0.0/4        0 0 reserved "Multicast"
+cidr4 240.0.0.0/4        0 0 reserved "Reserved (future use)"
+#
+cidr6 ::/128             0 0 reserved "Unspecified"
+cidr6 ::1/128            0 0 reserved "Loopback"
+cidr6 64:ff9b::/96       0 0 reserved "NAT64 well-known prefix (shouldn't be a client src)"
+cidr6 100::/64           0 0 reserved "Discard-only"
+cidr6 2001:db8::/32      0 0 reserved "Documentation"
+cidr6 2002::/16          0 0 reserved "6to4 (deprecated; treat as suspicious if seen)"
+cidr6 fc00::/7           0 0 reserved "ULA (RFC4193)"
+cidr6 fe80::/10          0 0 reserved "Link-local"
+cidr6 ff00::/8           0 0 reserved "Multicast"
+#
+# ---------------------------------------------------------------------------
+# Legacy / corporate blocks (low expected volume)
+#
+# Example given: 15.0.0.0/8 has historically been a HP legacy block.
+cidr4 15.0.0.0/8         3 5 corp_legacy "Low expected account creation volume (example)"
+#
+# Add more corp legacy blocks here as you confirm ownership and intent:
+# cidr4 X.0.0.0/8         3 5 corp_legacy "Org; reason"
+#
+# ---------------------------------------------------------------------------
+# Major cloud / datacenter (prefer ASN rules; applies to both IPv4 and IPv6)
+#
+# These are *starter* examples. Expand/tune based on your threat model.
+asn AS16509              1 3 cloud "Amazon AWS"
+asn AS15169              1 3 cloud "Google"
+asn AS8075               1 3 cloud "Microsoft"
+asn AS14061              1 3 cloud "DigitalOcean"
+asn AS16276              1 3 cloud "OVH"
+asn AS24940              1 3 cloud "Hetzner"
+asn AS20473              1 3 cloud "Vultr"
+asn AS63949              1 3 cloud "Linode (Akamai Connected Cloud)"
+#
+# ---------------------------------------------------------------------------
+# VPN / proxy / Tor
+#
+# Do NOT hardcode these long-term. Maintain dynamically:
+# - Import Tor exit lists on a schedule
+# - Import reputable IP reputation / abuse lists (and review false positives)
+# - Consider a separate "challenge" flow instead of outright blocks
+#
+# ---------------------------------------------------------------------------
+# Tuning Cheatsheet
+#
+# - If legit new-user signups are getting blocked from a specific ISP:
+#   Increase the default, and add an ISP-specific override (by ASN) with a higher budget.
+# - If abuse is coming from cloud providers:
+#   Keep cloud ASN budgets low; require email/phone/PoW/challenges for cloud signups.
+# - If abuse is "residential proxy" based:
+#   Add per-ASN budgets (consumer carriers) plus per-prefix budgets (/24, /56) so a single
+#   neighborhood / household can't burn the whole allowance.
+
