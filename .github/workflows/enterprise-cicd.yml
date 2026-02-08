@@ -225,12 +225,13 @@ jobs:
       - name: Store Local Prod Asset (No Rebuild)
         shell: bash
         env:
+          BUCKET: ${{ needs.build.outputs.bucket }}
           SHA: ${{ needs.build.outputs.sha }}
         run: |
           set -euo pipefail
           mkdir -p "assets/prod/${SHA}"
-          cp -f "assets/test/${SHA}/artifact.tgz" "assets/prod/${SHA}/artifact.tgz"
-          cp -f "assets/test/${SHA}/BUILD_INFO.txt" "assets/prod/${SHA}/BUILD_INFO.txt" || true
+          aws s3 cp "s3://${BUCKET}/prod/${SHA}/artifact.tgz" "assets/prod/${SHA}/artifact.tgz"
+          tar -xzf "assets/prod/${SHA}/artifact.tgz" -C "assets/prod/${SHA}" BUILD_INFO.txt 2>/dev/null || true
 
       - name: Deploy Prod
         shell: bash
