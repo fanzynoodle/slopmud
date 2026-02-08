@@ -109,7 +109,19 @@ jobs:
           bucket="slopmud-assets-${account_id}-${AWS_REGION}"
           key="${TRACK}/${SHA}/artifact.tgz"
 
+          set +e
           aws s3 cp "$ARTIFACT_PATH" "s3://${bucket}/${key}"
+          rc=$?
+          set -e
+          if [[ $rc -ne 0 ]]; then
+            if [[ "$TRACK" == "dev" ]]; then
+              echo "WARN: S3 upload failed (dev track continues without S3). Apply terraform to create/permit the assets bucket." >&2
+              bucket=""
+              key=""
+            else
+              exit $rc
+            fi
+          fi
 
           echo "bucket=$bucket" >> "$GITHUB_OUTPUT"
           echo "key=$key" >> "$GITHUB_OUTPUT"
@@ -136,6 +148,7 @@ jobs:
         shell: bash
         env:
           TRACK: ${{ needs.build.outputs.track }}
+          ARTIFACT_PATH: ${{ needs.build.outputs.artifact_path }}
           BUCKET: ${{ needs.build.outputs.bucket }}
           KEY: ${{ needs.build.outputs.key }}
         run: |
@@ -147,9 +160,15 @@ jobs:
             *) echo "unknown track: $TRACK" >&2; exit 2 ;;
           esac
 
-          sudo -n /usr/local/bin/slopmud-shuttle-assets \
-            --env "$env_name" \
-            --from-s3 "s3://${BUCKET}/${KEY}"
+          if [[ -n "${BUCKET}" && -n "${KEY}" ]]; then
+            sudo -n /usr/local/bin/slopmud-shuttle-assets \
+              --env "$env_name" \
+              --from-s3 "s3://${BUCKET}/${KEY}"
+          else
+            sudo -n /usr/local/bin/slopmud-shuttle-assets \
+              --env "$env_name" \
+              --from-file "$ARTIFACT_PATH"
+          fi
 
       - name: Smoke Test
         shell: bash
