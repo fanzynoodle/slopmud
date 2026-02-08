@@ -3469,6 +3469,7 @@ async fn handle_conn(
                         None,
                         None,
                         None,
+                        None,
                     ));
 
                     line_bytes.zeroize();
@@ -3574,6 +3575,7 @@ async fn handle_conn(
                     auth_blob = Some(make_shard_auth_blob(
                         name.as_deref().unwrap_or(""),
                         "password",
+                        None,
                         None,
                         None,
                         None,
@@ -3810,6 +3812,7 @@ async fn handle_conn(
                         google_email.as_deref(),
                         oidc_sub.as_deref(),
                         oidc_email.as_deref(),
+                        None,
                     )
                 });
 
