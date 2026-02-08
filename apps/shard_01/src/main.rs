@@ -33,6 +33,8 @@ struct AuthBlob {
     oidc_sub: Option<String>,
     #[serde(default)]
     oidc_email: Option<String>,
+    #[serde(default)]
+    caps: Option<Vec<String>>,
 }
 
 const OPENAI_API_BASE_DEFAULT: &str = "https://api.openai.com/v1";
