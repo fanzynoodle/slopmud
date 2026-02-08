@@ -2878,6 +2878,7 @@ async fn handle_conn(
                                                             google_email.as_deref(),
                                                             None,
                                                             None,
+                                                            req.caps.as_deref(),
                                                         ));
                                                         name = Some(uname.clone());
                                                         true
@@ -2920,6 +2921,7 @@ async fn handle_conn(
                                                 google_email.as_deref(),
                                                 None,
                                                 None,
+                                                req.caps.as_deref(),
                                             ));
                                             name = Some(uname.clone());
                                             true
@@ -2976,6 +2978,7 @@ async fn handle_conn(
                                                             None,
                                                             Some(sub),
                                                             oidc_email.as_deref(),
+                                                            req.caps.as_deref(),
                                                         ));
                                                         name = Some(uname.clone());
                                                         true
@@ -3018,6 +3021,7 @@ async fn handle_conn(
                                                 None,
                                                 Some(sub),
                                                 oidc_email.as_deref(),
+                                                req.caps.as_deref(),
                                             ));
                                             name = Some(uname.clone());
                                             true
@@ -3336,6 +3340,7 @@ async fn handle_conn(
                                 "google",
                                 Some(sub),
                                 email.as_deref(),
+                                None,
                                 None,
                                 None,
                             ));
