@@ -27,6 +27,18 @@
 
   const optScroll = document.getElementById("opt-scroll");
 
+  const authNameEl = document.getElementById("auth-name");
+  const authPasswordEl = document.getElementById("auth-password");
+  const btnAuthLoginPassword = document.getElementById("btn-auth-login-password");
+  const btnAuthCreatePassword = document.getElementById("btn-auth-create-password");
+
+  const ssoStatusEl = document.getElementById("sso-status");
+  const btnOauthGoogle = document.getElementById("btn-oauth-google");
+  const btnOauthOidc = document.getElementById("btn-oauth-oidc");
+  const btnOauthLogout = document.getElementById("btn-oauth-logout");
+  const btnAuthLoginSso = document.getElementById("btn-auth-login-sso");
+  const btnAuthCreateSso = document.getElementById("btn-auth-create-sso");
+
   const acctEmailEl = document.getElementById("acct-email");
   const btnEmailShow = document.getElementById("btn-email-show");
   const btnEmailSet = document.getElementById("btn-email-set");
@@ -48,6 +60,10 @@
 
   let ssoScanBuf = "";
   let lastSsoUrl = "";
+
+  let oauthProviders = { google: false, oidc: false };
+  let oauthIdentity = null; // { provider, email?, sub? }
+  let oauthPollTimer = null;
 
   const LS_WS_URL = "slopmud_ws_url";
   const LS_AUTOSCROLL = "slopmud_autoscroll";
@@ -115,6 +131,149 @@
     const t = newResumeToken();
     localStorage.setItem(LS_RESUME_TOKEN, t);
     return t;
+  }
+
+  function renderSsoStatus() {
+    if (!ssoStatusEl) return;
+
+    if (!oauthProviders.google && !oauthProviders.oidc) {
+      ssoStatusEl.textContent = "SSO is not configured on this server.";
+    } else if (!oauthIdentity) {
+      ssoStatusEl.textContent = "Not signed in.";
+    } else {
+      const email = oauthIdentity.email ? String(oauthIdentity.email) : "(no email)";
+      ssoStatusEl.textContent = `Signed in (${oauthIdentity.provider}): ${email}`;
+    }
+
+    btnOauthGoogle && (btnOauthGoogle.disabled = !oauthProviders.google);
+    btnOauthOidc && (btnOauthOidc.disabled = !oauthProviders.oidc);
+    btnOauthLogout && (btnOauthLogout.disabled = !oauthIdentity);
+
+    const canUseSso = !!oauthIdentity;
+    btnAuthLoginSso && (btnAuthLoginSso.disabled = !canUseSso);
+    btnAuthCreateSso && (btnAuthCreateSso.disabled = !canUseSso);
+  }
+
+  async function loadOauthProviders() {
+    oauthProviders = { google: false, oidc: false };
+    try {
+      const r = await fetch("/api/oauth/providers");
+      if (r.ok) {
+        const d = await r.json();
+        oauthProviders.google = !!(d && d.google);
+        oauthProviders.oidc = !!(d && d.oidc);
+      }
+    } catch {
+      // ignore
+    }
+    renderSsoStatus();
+  }
+
+  async function refreshOauthStatus() {
+    const token = getOrCreateResumeToken();
+    try {
+      const r = await fetch(`/api/oauth/status?resume=${encodeURIComponent(token)}`);
+      const d = await r.json().catch(() => null);
+      if (r.ok && d && d.type === "ok") {
+        oauthIdentity = d.identity || null;
+      }
+    } catch {
+      // ignore
+    }
+    renderSsoStatus();
+  }
+
+  async function oauthLogout() {
+    const token = getOrCreateResumeToken();
+    try {
+      await fetch("/api/oauth/logout", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ resume: token }),
+      });
+    } catch {
+      // ignore
+    }
+    oauthIdentity = null;
+    renderSsoStatus();
+  }
+
+  async function startOauth(provider) {
+    const token = getOrCreateResumeToken();
+
+    let d = null;
+    try {
+      const r = await fetch("/api/oauth/start", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provider, resume: token, return_to: location.pathname }),
+      });
+      d = await r.json().catch(() => null);
+      if (!r.ok || !d || d.type !== "ok" || !d.url) {
+        appendLine(`# oauth start failed: ${(d && d.message) || r.status}`);
+        return;
+      }
+    } catch {
+      appendLine("# oauth start failed: network error");
+      return;
+    }
+
+    try {
+      const pop = window.open(d.url, "slopmud_oauth", "popup=yes,width=520,height=720");
+      if (!pop) appendLine("# popup blocked");
+    } catch {
+      appendLine("# popup blocked");
+    }
+
+    renderSsoStatus();
+
+    if (oauthPollTimer) {
+      clearInterval(oauthPollTimer);
+      oauthPollTimer = null;
+    }
+
+    const started = Date.now();
+    let busy = false;
+    oauthPollTimer = setInterval(async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        if (Date.now() - started > 90_000) {
+          clearInterval(oauthPollTimer);
+          oauthPollTimer = null;
+          return;
+        }
+        await refreshOauthStatus();
+        if (oauthIdentity && oauthIdentity.provider === provider) {
+          clearInterval(oauthPollTimer);
+          oauthPollTimer = null;
+        }
+      } finally {
+        busy = false;
+      }
+    }, 500);
+  }
+
+  async function setWebAuth(action, method, name, password) {
+    const token = getOrCreateResumeToken();
+    const body = { resume: token, action, method, name };
+    if (password !== undefined) body.password = password;
+    try {
+      const r = await fetch("/api/webauth", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const d = await r.json().catch(() => null);
+      if (!r.ok || !d || d.type !== "ok") {
+        appendLine(`# auth failed: ${(d && d.message) || r.status}`);
+        return false;
+      }
+      return true;
+    } catch {
+      appendLine("# auth failed: network error");
+      return false;
+    }
   }
 
   function withResumeToken(url, token) {
@@ -346,6 +505,19 @@
   setStatus("disconnected", "");
   lineEl && lineEl.focus();
 
+  loadOauthProviders();
+  refreshOauthStatus();
+
+  window.addEventListener("message", (ev) => {
+    if (ev.origin !== location.origin) return;
+    const d = ev.data;
+    if (!d || d.type !== "oauth_complete") return;
+    const ok = d.ok ? "ok" : "err";
+    const msg = d.message ? String(d.message) : "";
+    appendLine(`# oauth ${d.provider || "?"}: ${ok} ${msg}`.trim());
+    refreshOauthStatus();
+  });
+
   function closeMenu() {
     if (!menuDd) return;
     menuDd.setAttribute("hidden", "");
@@ -429,6 +601,68 @@
       disconnect();
     });
 
+  function readAuthName() {
+    const raw = authNameEl ? authNameEl.value.trim() : "";
+    if (!raw) {
+      appendLine("# missing character name");
+      authNameEl && authNameEl.focus();
+      return "";
+    }
+    return raw;
+  }
+
+  async function doAuthPassword(action) {
+    const name = readAuthName();
+    const pw = authPasswordEl ? authPasswordEl.value : "";
+    if (!name) return;
+    if (!pw) {
+      appendLine("# missing password");
+      authPasswordEl && authPasswordEl.focus();
+      return;
+    }
+
+    const ok = await setWebAuth(action, "password", name, pw);
+    if (!ok) return;
+
+    authPasswordEl && (authPasswordEl.value = "");
+    shouldReconnect = true;
+    connect();
+    dlgConnect && dlgConnect.close();
+    lineEl && lineEl.focus();
+  }
+
+  async function doAuthSso(action) {
+    const name = readAuthName();
+    if (!name) return;
+    if (!oauthIdentity || !oauthIdentity.provider) {
+      appendLine("# not signed in");
+      return;
+    }
+    const method = String(oauthIdentity.provider);
+    if (method !== "google" && method !== "oidc") {
+      appendLine(`# unsupported sso provider: ${method}`);
+      return;
+    }
+
+    const ok = await setWebAuth(action, method, name);
+    if (!ok) return;
+
+    shouldReconnect = true;
+    connect();
+    dlgConnect && dlgConnect.close();
+    lineEl && lineEl.focus();
+  }
+
+  btnAuthLoginPassword && btnAuthLoginPassword.addEventListener("click", () => doAuthPassword("login"));
+  btnAuthCreatePassword && btnAuthCreatePassword.addEventListener("click", () => doAuthPassword("create"));
+
+  btnOauthGoogle && btnOauthGoogle.addEventListener("click", () => startOauth("google"));
+  btnOauthOidc && btnOauthOidc.addEventListener("click", () => startOauth("oidc"));
+  btnOauthLogout && btnOauthLogout.addEventListener("click", oauthLogout);
+
+  btnAuthLoginSso && btnAuthLoginSso.addEventListener("click", () => doAuthSso("login"));
+  btnAuthCreateSso && btnAuthCreateSso.addEventListener("click", () => doAuthSso("create"));
+
   function handleNewSession() {
     const ok = window.confirm(
       "Start a new session? This clears the saved resume token so you can choose a different account name."
@@ -449,7 +683,8 @@
     lineEl && lineEl.focus();
   });
 
-  menuConnect && menuConnect.addEventListener("click", () => openDialog(dlgConnect, wsUrlEl));
+  menuConnect &&
+    menuConnect.addEventListener("click", () => openDialog(dlgConnect, authNameEl || wsUrlEl));
   menuOnline && menuOnline.addEventListener("click", () => openDialog(dlgOnline, null));
   menuAccount && menuAccount.addEventListener("click", () => openDialog(dlgAccount, acctEmailEl));
   menuSso && menuSso.addEventListener("click", () => openDialog(dlgSso, null));
@@ -527,5 +762,9 @@
       saveSettings();
     });
 
+  const hadResumeToken = isValidResumeToken(localStorage.getItem(LS_RESUME_TOKEN));
   connect();
+  if (!hadResumeToken) {
+    openDialog(dlgConnect, authNameEl || wsUrlEl);
+  }
 })();

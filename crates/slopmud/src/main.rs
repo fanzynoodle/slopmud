@@ -1564,6 +1564,8 @@ struct ShardAuthBlob {
     oidc_sub: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     oidc_email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    caps: Option<Vec<String>>,
 }
 
 fn make_shard_auth_blob(
@@ -1573,6 +1575,7 @@ fn make_shard_auth_blob(
     google_email: Option<&str>,
     oidc_sub: Option<&str>,
     oidc_email: Option<&str>,
+    caps: Option<&[String]>,
 ) -> Bytes {
     let b = ShardAuthBlob {
         acct: acct.trim().to_string(),
@@ -1589,6 +1592,15 @@ fn make_shard_auth_blob(
         oidc_email: oidc_email
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty()),
+        caps: caps
+            .map(|v| {
+                v.iter()
+                    .map(|s| s.trim().to_ascii_lowercase())
+                    .filter(|s| !s.is_empty() && s.len() <= 64)
+                    .take(32)
+                    .collect::<Vec<_>>()
+            })
+            .filter(|v| !v.is_empty()),
     };
     // Broker is the auth boundary; if this fails, we prefer a hard error over silently dropping.
     Bytes::from(serde_json::to_vec(&b).expect("serialize shard auth blob"))
@@ -1668,6 +1680,8 @@ struct WebAuthReq {
     oidc_sub: Option<String>,
     #[serde(default)]
     oidc_email: Option<String>,
+    #[serde(default)]
+    caps: Option<Vec<String>>,
 }
 
 #[derive(Debug)]
@@ -2753,6 +2767,7 @@ async fn handle_conn(
                                             None,
                                             None,
                                             None,
+                                            req.caps.as_deref(),
                                         ));
                                         name = Some(uname.clone());
                                         true
@@ -2764,39 +2779,53 @@ async fn handle_conn(
                                         let a = accounts.lock().await;
                                         a.by_name.get(&uname).cloned()
                                     };
-                                    let Some(hash) = rec.as_ref().and_then(|r| r.pw_hash.as_deref()) else {
-                                        let _ = write_tx
-                                            .send(Bytes::from_static(
-                                                b"web_auth: account has no password set\r\nname: ",
-                                            ))
-                                            .await;
-                                        false
-                                    } else {
-                                        let ok = if let Ok(ph) = PasswordHash::new(hash) {
-                                            Argon2::default().verify_password(pw, &ph).is_ok()
-                                        } else {
-                                            false
-                                        };
-                                        if !ok {
+                                    match rec {
+                                        None => {
                                             let _ = write_tx
                                                 .send(Bytes::from_static(
-                                                    b"web_auth: bad password\r\nname: ",
+                                                    b"web_auth: account not found\r\nname: ",
                                                 ))
                                                 .await;
                                             false
-                                        } else {
-                                            auth_method = Some("password".to_string());
-                                            auth_blob = Some(make_shard_auth_blob(
-                                                &uname,
-                                                "password",
-                                                None,
-                                                None,
-                                                None,
-                                                None,
-                                            ));
-                                            name = Some(uname.clone());
-                                            true
                                         }
+                                        Some(r) => match r.pw_hash.as_deref() {
+                                            None => {
+                                                let _ = write_tx
+                                                    .send(Bytes::from_static(
+                                                        b"web_auth: account has no password set\r\nname: ",
+                                                    ))
+                                                    .await;
+                                                false
+                                            }
+                                            Some(hash) => {
+                                                let ok = if let Ok(ph) = PasswordHash::new(hash) {
+                                                    Argon2::default().verify_password(pw, &ph).is_ok()
+                                                } else {
+                                                    false
+                                                };
+                                                if !ok {
+                                                    let _ = write_tx
+                                                        .send(Bytes::from_static(
+                                                            b"web_auth: bad password\r\nname: ",
+                                                        ))
+                                                        .await;
+                                                    false
+                                                } else {
+                                                    auth_method = Some("password".to_string());
+                                                    auth_blob = Some(make_shard_auth_blob(
+                                                        &uname,
+                                                        "password",
+                                                        None,
+                                                        None,
+                                                        None,
+                                                        None,
+                                                        req.caps.as_deref(),
+                                                    ));
+                                                    name = Some(uname.clone());
+                                                    true
+                                                }
+                                            }
+                                        },
                                     }
                                 }
                                 ("create", "google") | ("login", "google") => {
@@ -2820,34 +2849,40 @@ async fn handle_conn(
                                         };
 
                                         if action == "login" {
-                                            let Some(r) = exists else {
-                                                let _ = write_tx
-                                                    .send(Bytes::from_static(
-                                                        b"web_auth: account not found\r\nname: ",
-                                                    ))
-                                                    .await;
-                                                false
-                                            } else if r.google_sub.as_deref() != Some(sub) {
-                                                let _ = write_tx
-                                                    .send(Bytes::from_static(
-                                                        b"web_auth: account not linked to google\r\nname: ",
-                                                    ))
-                                                    .await;
-                                                false
-                                            } else {
-                                                google_sub = Some(sub.to_string());
-                                                google_email = r.google_email.clone().or(email.clone());
-                                                auth_method = Some("google".to_string());
-                                                auth_blob = Some(make_shard_auth_blob(
-                                                    &uname,
-                                                    "google",
-                                                    Some(sub),
-                                                    google_email.as_deref(),
-                                                    None,
-                                                    None,
-                                                ));
-                                                name = Some(uname.clone());
-                                                true
+                                            match exists {
+                                                None => {
+                                                    let _ = write_tx
+                                                        .send(Bytes::from_static(
+                                                            b"web_auth: account not found\r\nname: ",
+                                                        ))
+                                                        .await;
+                                                    false
+                                                }
+                                                Some(r) => {
+                                                    if r.google_sub.as_deref() != Some(sub) {
+                                                        let _ = write_tx
+                                                            .send(Bytes::from_static(
+                                                                b"web_auth: account not linked to google\r\nname: ",
+                                                            ))
+                                                            .await;
+                                                        false
+                                                    } else {
+                                                        google_sub = Some(sub.to_string());
+                                                        google_email =
+                                                            r.google_email.clone().or(email.clone());
+                                                        auth_method = Some("google".to_string());
+                                                        auth_blob = Some(make_shard_auth_blob(
+                                                            &uname,
+                                                            "google",
+                                                            Some(sub),
+                                                            google_email.as_deref(),
+                                                            None,
+                                                            None,
+                                                        ));
+                                                        name = Some(uname.clone());
+                                                        true
+                                                    }
+                                                }
                                             }
                                         } else if exists.is_some() {
                                             let _ = write_tx
@@ -2912,34 +2947,40 @@ async fn handle_conn(
                                         };
 
                                         if action == "login" {
-                                            let Some(r) = exists else {
-                                                let _ = write_tx
-                                                    .send(Bytes::from_static(
-                                                        b"web_auth: account not found\r\nname: ",
-                                                    ))
-                                                    .await;
-                                                false
-                                            } else if r.oidc_sub.as_deref() != Some(sub) {
-                                                let _ = write_tx
-                                                    .send(Bytes::from_static(
-                                                        b"web_auth: account not linked to oidc\r\nname: ",
-                                                    ))
-                                                    .await;
-                                                false
-                                            } else {
-                                                oidc_sub = Some(sub.to_string());
-                                                oidc_email = r.oidc_email.clone().or(email.clone());
-                                                auth_method = Some("oidc".to_string());
-                                                auth_blob = Some(make_shard_auth_blob(
-                                                    &uname,
-                                                    "oidc",
-                                                    None,
-                                                    None,
-                                                    Some(sub),
-                                                    oidc_email.as_deref(),
-                                                ));
-                                                name = Some(uname.clone());
-                                                true
+                                            match exists {
+                                                None => {
+                                                    let _ = write_tx
+                                                        .send(Bytes::from_static(
+                                                            b"web_auth: account not found\r\nname: ",
+                                                        ))
+                                                        .await;
+                                                    false
+                                                }
+                                                Some(r) => {
+                                                    if r.oidc_sub.as_deref() != Some(sub) {
+                                                        let _ = write_tx
+                                                            .send(Bytes::from_static(
+                                                                b"web_auth: account not linked to oidc\r\nname: ",
+                                                            ))
+                                                            .await;
+                                                        false
+                                                    } else {
+                                                        oidc_sub = Some(sub.to_string());
+                                                        oidc_email =
+                                                            r.oidc_email.clone().or(email.clone());
+                                                        auth_method = Some("oidc".to_string());
+                                                        auth_blob = Some(make_shard_auth_blob(
+                                                            &uname,
+                                                            "oidc",
+                                                            None,
+                                                            None,
+                                                            Some(sub),
+                                                            oidc_email.as_deref(),
+                                                        ));
+                                                        name = Some(uname.clone());
+                                                        true
+                                                    }
+                                                }
                                             }
                                         } else if exists.is_some() {
                                             let _ = write_tx

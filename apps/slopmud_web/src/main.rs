@@ -9,7 +9,7 @@ use axum::{
     extract::{ConnectInfo, Host, Query, State, ws},
     http::{StatusCode, Uri, header},
     response::{Html, IntoResponse, Redirect},
-    routing::get,
+    routing::{get, post},
 };
 use axum_server::tls_rustls::RustlsConfig;
 use base64::Engine;
@@ -44,6 +44,13 @@ ENV:
   GOOGLE_OAUTH_CLIENT_ID   required to enable Google SSO
   GOOGLE_OAUTH_CLIENT_SECRET required to enable Google SSO
   GOOGLE_OAUTH_REDIRECT_URI required to enable Google SSO (e.g. https://slopmud.com/auth/google/callback)
+  SLOPMUD_OIDC_SSO_AUTH_URL optional; if set (with the other vars) enables custom OIDC SSO (authorization endpoint)
+  SLOPMUD_OIDC_SSO_TOKEN_URL optional; token endpoint
+  SLOPMUD_OIDC_SSO_USERINFO_URL optional; userinfo endpoint (must return JSON with at least `sub`; `email` optional)
+  SLOPMUD_OIDC_SSO_CLIENT_ID optional
+  SLOPMUD_OIDC_SSO_CLIENT_SECRET optional
+  SLOPMUD_OIDC_SSO_REDIRECT_URI optional (e.g. https://slopmud.com/auth/oidc/callback)
+  SLOPMUD_OIDC_SSO_SCOPE optional; default \"openid email profile\"
 "
     );
     std::process::exit(2);
@@ -62,6 +69,13 @@ struct Config {
     google_client_id: Option<String>,
     google_client_secret: Option<String>,
     google_redirect_uri: Option<String>,
+    oidc_sso_auth_url: Option<String>,
+    oidc_sso_token_url: Option<String>,
+    oidc_sso_userinfo_url: Option<String>,
+    oidc_sso_client_id: Option<String>,
+    oidc_sso_client_secret: Option<String>,
+    oidc_sso_redirect_uri: Option<String>,
+    oidc_sso_scope: Option<String>,
 }
 
 fn parse_args() -> Config {
@@ -99,6 +113,15 @@ fn parse_args() -> Config {
     let google_client_id = std::env::var("GOOGLE_OAUTH_CLIENT_ID").ok();
     let google_client_secret = std::env::var("GOOGLE_OAUTH_CLIENT_SECRET").ok();
     let google_redirect_uri = std::env::var("GOOGLE_OAUTH_REDIRECT_URI").ok();
+
+    // Optional custom OIDC SSO provider (distinct from the broker's internal OIDC token minting).
+    let oidc_sso_auth_url = std::env::var("SLOPMUD_OIDC_SSO_AUTH_URL").ok();
+    let oidc_sso_token_url = std::env::var("SLOPMUD_OIDC_SSO_TOKEN_URL").ok();
+    let oidc_sso_userinfo_url = std::env::var("SLOPMUD_OIDC_SSO_USERINFO_URL").ok();
+    let oidc_sso_client_id = std::env::var("SLOPMUD_OIDC_SSO_CLIENT_ID").ok();
+    let oidc_sso_client_secret = std::env::var("SLOPMUD_OIDC_SSO_CLIENT_SECRET").ok();
+    let oidc_sso_redirect_uri = std::env::var("SLOPMUD_OIDC_SSO_REDIRECT_URI").ok();
+    let oidc_sso_scope = std::env::var("SLOPMUD_OIDC_SSO_SCOPE").ok();
 
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
@@ -148,6 +171,13 @@ fn parse_args() -> Config {
         google_client_id,
         google_client_secret,
         google_redirect_uri,
+        oidc_sso_auth_url,
+        oidc_sso_token_url,
+        oidc_sso_userinfo_url,
+        oidc_sso_client_id,
+        oidc_sso_client_secret,
+        oidc_sso_redirect_uri,
+        oidc_sso_scope,
     }
 }
 
@@ -239,13 +269,401 @@ async fn api_ws_logout(
     )
 }
 
+#[derive(Debug, Serialize)]
+struct OAuthProvidersResp {
+    google: bool,
+    oidc: bool,
+}
+
+async fn api_oauth_providers(State(state): State<AppState>) -> impl IntoResponse {
+    let google = state.oauth.client_id.is_some()
+        && state.oauth.client_secret.is_some()
+        && state.oauth.redirect_uri.is_some();
+    let oidc = state.oauth.oidc_auth_url.is_some()
+        && state.oauth.oidc_token_url.is_some()
+        && state.oauth.oidc_userinfo_url.is_some()
+        && state.oauth.oidc_client_id.is_some()
+        && state.oauth.oidc_client_secret.is_some()
+        && state.oauth.oidc_redirect_uri.is_some();
+    (StatusCode::OK, axum::Json(OAuthProvidersResp { google, oidc }))
+}
+
+#[derive(Debug, Deserialize)]
+struct OAuthStartReq {
+    provider: String,
+    resume: String,
+    #[serde(default)]
+    return_to: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum OAuthStartResp {
+    Ok { url: String },
+    Err { message: String },
+}
+
+fn sanitize_return_to(s: Option<&str>) -> String {
+    let raw = s.unwrap_or("").trim();
+    if raw.is_empty() {
+        return "/play.html".to_string();
+    }
+    if !raw.starts_with('/') {
+        return "/play.html".to_string();
+    }
+    if raw.starts_with("//") {
+        return "/play.html".to_string();
+    }
+    if raw.contains('\r') || raw.contains('\n') {
+        return "/play.html".to_string();
+    }
+    raw.to_string()
+}
+
+async fn api_oauth_start(
+    State(state): State<AppState>,
+    axum::Json(req): axum::Json<OAuthStartReq>,
+) -> impl IntoResponse {
+    if !is_valid_resume_token(&req.resume) {
+        return (
+            StatusCode::BAD_REQUEST,
+            axum::Json(OAuthStartResp::Err {
+                message: "bad resume token".to_string(),
+            }),
+        );
+    }
+
+    let provider = req.provider.trim().to_ascii_lowercase();
+    let google_enabled = state.oauth.client_id.is_some()
+        && state.oauth.client_secret.is_some()
+        && state.oauth.redirect_uri.is_some();
+    let oidc_enabled = state.oauth.oidc_auth_url.is_some()
+        && state.oauth.oidc_token_url.is_some()
+        && state.oauth.oidc_userinfo_url.is_some()
+        && state.oauth.oidc_client_id.is_some()
+        && state.oauth.oidc_client_secret.is_some()
+        && state.oauth.oidc_redirect_uri.is_some();
+
+    match provider.as_str() {
+        "google" => {
+            if !google_enabled {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    axum::Json(OAuthStartResp::Err {
+                        message: "google sso not configured".to_string(),
+                    }),
+                );
+            }
+        }
+        "oidc" => {
+            if !oidc_enabled {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    axum::Json(OAuthStartResp::Err {
+                        message: "oidc sso not configured".to_string(),
+                    }),
+                );
+            }
+        }
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                axum::Json(OAuthStartResp::Err {
+                    message: "unsupported provider".to_string(),
+                }),
+            );
+        }
+    }
+
+    let return_to = sanitize_return_to(req.return_to.as_deref());
+
+    // Random state code (not the resume token, so it isn't leaked to the IdP).
+    let state_code = {
+        let mut raw = [0u8; 16];
+        if getrandom::getrandom(&mut raw).is_err() {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                axum::Json(OAuthStartResp::Err {
+                    message: "rng failure".to_string(),
+                }),
+            );
+        }
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(raw)
+    };
+    let verifier = {
+        let mut raw = [0u8; 32];
+        if getrandom::getrandom(&mut raw).is_err() {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                axum::Json(OAuthStartResp::Err {
+                    message: "rng failure".to_string(),
+                }),
+            );
+        }
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(raw)
+    };
+    let now_unix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let pending = WebOAuthPending {
+        resume: req.resume.trim().to_string(),
+        verifier,
+        return_to,
+        created_unix: now_unix,
+    };
+    match provider.as_str() {
+        "google" => {
+            let mut m = state.oauth.web_pending_google.lock().await;
+            m.insert(state_code.clone(), pending);
+        }
+        "oidc" => {
+            let mut m = state.oauth.web_pending_oidc.lock().await;
+            m.insert(state_code.clone(), pending);
+        }
+        _ => {}
+    }
+
+    let path = match provider.as_str() {
+        "google" => "/auth/google",
+        "oidc" => "/auth/oidc",
+        _ => "/auth/google",
+    };
+    let url = format!("{path}?code={}", urlencoding::encode(&state_code));
+    (StatusCode::OK, axum::Json(OAuthStartResp::Ok { url }))
+}
+
+#[derive(Debug, Deserialize)]
+struct OAuthStatusQuery {
+    resume: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum OAuthStatusResp {
+    Ok { identity: Option<WebOAuthIdentity> },
+    Err { message: String },
+}
+
+async fn api_oauth_status(
+    State(state): State<AppState>,
+    Query(q): Query<OAuthStatusQuery>,
+) -> impl IntoResponse {
+    if !is_valid_resume_token(&q.resume) {
+        return (
+            StatusCode::BAD_REQUEST,
+            axum::Json(OAuthStatusResp::Err {
+                message: "bad resume token".to_string(),
+            }),
+        );
+    }
+
+    let ident = {
+        let m = state.oauth.web_identities.lock().await;
+        m.get(q.resume.trim()).cloned()
+    };
+
+    (StatusCode::OK, axum::Json(OAuthStatusResp::Ok { identity: ident }))
+}
+
+#[derive(Debug, Deserialize)]
+struct OAuthLogoutReq {
+    resume: String,
+}
+
+async fn api_oauth_logout(
+    State(state): State<AppState>,
+    axum::Json(req): axum::Json<OAuthLogoutReq>,
+) -> impl IntoResponse {
+    if !is_valid_resume_token(&req.resume) {
+        return (
+            StatusCode::BAD_REQUEST,
+            axum::Json(OAuthStatusResp::Err {
+                message: "bad resume token".to_string(),
+            }),
+        );
+    }
+
+    {
+        let mut m = state.oauth.web_identities.lock().await;
+        m.remove(req.resume.trim());
+    }
+
+    (StatusCode::OK, axum::Json(OAuthStatusResp::Ok { identity: None }))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct WebAuthReq {
+    action: String, // login | create
+    method: String, // password | google | oidc
+    name: String,
+    #[serde(default)]
+    password: Option<String>,
+    #[serde(default)]
+    google_sub: Option<String>,
+    #[serde(default)]
+    google_email: Option<String>,
+    #[serde(default)]
+    oidc_sub: Option<String>,
+    #[serde(default)]
+    oidc_email: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    caps: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct WebAuthSetReq {
+    resume: String,
+    action: String,
+    method: String,
+    name: String,
+    #[serde(default)]
+    password: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum WebAuthSetResp {
+    Ok {},
+    Err { message: String },
+}
+
+async fn api_webauth_set(
+    State(state): State<AppState>,
+    axum::Json(req): axum::Json<WebAuthSetReq>,
+) -> impl IntoResponse {
+    if !is_valid_resume_token(&req.resume) {
+        return (
+            StatusCode::BAD_REQUEST,
+            axum::Json(WebAuthSetResp::Err {
+                message: "bad resume token".to_string(),
+            }),
+        );
+    }
+
+    let action = req.action.trim().to_ascii_lowercase();
+    let method = req.method.trim().to_ascii_lowercase();
+    let name = req.name.trim().to_string();
+
+    if action != "login" && action != "create" {
+        return (
+            StatusCode::BAD_REQUEST,
+            axum::Json(WebAuthSetResp::Err {
+                message: "bad action".to_string(),
+            }),
+        );
+    }
+
+    let mut wa = WebAuthReq {
+        action: action.clone(),
+        method: method.clone(),
+        name,
+        password: None,
+        google_sub: None,
+        google_email: None,
+        oidc_sub: None,
+        oidc_email: None,
+        caps: None,
+    };
+
+    match method.as_str() {
+        "password" => {
+            let pw = req.password.clone().unwrap_or_default();
+            if pw.is_empty() {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    axum::Json(WebAuthSetResp::Err {
+                        message: "missing password".to_string(),
+                    }),
+                );
+            }
+            wa.password = Some(pw);
+        }
+        "google" | "oidc" => {
+            let ident = {
+                let m = state.oauth.web_identities.lock().await;
+                m.get(req.resume.trim()).cloned()
+            };
+            let Some(ident) = ident else {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    axum::Json(WebAuthSetResp::Err {
+                        message: "not signed in".to_string(),
+                    }),
+                );
+            };
+            if ident.provider != method {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    axum::Json(WebAuthSetResp::Err {
+                        message: "signed in with different provider".to_string(),
+                    }),
+                );
+            }
+            if method == "google" {
+                wa.google_sub = Some(ident.sub);
+                wa.google_email = ident.email;
+                wa.caps = ident.caps;
+            } else {
+                wa.oidc_sub = Some(ident.sub);
+                wa.oidc_email = ident.email;
+                wa.caps = ident.caps;
+            }
+        }
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                axum::Json(WebAuthSetResp::Err {
+                    message: "bad method".to_string(),
+                }),
+            );
+        }
+    }
+
+    let body = match serde_json::to_vec(&wa) {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                axum::Json(WebAuthSetResp::Err {
+                    message: format!("bad request: {e}"),
+                }),
+            );
+        }
+    };
+    let mut line = Vec::with_capacity("WEB_AUTH ".len() + body.len() + 2);
+    line.extend_from_slice(b"WEB_AUTH ");
+    line.extend_from_slice(&body);
+    line.push(b'\n');
+
+    if !state.web_sessions.send_or_defer(&req.resume, line).await {
+        return (
+            StatusCode::BAD_REQUEST,
+            axum::Json(WebAuthSetResp::Err {
+                message: "bad resume token".to_string(),
+            }),
+        );
+    }
+
+    (StatusCode::OK, axum::Json(WebAuthSetResp::Ok {}))
+}
+
 #[derive(Clone, Debug)]
 struct OAuthState {
     dir: PathBuf,
     client_id: Option<String>,
     client_secret: Option<String>,
     redirect_uri: Option<String>,
+    oidc_auth_url: Option<String>,
+    oidc_token_url: Option<String>,
+    oidc_userinfo_url: Option<String>,
+    oidc_client_id: Option<String>,
+    oidc_client_secret: Option<String>,
+    oidc_redirect_uri: Option<String>,
+    oidc_scope: Option<String>,
     web_pending_google: Arc<tokio::sync::Mutex<HashMap<String, WebOAuthPending>>>,
+    web_pending_oidc: Arc<tokio::sync::Mutex<HashMap<String, WebOAuthPending>>>,
     web_identities: Arc<tokio::sync::Mutex<HashMap<String, WebOAuthIdentity>>>,
 }
 
@@ -279,6 +697,8 @@ struct WebOAuthIdentity {
     sub: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    caps: Option<Vec<String>>,
     created_unix: u64,
 }
 
@@ -435,28 +855,105 @@ async fn google_auth_callback(
             .into_response();
     };
 
+    let now_unix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
     let path = pending_path(&st.oauth.dir, state_code);
+
+    // Determine which flow this callback is for:
+    // - file-based (legacy): broker created a pending JSON file and the player types `check`
+    // - web-based: /api/oauth/start created an in-memory pending record keyed by a random state code
+    let mut file_pending: Option<GoogleOAuthPending> = None;
+    let mut web_pending: Option<WebOAuthPending> = None;
+    match std::fs::read_to_string(&path) {
+        Ok(s) => {
+            let pending: GoogleOAuthPending = match serde_json::from_str(&s) {
+                Ok(v) => v,
+                Err(_) => {
+                    return (
+                        axum::http::StatusCode::BAD_REQUEST,
+                        "bad oauth record
+",
+                    )
+                        .into_response();
+                }
+            };
+            if pending.status != "pending" {
+                return Html(
+                    "<h1>Already completed</h1><p>Return to the game and type <code>check</code>.</p>"
+                        .to_string(),
+                )
+                .into_response();
+            }
+            file_pending = Some(pending);
+        }
+        Err(_) => {
+            web_pending = st
+                .oauth
+                .web_pending_google
+                .lock()
+                .await
+                .remove(state_code);
+            if web_pending.is_none() {
+                return (
+                    axum::http::StatusCode::NOT_FOUND,
+                    "unknown state
+",
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    let is_web = web_pending.is_some();
+    let verifier = if let Some(p) = web_pending.as_ref() {
+        p.verifier.as_str()
+    } else {
+        file_pending
+            .as_ref()
+            .map(|p| p.verifier.as_str())
+            .unwrap_or("")
+    };
+
+    let web_return_to = web_pending
+        .as_ref()
+        .map(|p| p.return_to.as_str())
+        .unwrap_or("/play.html");
+
+    let oauth_popup = |ok: bool, msg: &str| -> axum::response::Response {
+        oauth_popup_html("google", ok, msg, web_return_to).into_response()
+    };
 
     if let Some(err) = q.error.as_deref() {
         let msg = q
             .error_description
             .clone()
             .unwrap_or_else(|| err.to_string());
-        let _ = write_pending_err(&path, &msg);
-        return Html(format!(
-            "<h1>Google sign-in failed</h1><p>{}</p><p>Return to the game and type <code>check</code>.</p>",
-            html_escape(&msg)
-        ))
-        .into_response();
+        if !is_web {
+            let _ = write_pending_err(&path, &msg);
+            return Html(format!(
+                "<h1>Google sign-in failed</h1><p>{}</p><p>Return to the game and type <code>check</code>.</p>",
+                html_escape(&msg)
+            ))
+            .into_response();
+        }
+        return oauth_popup(false, &msg);
     }
 
     let Some(code) = q.code.as_deref() else {
-        return (
-            axum::http::StatusCode::BAD_REQUEST,
-            "missing code
+        let msg = "missing code".to_string();
+        if !is_web {
+            let _ = write_pending_err(&path, &msg);
+            return (
+                axum::http::StatusCode::BAD_REQUEST,
+                "missing code
 ",
-        )
-            .into_response();
+            )
+                .into_response();
+        }
+        return oauth_popup(false, &msg);
     };
 
     let (Some(client_id), Some(client_secret), Some(redirect_uri)) = (
@@ -464,43 +961,17 @@ async fn google_auth_callback(
         st.oauth.client_secret.as_deref(),
         st.oauth.redirect_uri.as_deref(),
     ) else {
-        return (
-            axum::http::StatusCode::SERVICE_UNAVAILABLE,
-            "google sso not configured
-",
-        )
-            .into_response();
-    };
-
-    let pending_s = match std::fs::read_to_string(&path) {
-        Ok(s) => s,
-        Err(_) => {
+        let msg = "google sso not configured".to_string();
+        if !is_web {
             return (
-                axum::http::StatusCode::NOT_FOUND,
-                "unknown state
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                "google sso not configured
 ",
             )
                 .into_response();
         }
+        return oauth_popup(false, &msg);
     };
-    let pending: GoogleOAuthPending = match serde_json::from_str(&pending_s) {
-        Ok(v) => v,
-        Err(_) => {
-            return (
-                axum::http::StatusCode::BAD_REQUEST,
-                "bad oauth record
-",
-            )
-                .into_response();
-        }
-    };
-    if pending.status != "pending" {
-        return Html(
-            "<h1>Already completed</h1><p>Return to the game and type <code>check</code>.</p>"
-                .to_string(),
-        )
-        .into_response();
-    }
 
     let http = reqwest::Client::new();
 
@@ -512,7 +983,7 @@ async fn google_auth_callback(
             ("client_secret", client_secret),
             ("redirect_uri", redirect_uri),
             ("code", code),
-            ("code_verifier", pending.verifier.as_str()),
+            ("code_verifier", verifier),
         ])
         .send()
         .await
@@ -520,6 +991,21 @@ async fn google_auth_callback(
         Ok(r) => r,
         Err(e) => {
             let msg = format!("token exchange failed: {e}");
+            if !is_web {
+                let _ = write_pending_err(&path, &msg);
+                return Html(format!(
+                    "<h1>Google sign-in failed</h1><p>{}</p><p>Return to the game and type <code>check</code>.</p>",
+                    html_escape(&msg)
+                ))
+                .into_response();
+            }
+            return oauth_popup(false, &msg);
+        }
+    };
+
+    if !token.status().is_success() {
+        let msg = format!("token exchange returned {}", token.status());
+        if !is_web {
             let _ = write_pending_err(&path, &msg);
             return Html(format!(
                 "<h1>Google sign-in failed</h1><p>{}</p><p>Return to the game and type <code>check</code>.</p>",
@@ -527,28 +1013,22 @@ async fn google_auth_callback(
             ))
             .into_response();
         }
-    };
-
-    if !token.status().is_success() {
-        let msg = format!("token exchange returned {}", token.status());
-        let _ = write_pending_err(&path, &msg);
-        return Html(format!(
-            "<h1>Google sign-in failed</h1><p>{}</p><p>Return to the game and type <code>check</code>.</p>",
-            html_escape(&msg)
-        ))
-        .into_response();
+        return oauth_popup(false, &msg);
     }
 
     let token: GoogleTokenResponse = match token.json().await {
         Ok(v) => v,
         Err(e) => {
             let msg = format!("token response parse failed: {e}");
-            let _ = write_pending_err(&path, &msg);
-            return Html(format!(
-                "<h1>Google sign-in failed</h1><p>{}</p><p>Return to the game and type <code>check</code>.</p>",
-                html_escape(&msg)
-            ))
-            .into_response();
+            if !is_web {
+                let _ = write_pending_err(&path, &msg);
+                return Html(format!(
+                    "<h1>Google sign-in failed</h1><p>{}</p><p>Return to the game and type <code>check</code>.</p>",
+                    html_escape(&msg)
+                ))
+                .into_response();
+            }
+            return oauth_popup(false, &msg);
         }
     };
 
@@ -561,6 +1041,21 @@ async fn google_auth_callback(
         Ok(r) => r,
         Err(e) => {
             let msg = format!("userinfo request failed: {e}");
+            if !is_web {
+                let _ = write_pending_err(&path, &msg);
+                return Html(format!(
+                    "<h1>Google sign-in failed</h1><p>{}</p><p>Return to the game and type <code>check</code>.</p>",
+                    html_escape(&msg)
+                ))
+                .into_response();
+            }
+            return oauth_popup(false, &msg);
+        }
+    };
+
+    if !userinfo.status().is_success() {
+        let msg = format!("userinfo returned {}", userinfo.status());
+        if !is_web {
             let _ = write_pending_err(&path, &msg);
             return Html(format!(
                 "<h1>Google sign-in failed</h1><p>{}</p><p>Return to the game and type <code>check</code>.</p>",
@@ -568,44 +1063,294 @@ async fn google_auth_callback(
             ))
             .into_response();
         }
-    };
-
-    if !userinfo.status().is_success() {
-        let msg = format!("userinfo returned {}", userinfo.status());
-        let _ = write_pending_err(&path, &msg);
-        return Html(format!(
-            "<h1>Google sign-in failed</h1><p>{}</p><p>Return to the game and type <code>check</code>.</p>",
-            html_escape(&msg)
-        ))
-        .into_response();
+        return oauth_popup(false, &msg);
     }
 
     let userinfo: GoogleUserInfo = match userinfo.json().await {
         Ok(v) => v,
         Err(e) => {
             let msg = format!("userinfo parse failed: {e}");
-            let _ = write_pending_err(&path, &msg);
-            return Html(format!(
-                "<h1>Google sign-in failed</h1><p>{}</p><p>Return to the game and type <code>check</code>.</p>",
-                html_escape(&msg)
-            ))
-            .into_response();
+            if !is_web {
+                let _ = write_pending_err(&path, &msg);
+                return Html(format!(
+                    "<h1>Google sign-in failed</h1><p>{}</p><p>Return to the game and type <code>check</code>.</p>",
+                    html_escape(&msg)
+                ))
+                .into_response();
+            }
+            return oauth_popup(false, &msg);
         }
     };
 
     let email = userinfo.email.filter(|e| e.len() <= 254);
-    if let Err(e) = write_pending_ok(&path, &userinfo.sub, email.as_deref()) {
-        warn!(err = %e, "failed writing oauth pending ok");
+    if !is_web {
+        if let Err(e) = write_pending_ok(&path, &userinfo.sub, email.as_deref()) {
+            warn!(err = %e, "failed writing oauth pending ok");
+            return (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to write oauth result
+",
+            )
+                .into_response();
+        }
+
+        return Html(
+            "<h1>Signed in</h1><p>Return to the game and type <code>check</code>.</p>".to_string(),
+        )
+        .into_response();
+    }
+
+    if let Some(p) = web_pending.as_ref() {
+        let mut m = st.oauth.web_identities.lock().await;
+        m.insert(
+            p.resume.clone(),
+            WebOAuthIdentity {
+                provider: "google".to_string(),
+                sub: userinfo.sub,
+                email,
+                caps: None,
+                created_unix: now_unix,
+            },
+        );
+    }
+
+    oauth_popup(true, "ok")
+}
+
+#[derive(Debug, Deserialize)]
+struct OidcCallbackQuery {
+    #[serde(default)]
+    code: Option<String>,
+    #[serde(default)]
+    state: Option<String>,
+    #[serde(default)]
+    error: Option<String>,
+    #[serde(default)]
+    error_description: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OidcUserInfo {
+    sub: String,
+    #[serde(default)]
+    email: Option<String>,
+    #[serde(default)]
+    caps: Option<Vec<String>>,
+}
+
+fn join_query(base: &str, qs: &str) -> String {
+    let mut out = base.trim().to_string();
+    if out.contains('?') {
+        if !out.ends_with('?') && !out.ends_with('&') {
+            out.push('&');
+        }
+    } else {
+        out.push('?');
+    }
+    out.push_str(qs);
+    out
+}
+
+async fn oidc_auth_start(
+    State(st): State<AppState>,
+    Query(q): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let Some(code) = q.get("code").map(|s| s.as_str()) else {
         return (
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            "failed to write oauth result
+            axum::http::StatusCode::BAD_REQUEST,
+            "missing code
+",
+        )
+            .into_response();
+    };
+
+    let (Some(auth_url), Some(client_id), Some(redirect_uri)) = (
+        st.oauth.oidc_auth_url.as_deref(),
+        st.oauth.oidc_client_id.as_deref(),
+        st.oauth.oidc_redirect_uri.as_deref(),
+    ) else {
+        return (
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            "oidc sso not configured
+",
+        )
+            .into_response();
+    };
+    let scope = st.oauth.oidc_scope.as_deref().unwrap_or("openid email profile");
+
+    let now_unix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let pending = { st.oauth.web_pending_oidc.lock().await.get(code).cloned() };
+    let Some(p) = pending else {
+        return (
+            axum::http::StatusCode::NOT_FOUND,
+            "unknown code
+",
+        )
+            .into_response();
+    };
+    if now_unix.saturating_sub(p.created_unix) > 15 * 60 {
+        let mut m = st.oauth.web_pending_oidc.lock().await;
+        m.remove(code);
+        return (
+            axum::http::StatusCode::BAD_REQUEST,
+            "oauth expired
 ",
         )
             .into_response();
     }
 
-    Html("<h1>Signed in</h1><p>Return to the game and type <code>check</code>.</p>".to_string())
-        .into_response()
+    let challenge = base64url_sha256(&p.verifier);
+    let qs = format!(
+        "response_type=code&client_id={}&redirect_uri={}&scope={}&state={}&code_challenge={}&code_challenge_method=S256",
+        urlencoding::encode(client_id),
+        urlencoding::encode(redirect_uri),
+        urlencoding::encode(scope),
+        urlencoding::encode(code),
+        urlencoding::encode(&challenge),
+    );
+    let url = join_query(auth_url, &qs);
+    Redirect::temporary(&url).into_response()
+}
+
+async fn oidc_auth_callback(
+    State(st): State<AppState>,
+    Query(q): Query<OidcCallbackQuery>,
+) -> impl IntoResponse {
+    let Some(state_code) = q.state.as_deref() else {
+        return (
+            axum::http::StatusCode::BAD_REQUEST,
+            "missing state
+",
+        )
+            .into_response();
+    };
+
+    let pending = st.oauth.web_pending_oidc.lock().await.remove(state_code);
+    let Some(pending) = pending else {
+        return (
+            axum::http::StatusCode::NOT_FOUND,
+            "unknown state
+",
+        )
+            .into_response();
+    };
+
+    let now_unix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let web_return_to = pending.return_to.as_str();
+    let oauth_popup = |ok: bool, msg: &str| -> axum::response::Response {
+        oauth_popup_html("oidc", ok, msg, web_return_to).into_response()
+    };
+
+    if let Some(err) = q.error.as_deref() {
+        let msg = q
+            .error_description
+            .clone()
+            .unwrap_or_else(|| err.to_string());
+        return oauth_popup(false, &msg);
+    }
+
+    let Some(code) = q.code.as_deref() else {
+        return oauth_popup(false, "missing code");
+    };
+
+    let (
+        Some(token_url),
+        Some(userinfo_url),
+        Some(client_id),
+        Some(client_secret),
+        Some(redirect_uri),
+    ) = (
+        st.oauth.oidc_token_url.as_deref(),
+        st.oauth.oidc_userinfo_url.as_deref(),
+        st.oauth.oidc_client_id.as_deref(),
+        st.oauth.oidc_client_secret.as_deref(),
+        st.oauth.oidc_redirect_uri.as_deref(),
+    ) else {
+        return oauth_popup(false, "oidc sso not configured");
+    };
+
+    let http = reqwest::Client::new();
+
+    let token = match http
+        .post(token_url)
+        .basic_auth(client_id, Some(client_secret))
+        .form(&[
+            ("grant_type", "authorization_code"),
+            ("client_id", client_id),
+            ("redirect_uri", redirect_uri),
+            ("code", code),
+            ("code_verifier", pending.verifier.as_str()),
+        ])
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => return oauth_popup(false, &format!("token exchange failed: {e}")),
+    };
+
+    if !token.status().is_success() {
+        return oauth_popup(false, &format!("token exchange returned {}", token.status()));
+    }
+
+    let token: GoogleTokenResponse = match token.json().await {
+        Ok(v) => v,
+        Err(e) => return oauth_popup(false, &format!("token response parse failed: {e}")),
+    };
+
+    let userinfo = match http
+        .get(userinfo_url)
+        .bearer_auth(&token.access_token)
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => return oauth_popup(false, &format!("userinfo request failed: {e}")),
+    };
+
+    if !userinfo.status().is_success() {
+        return oauth_popup(false, &format!("userinfo returned {}", userinfo.status()));
+    }
+
+    let userinfo: OidcUserInfo = match userinfo.json().await {
+        Ok(v) => v,
+        Err(e) => return oauth_popup(false, &format!("userinfo parse failed: {e}")),
+    };
+
+    let email = userinfo.email.filter(|e| e.len() <= 254);
+    let caps = userinfo
+        .caps
+        .map(|v| {
+            v.into_iter()
+                .map(|s| s.trim().to_ascii_lowercase())
+                .filter(|s| !s.is_empty() && s.len() <= 64)
+                .take(32)
+                .collect::<Vec<_>>()
+        })
+        .filter(|v| !v.is_empty());
+
+    {
+        let mut m = st.oauth.web_identities.lock().await;
+        m.insert(
+            pending.resume.clone(),
+            WebOAuthIdentity {
+                provider: "oidc".to_string(),
+                sub: userinfo.sub,
+                email,
+                caps,
+                created_unix: now_unix,
+            },
+        );
+    }
+
+    oauth_popup(true, "ok")
 }
 
 fn write_pending_ok(path: &Path, sub: &str, email: Option<&str>) -> anyhow::Result<()> {
@@ -657,6 +1402,73 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
+}
+
+fn oauth_popup_html(provider: &str, ok: bool, msg: &str, return_to: &str) -> Html<String> {
+    #[derive(Serialize)]
+    struct PopupMsg<'a> {
+        #[serde(rename = "type")]
+        typ: &'a str,
+        provider: &'a str,
+        ok: bool,
+        message: &'a str,
+    }
+
+    fn js_safe_json(mut s: String) -> String {
+        // Prevent </script> breaks + JS parser edge-cases.
+        // - Escape `<` so `</script>` can't appear.
+        // - Escape U+2028/U+2029 so the JS parser can't treat them as newlines.
+        s = s.replace('<', "\\u003c");
+        s = s.replace('\u{2028}', "\\u2028");
+        s = s.replace('\u{2029}', "\\u2029");
+        s
+    }
+
+    fn js_string_literal(s: &str) -> String {
+        js_safe_json(serde_json::to_string(s).unwrap_or_else(|_| "\"\"".to_string()))
+    }
+
+    let title = if ok { "Signed in" } else { "Sign-in failed" };
+    let body_msg = html_escape(msg);
+    let return_to_html = html_escape(return_to);
+
+    let msg_obj = PopupMsg {
+        typ: "oauth_complete",
+        provider,
+        ok,
+        message: msg,
+    };
+    let msg_json = js_safe_json(serde_json::to_string(&msg_obj).unwrap_or_else(|_| {
+        "{\"type\":\"oauth_complete\",\"ok\":false,\"message\":\"serialize_failed\"}".to_string()
+    }));
+    let return_to_js = js_string_literal(return_to);
+
+    Html(format!(
+        "<!doctype html><meta charset=\"utf-8\" /><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\
+<title>slopmud oauth</title>\
+<body style=\"font: 16px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace\">\
+<script>\
+(() => {{\
+  const msg = {msg_json};\
+  const returnTo = {return_to_js};\
+  const ok = {ok_lit};\
+  try {{\
+    if (window.opener && window.opener !== window) {{\
+      window.opener.postMessage(msg, window.location.origin);\
+      window.close();\
+      return;\
+    }}\
+  }} catch (e) {{}}\
+  try {{\
+    window.location.href = returnTo + '#oauth=' + (ok ? 'ok' : 'err');\
+  }} catch (e) {{}}\
+}})();\
+</script>\
+<h1>{title}</h1><p>{body_msg}</p>\
+<p><a href=\"{return_to_html}\">return</a></p>\
+</body>",
+        ok_lit = if ok { "true" } else { "false" }
+    ))
 }
 
 const WEB_SESSION_IDLE_TTL_DEFAULT: Duration = Duration::from_secs(10 * 60);
@@ -765,7 +1577,7 @@ impl WebSessionManager {
                 created.shutdown();
                 return Ok(raced);
             }
-            m.insert(token, created.clone());
+            m.insert(token.clone(), created.clone());
         }
 
         // Flush any queued TCP inputs (for example: pre-auth).
@@ -1331,7 +2143,15 @@ async fn main() {
             client_id: cfg.google_client_id.clone(),
             client_secret: cfg.google_client_secret.clone(),
             redirect_uri: cfg.google_redirect_uri.clone(),
+            oidc_auth_url: cfg.oidc_sso_auth_url.clone(),
+            oidc_token_url: cfg.oidc_sso_token_url.clone(),
+            oidc_userinfo_url: cfg.oidc_sso_userinfo_url.clone(),
+            oidc_client_id: cfg.oidc_sso_client_id.clone(),
+            oidc_client_secret: cfg.oidc_sso_client_secret.clone(),
+            oidc_redirect_uri: cfg.oidc_sso_redirect_uri.clone(),
+            oidc_scope: cfg.oidc_sso_scope.clone(),
             web_pending_google: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            web_pending_oidc: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             web_identities: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         },
         compliance,
@@ -1349,11 +2169,18 @@ async fn main() {
 "
             }),
         )
-        .route("/api/online", get(api_online))
-        .route("/api/ws/logout", axum::routing::post(api_ws_logout))
+            .route("/api/online", get(api_online))
+        .route("/api/ws/logout", post(api_ws_logout))
+        .route("/api/oauth/providers", get(api_oauth_providers))
+        .route("/api/oauth/start", post(api_oauth_start))
+        .route("/api/oauth/status", get(api_oauth_status))
+        .route("/api/oauth/logout", post(api_oauth_logout))
+        .route("/api/webauth", post(api_webauth_set))
         .route("/ws", get(ws_session))
         .route("/auth/google", get(google_auth_start))
         .route("/auth/google/callback", get(google_auth_callback))
+        .route("/auth/oidc", get(oidc_auth_start))
+        .route("/auth/oidc/callback", get(oidc_auth_callback))
         .merge(compliance_portal::router())
         .with_state(state.clone())
         .fallback_service(service)

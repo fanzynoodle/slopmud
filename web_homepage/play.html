@@ -108,6 +108,51 @@
 
             <div class="dlg__body">
               <div class="dlg__section">
+                <div class="dlg__sectiontitle">auth</div>
+
+                <label class="stack">
+                  <span class="muted">character name</span>
+                  <input id="auth-name" class="in" autocomplete="username" placeholder="name" />
+                </label>
+
+                <div class="dlg__sectiontitle" style="margin-top: 12px">password</div>
+                <label class="stack">
+                  <span class="muted">password</span>
+                  <input
+                    id="auth-password"
+                    class="in"
+                    type="password"
+                    autocomplete="current-password"
+                    placeholder="password"
+                  />
+                </label>
+                <div class="dlg__row">
+                  <button id="btn-auth-login-password" class="btn2" type="button">login</button>
+                  <button id="btn-auth-create-password" class="btn2 btn2--primary" type="button">
+                    create
+                  </button>
+                </div>
+
+                <div class="dlg__sectiontitle" style="margin-top: 12px">sso</div>
+                <p class="muted tiny" id="sso-status" style="margin: 0 0 10px">loading...</p>
+                <div class="dlg__row">
+                  <button id="btn-oauth-google" class="btn2" type="button" disabled>
+                    sign in with google
+                  </button>
+                  <button id="btn-oauth-oidc" class="btn2" type="button" disabled>
+                    sign in with custom
+                  </button>
+                  <button id="btn-oauth-logout" class="btn2" type="button" disabled>sign out</button>
+                </div>
+                <div class="dlg__row">
+                  <button id="btn-auth-login-sso" class="btn2" type="button" disabled>login</button>
+                  <button id="btn-auth-create-sso" class="btn2 btn2--primary" type="button" disabled>
+                    create
+                  </button>
+                </div>
+              </div>
+
+              <div class="dlg__section">
                 <div class="dlg__sectiontitle">connection</div>
                 <label class="stack">
                   <span class="muted">websocket url</span>
