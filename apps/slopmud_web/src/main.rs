@@ -245,6 +245,8 @@ struct OAuthState {
     client_id: Option<String>,
     client_secret: Option<String>,
     redirect_uri: Option<String>,
+    web_pending_google: Arc<tokio::sync::Mutex<HashMap<String, WebOAuthPending>>>,
+    web_identities: Arc<tokio::sync::Mutex<HashMap<String, WebOAuthIdentity>>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -261,6 +263,23 @@ struct GoogleOAuthPending {
     google_email: Option<String>,
     #[serde(default)]
     error: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct WebOAuthPending {
+    resume: String,
+    verifier: String,
+    return_to: String,
+    created_unix: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct WebOAuthIdentity {
+    provider: String, // google | oidc
+    sub: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    email: Option<String>,
+    created_unix: u64,
 }
 
 fn pending_path(dir: &Path, code: &str) -> PathBuf {
@@ -301,39 +320,61 @@ async fn google_auth_start(
             .into_response();
     };
 
-    let path = pending_path(&st.oauth.dir, code);
-    let s = match std::fs::read_to_string(&path) {
-        Ok(s) => s,
-        Err(_) => {
-            return (
-                axum::http::StatusCode::NOT_FOUND,
-                "unknown code
-",
-            )
-                .into_response();
-        }
-    };
-    let pending: GoogleOAuthPending = match serde_json::from_str(&s) {
-        Ok(v) => v,
-        Err(_) => {
-            return (
-                axum::http::StatusCode::BAD_REQUEST,
-                "bad oauth record
-",
-            )
-                .into_response();
-        }
-    };
-    if pending.status != "pending" {
-        return (
-            axum::http::StatusCode::BAD_REQUEST,
-            "oauth already completed
-",
-        )
-            .into_response();
-    }
+    let now_unix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
 
-    let challenge = base64url_sha256(&pending.verifier);
+    let path = pending_path(&st.oauth.dir, code);
+    let verifier = match std::fs::read_to_string(&path) {
+        Ok(s) => {
+            let pending: GoogleOAuthPending = match serde_json::from_str(&s) {
+                Ok(v) => v,
+                Err(_) => {
+                    return (
+                        axum::http::StatusCode::BAD_REQUEST,
+                        "bad oauth record
+",
+                    )
+                        .into_response();
+                }
+            };
+            if pending.status != "pending" {
+                return (
+                    axum::http::StatusCode::BAD_REQUEST,
+                    "oauth already completed
+",
+                )
+                    .into_response();
+            }
+            pending.verifier
+        }
+        Err(_) => {
+            // Web flow: pending state stored in-memory (keyed by a random state code).
+            let pending = { st.oauth.web_pending_google.lock().await.get(code).cloned() };
+            let Some(p) = pending else {
+                return (
+                    axum::http::StatusCode::NOT_FOUND,
+                    "unknown code
+",
+                )
+                    .into_response();
+            };
+            if now_unix.saturating_sub(p.created_unix) > 15 * 60 {
+                let mut m = st.oauth.web_pending_google.lock().await;
+                m.remove(code);
+                return (
+                    axum::http::StatusCode::BAD_REQUEST,
+                    "oauth expired
+",
+                )
+                    .into_response();
+            }
+            p.verifier
+        }
+    };
+
+    let challenge = base64url_sha256(&verifier);
 
     // Build Google OAuth URL.
     let scope = urlencoding::encode("openid email profile");
@@ -1290,6 +1331,8 @@ async fn main() {
             client_id: cfg.google_client_id.clone(),
             client_secret: cfg.google_client_secret.clone(),
             redirect_uri: cfg.google_redirect_uri.clone(),
+            web_pending_google: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            web_identities: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         },
         compliance,
     };
