@@ -248,4 +248,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 ./scripts/cicd/smoke_telnet.py --host 127.0.0.1 --port 23
+          python3 ./scripts/cicd/smoke_telnet.py --host 127.0.0.1 --port 4200

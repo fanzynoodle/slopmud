@@ -40,8 +40,8 @@ data "aws_ssm_parameter" "al2023_ami" {
 }
 
 locals {
-  subnet_ids = sort(data.aws_subnets.default.ids)
-  ami_id     = var.os == "al2023" ? data.aws_ssm_parameter.al2023_ami[0].value : data.aws_ami.debian12[0].id
+  subnet_ids         = sort(data.aws_subnets.default.ids)
+  ami_id             = var.os == "al2023" ? data.aws_ssm_parameter.al2023_ami[0].value : data.aws_ami.debian12[0].id
   assets_bucket_name = var.assets_bucket_name != "" ? var.assets_bucket_name : "slopmud-assets-${data.aws_caller_identity.current.account_id}-${var.region}"
   tags = {
     ManagedBy = "terraform"
@@ -62,14 +62,6 @@ resource "aws_security_group" "this" {
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = [var.ssh_allowed_cidr]
-  }
-
-  ingress {
-    description = "Telnet (world)"
-    from_port   = 23
-    to_port     = 23
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
@@ -167,6 +159,65 @@ data "aws_iam_policy_document" "dns_admin" {
     ]
     resources = ["*"]
   }
+}
+
+locals {
+  ssm_read_param_arns = [
+    for n in var.ssm_read_parameter_names :
+    "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(n, "/")}"
+  ]
+}
+
+data "aws_iam_policy_document" "ssm_read_params" {
+  count = var.enable_compute && length(local.ssm_read_param_arns) > 0 ? 1 : 0
+
+  statement {
+    sid    = "SsmReadParameters"
+    effect = "Allow"
+    actions = [
+      "ssm:GetParameter",
+      "ssm:GetParameters",
+      "ssm:GetParameterHistory",
+    ]
+    resources = local.ssm_read_param_arns
+  }
+
+  # Needed for SecureString (including aws/ssm managed key); scope via ViaService.
+  statement {
+    sid    = "KmsDecryptForSsm"
+    effect = "Allow"
+    actions = [
+      "kms:Decrypt",
+    ]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["ssm.${var.region}.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "kms:CallerAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+  }
+}
+
+resource "aws_iam_policy" "ssm_read_params" {
+  count = var.enable_compute && length(local.ssm_read_param_arns) > 0 ? 1 : 0
+
+  name_prefix = "${var.name_prefix}-ssmread-"
+  description = "Allow the instance to read specific SSM parameters (for app secrets)."
+  policy      = data.aws_iam_policy_document.ssm_read_params[0].json
+
+  tags = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ssm_read_params" {
+  count = var.enable_compute && length(local.ssm_read_param_arns) > 0 ? 1 : 0
+
+  role       = aws_iam_role.ssm[0].name
+  policy_arn = aws_iam_policy.ssm_read_params[0].arn
 }
 
 resource "aws_iam_policy" "dns_admin" {

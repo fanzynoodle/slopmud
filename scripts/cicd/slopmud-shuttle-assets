@@ -85,7 +85,7 @@ case "$env_name" in
   prd)
     service_name="slopmud-prd"
     node_id="1"
-    bind="0.0.0.0:23"
+    bind="0.0.0.0:4200"
     bin_dst="/opt/slopmud/bin/slopmud-prd"
     ;;
   *)
