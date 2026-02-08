@@ -29,7 +29,6 @@ inputs = {
     "/slopmud/dev/openai_api_key",
     "/slopmud/stg/openai_api_key",
     "/slopmud/prd/openai_api_key",
-    "/slopmud/uat/openai_api_key", # legacy alias for stg
 
     # "/slopmud/prd/google_oauth_client_id",
     # "/slopmud/prd/google_oauth_client_secret",
@@ -40,7 +39,6 @@ inputs = {
     "prd-gaia",
     "stg-gaia",
     "dev-gaia",
-    "uat-gaia", # legacy alias for stg-gaia
   ]
 
   # Optional: create + allow-read a compliance portal config JSON parameter (value should be passed via TF_VAR_...).

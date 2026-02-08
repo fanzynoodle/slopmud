@@ -16,14 +16,12 @@ on:
     branches:
       - dev
       - stg
-      - uat # legacy alias for stg
-      - test # legacy alias for stg
 
 permissions:
   contents: read
 
 concurrency:
-  group: enterprise-cicd-${{ github.event_name == 'workflow_dispatch' && (inputs.track == 'uat' && 'stg' || inputs.track == 'test' && 'stg' || inputs.track) || (github.ref_name == 'uat' && 'stg' || github.ref_name == 'test' && 'stg' || github.ref_name) }}
+  group: enterprise-cicd-${{ github.event_name == 'workflow_dispatch' && inputs.track || github.ref_name }}
   cancel-in-progress: true
 
 env:
@@ -71,9 +69,6 @@ jobs:
           case "$track" in
             dev) deploy_env="dev" ;;
             stg) deploy_env="stg" ;;
-            staging) deploy_env="stg" ;; # alias (spelled out)
-            uat) deploy_env="stg" ;; # legacy alias
-            test) deploy_env="stg" ;; # legacy alias
             *) echo "unknown track: $track" >&2; exit 2 ;;
           esac
           echo "deploy_env=$deploy_env" >> "$GITHUB_OUTPUT"
@@ -109,7 +104,7 @@ jobs:
         shell: bash
         env:
           TRACK: ${{ steps.meta.outputs.deploy_env }}
-          # Clean rebuild only on the staging branch/track.
+          # Clean rebuild only on the stg branch/track.
           CLEAN_BUILD: ${{ steps.meta.outputs.deploy_env == 'stg' && '1' || '0' }}
         run: |
           set -euo pipefail
@@ -146,7 +141,7 @@ jobs:
           echo "bucket=$bucket" >> "$GITHUB_OUTPUT"
           echo "key=$key" >> "$GITHUB_OUTPUT"
 
-  deploy_testing:
+  deploy_stg:
     name: Deploy To Staging
     runs-on: [self-hosted, Linux]
     timeout-minutes: 20
@@ -203,7 +198,7 @@ jobs:
     name: Promote To Prod
     runs-on: [self-hosted, Linux]
     timeout-minutes: 30
-    needs: [build, deploy_testing]
+    needs: [build, deploy_stg]
     if: needs.build.outputs.deploy_env == 'stg'
 
     steps:

@@ -48,11 +48,6 @@ The broker prints the auth URL using `SLOPMUD_GOOGLE_AUTH_BASE_URL`, which shoul
 - OAuth web HTTPS: `4242` (`https://prd-gaia.slopmud.com:4242/`)
 - OAuth callback (register in Google): `https://prd-gaia.slopmud.com:4242/auth/google/callback`
 
-## Legacy Names
-
-This env was previously referred to as `uat-gaia` / `test-gaia`.
-Use `stg-gaia` consistently.
-
 ## Local Dev OAuth Port
 
 For local OAuth testing, `just web-sso-run-local` binds:

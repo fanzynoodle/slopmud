@@ -5,17 +5,7 @@ env_name="${1:-}"
 if [[ -z "${env_name}" ]]; then
   echo "USAGE: $0 <env>" >&2
   echo "  env: prd | stg | dev (or any string used in your SSM path prefix)" >&2
-  echo "  legacy aliases: uat, test -> stg" >&2
   exit 2
-fi
-
-if [[ "$env_name" == "staging" ]]; then
-  echo "WARN: env=${env_name} is an alias; using env=stg" >&2
-  env_name="stg"
-fi
-if [[ "$env_name" == "uat" || "$env_name" == "test" ]]; then
-  echo "WARN: env=${env_name} is deprecated; using env=stg" >&2
-  env_name="stg"
 fi
 
 prefix="${SSM_PREFIX:-/slopmud/${env_name}}"

@@ -11,9 +11,6 @@ USAGE:
   slopmud-shuttle-assets --env <dev|stg|prd> --from-s3 s3://BUCKET/KEY
   slopmud-shuttle-assets --env <dev|stg|prd> --from-file /path/to/artifact.tgz
 
-NOTE:
-  `uat` and `test` are deprecated aliases for `stg`.
-
 This script:
 - copies the asset tarball into /opt/slopmud/assets/<env>/<sha>/
 - extracts it
@@ -61,15 +58,6 @@ if [[ -z "$env_name" ]]; then
   exit 2
 fi
 
-if [[ "$env_name" == "staging" ]]; then
-  echo "WARN: --env ${env_name} is an alias; treating as --env stg" >&2
-  env_name="stg"
-fi
-if [[ "$env_name" == "uat" || "$env_name" == "test" ]]; then
-  echo "WARN: --env ${env_name} is deprecated; treating as --env stg" >&2
-  env_name="stg"
-fi
-
 if [[ -n "$from_s3" && -n "$from_file" ]]; then
   echo "ERROR: choose only one of --from-s3 or --from-file" >&2
   usage
@@ -81,8 +69,6 @@ if [[ -z "$from_s3" && -z "$from_file" ]]; then
   exit 2
 fi
 
-legacy_service_names=()
-
 case "$env_name" in
   dev)
     service_name="slopmud-dev"
@@ -92,7 +78,6 @@ case "$env_name" in
     ;;
   stg)
     service_name="slopmud-stg"
-    legacy_service_names=("slopmud-uat" "slopmud-test")
     node_id="3"
     bind="0.0.0.0:4023"
     bin_dst="/opt/slopmud/bin/slopmud-stg"
@@ -158,13 +143,6 @@ chown slopmud:slopmud /opt/slopmud
 
 echo "Installing binary -> ${bin_dst}"
 install -m 0755 -o root -g root "$bin_src" "$bin_dst"
-
-if [[ "${#legacy_service_names[@]}" -gt 0 ]]; then
-  # Migration: older installs used `slopmud-uat` or `slopmud-test` for what is now `stg`.
-  for s in "${legacy_service_names[@]}"; do
-    systemctl disable --now "${s}.service" 2>/dev/null || true
-  done
-fi
 
 unit_path="/etc/systemd/system/${service_name}.service"
 cat >"$unit_path" <<EOF

@@ -15,7 +15,7 @@ Monorepo.
 This repo is intentionally optimized for fast hand-driven ops:
 - Base infrastructure is managed via Terraform/Terragrunt under `infra/`.
 - Everything else (deploys, service admin, etc.) is driven via `just` recipes.
-- CI/CD exists for `dev`/`stg` tracks via the self-hosted runner (see `.github/workflows/enterprise-cicd.yml`). (`uat`/`test` are legacy aliases for `stg`.)
+- CI/CD exists for `dev`/`stg` tracks via the self-hosted runner (see `.github/workflows/enterprise-cicd.yml`).
 - Canonical environment naming (`dev`/`stg`/`prd`) is documented in `docs/environments.md`.
 
 ## Engineering Stance
