@@ -32,4 +32,64 @@
     robotBtn.addEventListener("click", () => setConnectMode("robot"));
     setConnectMode("human");
   }
+
+  const onlineMetaEl = document.getElementById("online-meta");
+  const onlineHumansEl = document.getElementById("online-humans");
+  const onlineBotsEl = document.getElementById("online-bots");
+  const onlineHumansCountEl = document.getElementById("online-humans-count");
+  const onlineBotsCountEl = document.getElementById("online-bots-count");
+
+  function renderNames(el, names) {
+    if (!el) return;
+    el.textContent = "";
+    if (!Array.isArray(names) || names.length === 0) return;
+
+    const frag = document.createDocumentFragment();
+    for (const n of names) {
+      const li = document.createElement("li");
+      li.textContent = String(n);
+      frag.appendChild(li);
+    }
+    el.appendChild(frag);
+  }
+
+  async function refreshOnline() {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 1500);
+    try {
+      const res = await fetch("/api/online", { cache: "no-store", signal: ctl.signal });
+      const data = await res.json();
+      if (!data || data.type !== "ok_sessions") {
+        const msg = data && data.message ? data.message : "bad response";
+        throw new Error(msg);
+      }
+
+      const humans = Array.isArray(data.humans) ? data.humans : [];
+      const bots = Array.isArray(data.bots) ? data.bots : [];
+      renderNames(onlineHumansEl, humans);
+      renderNames(onlineBotsEl, bots);
+
+      if (onlineHumansCountEl) onlineHumansCountEl.textContent = `(${humans.length})`;
+      if (onlineBotsCountEl) onlineBotsCountEl.textContent = `(${bots.length})`;
+
+      if (onlineMetaEl) {
+        const total = humans.length + bots.length;
+        const ts = new Date().toLocaleTimeString();
+        onlineMetaEl.textContent = `${total} online (updated ${ts})`;
+      }
+    } catch (e) {
+      renderNames(onlineHumansEl, []);
+      renderNames(onlineBotsEl, []);
+      if (onlineHumansCountEl) onlineHumansCountEl.textContent = "";
+      if (onlineBotsCountEl) onlineBotsCountEl.textContent = "";
+      if (onlineMetaEl) onlineMetaEl.textContent = "offline";
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
+  if (onlineHumansEl && onlineBotsEl) {
+    refreshOnline();
+    setInterval(refreshOnline, 4000);
+  }
 })();

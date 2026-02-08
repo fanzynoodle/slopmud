@@ -1,0 +1,3110 @@
+version: 1
+zone_id: the_seam
+zone_name: The Seam
+area_id: A01
+level_band:
+- 17
+- 20
+start_room: P_SEAM_CORE
+rooms:
+- id: P_SEAM_CORE
+  name: The Core Transfer
+  cluster: CL_SEAM_EDGE_STATION
+  tags:
+  - portal.P_SEAM_CORE
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies The Core.
+  exits:
+  - dir: out
+    to: P_CORE_SEAM
+    len: 4
+    state: sealed
+    gate: gate.seam.entry
+  - dir: in
+    to: R_SEAM_EDGE_01
+    len: 1
+- id: R_SEAM_EDGE_01
+  name: The Seam Anchor
+  cluster: CL_SEAM_EDGE_STATION
+  tags:
+  - HUB_SEAM_EDGE
+  - portal.P_SEAM_CORE
+  desc: |-
+    A station built at the boundary where rules start to slip.
+    Warning placards feel more like prayers.
+  exits:
+  - dir: to_P_SEAM_CORE
+    to: P_SEAM_CORE
+    len: 1
+  - dir: to_R_SEAM_RIFT_ROUTE_01
+    to: R_SEAM_RIFT_ROUTE_01
+    len: 1
+  - dir: to_R_SEAM_CHOICE_01
+    to: R_SEAM_CHOICE_01
+    len: 1
+    state: sealed
+    gate: q.q14_stabilize_boundary.rifts>=4
+  - dir: wander_station
+    to: R_SEAM_STATION_01
+    len: 1
+  - dir: to_maze
+    to: R_SEAM_MAZE_01
+    len: 1
+- id: R_SEAM_RIFT_ROUTE_01
+  name: Rift Route Hub
+  cluster: CL_SEAM_RIFTS
+  tags: []
+  desc: |-
+    Four stabilized paths branch out from the station, each marked with a distinct icon and warning banner.
+    Retreat is always possible. The edge station is the reset.
+  exits:
+  - dir: south
+    to: R_SEAM_EDGE_01
+    len: 1
+  - dir: north
+    to: R_SEAM_RIFT1_01
+    len: 1
+  - dir: west
+    to: R_SEAM_RIFT2_01
+    len: 1
+  - dir: east
+    to: R_SEAM_RIFT3_01
+    len: 1
+  - dir: up
+    to: R_SEAM_RIFT4_01
+    len: 1
+- id: R_SEAM_RIFT1_01
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - setpiece.q14.rift_1
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_ROUTE_01
+    len: 1
+  - dir: wander_rift
+    to: R_SEAM_RIFT_01
+    len: 1
+- id: R_SEAM_RIFT2_01
+  name: Blue Noise Pocket
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - setpiece.q14.rift_2
+  desc: |-
+    Silence pockets bloom and drift. Spells feel unreliable in the wrong zone.
+    The rift's rule banner is loud and specific.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_ROUTE_01
+    len: 1
+- id: R_SEAM_RIFT3_01
+  name: Blind Spot Collapse
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - setpiece.q14.rift_3
+  desc: |-
+    Geometry collapses in predictable chunks.
+    The only safe line is the one you can learn to see.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_ROUTE_01
+    len: 1
+- id: R_SEAM_RIFT4_01
+  name: Glass Choir Bend
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - setpiece.q14.rift_4
+  desc: |-
+    Repeated casting triggers a punishment pulse. Coordination beats spam.
+    The safe pocket can be earned mid-run if the party stays disciplined.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_ROUTE_01
+    len: 1
+- id: R_SEAM_CHOICE_01
+  name: Reinforcement Console
+  cluster: CL_SEAM_EDGE_STATION
+  tags: []
+  desc: |-
+    A console with three reinforcement targets, each labeled like a doctrine.
+    This is a real choice, not a decorative button.
+  exits:
+  - dir: north
+    to: R_SEAM_EDGE_01
+    len: 1
+  - dir: south
+    to: R_SEAM_NEXUS_GATE_01
+    len: 1
+- id: R_SEAM_NEXUS_GATE_01
+  name: Nexus Gate
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags: []
+  desc: |-
+    A staging line before the stabilizer nexus.
+    The warning placard is blunt: "It will change the rules mid-fight."
+  exits:
+  - dir: north
+    to: R_SEAM_CHOICE_01
+    len: 1
+  - dir: south
+    to: R_SEAM_NEXUS_01
+    len: 1
+- id: R_SEAM_NEXUS_01
+  name: Stabilizer Nexus
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - setpiece.q14.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: north
+    to: R_SEAM_EDGE_01
+    len: 1
+  - dir: wander_nexu
+    to: R_SEAM_NEXU_01
+    len: 1
+- id: R_SEAM_STATION_01
+  name: Staging Bay
+  cluster: CL_SEAM_EDGE_STATION
+  tags:
+  - landmark.seam.edge_station
+  desc: |-
+    A staging bay with gear racks, a taped checklist, and static that crawls under your teeth.
+    Someone keeps a chalk tally of "returns" and "didn't come back".
+  exits:
+  - dir: back
+    to: R_SEAM_EDGE_01
+    len: 1
+  - dir: ahead
+    to: R_SEAM_STATION_02
+    len: 1
+- id: R_SEAM_STATION_02
+  name: Placard Hall
+  cluster: CL_SEAM_EDGE_STATION
+  tags:
+  - landmark.seam.edge_station
+  desc: |-
+    A corridor lined with warning placards and bent mirror strips that make you check yourself.
+    Most signs are procedural. A few read like prayers.
+  exits:
+  - dir: back
+    to: R_SEAM_STATION_01
+    len: 1
+  - dir: ahead
+    to: R_SEAM_STATION_03
+    len: 1
+- id: R_SEAM_STATION_03
+  name: Locker Row
+  cluster: CL_SEAM_EDGE_STATION
+  tags:
+  - landmark.seam.edge_station
+  desc: |-
+    Open lockers rattle in a draft that smells like ozone.
+    Tags list names and dates, then stop mid-line.
+  exits:
+  - dir: back
+    to: R_SEAM_STATION_02
+    len: 1
+  - dir: ahead
+    to: R_SEAM_STATION_04
+    len: 1
+- id: R_SEAM_STATION_04
+  name: Intercom Nook
+  cluster: CL_SEAM_EDGE_STATION
+  tags:
+  - landmark.seam.edge_station
+  desc: |-
+    A dead intercom squawks once, then goes silent.
+    The only message that repeats is: RETURN TO EDGE STATION.
+  exits:
+  - dir: back
+    to: R_SEAM_STATION_03
+    len: 1
+  - dir: ahead
+    to: R_SEAM_STATION_05
+    len: 1
+- id: R_SEAM_STATION_05
+  name: Staging Bay
+  cluster: CL_SEAM_EDGE_STATION
+  tags:
+  - landmark.seam.edge_station
+  desc: |-
+    A workbench with spare wraps and a cracked canteen; the light is too clean.
+    Everyone pauses here without talking, like it is part of the ritual.
+  exits:
+  - dir: back
+    to: R_SEAM_STATION_04
+    len: 1
+  - dir: ahead
+    to: R_SEAM_STATION_06
+    len: 1
+- id: R_SEAM_STATION_06
+  name: Broken Schedule Board
+  cluster: CL_SEAM_EDGE_STATION
+  tags:
+  - landmark.seam.edge_station
+  desc: |-
+    A schedule board hangs on one bolt, its times overwritten until they are nonsense.
+    Whatever ran here used to care about cadence.
+  exits:
+  - dir: back
+    to: R_SEAM_STATION_05
+    len: 1
+  - dir: ahead
+    to: R_SEAM_STATION_07
+    len: 1
+- id: R_SEAM_STATION_07
+  name: Boundary Sighting
+  cluster: CL_SEAM_EDGE_STATION
+  tags:
+  - landmark.seam.edge_station
+  desc: |-
+    Through a narrow window, the rift-light pulses in slow, deliberate beats.
+    It is close enough to make your hair lift.
+  exits:
+  - dir: back
+    to: R_SEAM_STATION_06
+    len: 1
+  - dir: ahead
+    to: R_SEAM_STATION_08
+    len: 1
+- id: R_SEAM_STATION_08
+  name: Filter Alcove
+  cluster: CL_SEAM_EDGE_STATION
+  tags:
+  - landmark.seam.edge_station
+  desc: |-
+    Stacks of gray filters and sealant tubes sit ready, as if repairs are constant.
+    One placard reads: DO NOT TRUST STRAIGHT LINES.
+  exits:
+  - dir: back
+    to: R_SEAM_STATION_07
+    len: 1
+  - dir: ahead
+    to: R_SEAM_STATION_09
+    len: 1
+- id: R_SEAM_STATION_09
+  name: Staging Bay
+  cluster: CL_SEAM_EDGE_STATION
+  tags:
+  - landmark.seam.edge_station
+  desc: |-
+    A quiet bay where footsteps sound delayed, like the room waits before agreeing.
+    Reset, count heads, and move on.
+  exits:
+  - dir: back
+    to: R_SEAM_STATION_08
+    len: 1
+  - dir: ahead
+    to: R_SEAM_STATION_10
+    len: 1
+- id: R_SEAM_STATION_10
+  name: Quiet Threshold
+  cluster: CL_SEAM_EDGE_STATION
+  tags:
+  - landmark.seam.edge_station
+  desc: |-
+    A threshold marked with paint stripes and a low hum that dampens speech.
+    Crossing it feels like committing to the next rule set.
+  exits:
+  - dir: back
+    to: R_SEAM_STATION_09
+    len: 1
+  - dir: ahead
+    to: R_SEAM_STATION_11
+    len: 1
+- id: R_SEAM_STATION_11
+  name: Signal Room
+  cluster: CL_SEAM_EDGE_STATION
+  tags:
+  - landmark.seam.edge_station
+  desc: |-
+    Signal lamps blink in patterns that almost resolve into language.
+    Somebody scratched: FOLLOW ICONS, NOT INSTINCT.
+  exits:
+  - dir: back
+    to: R_SEAM_STATION_10
+    len: 1
+  - dir: ahead
+    to: R_SEAM_STATION_12
+    len: 1
+- id: R_SEAM_STATION_12
+  name: Staging Bay
+  cluster: CL_SEAM_EDGE_STATION
+  tags:
+  - landmark.seam.edge_station
+  desc: |-
+    A final resupply nook: bandage box, spare cells, a pouch of cheap rations.
+    Everything is labeled with the same careful handwriting.
+  exits:
+  - dir: back
+    to: R_SEAM_STATION_11
+    len: 1
+  - dir: ahead
+    to: R_SEAM_STATION_13
+    len: 1
+- id: R_SEAM_STATION_13
+  name: Quiet Threshold
+  cluster: CL_SEAM_EDGE_STATION
+  tags:
+  - landmark.seam.edge_station
+  desc: |-
+    The light changes here, warmer and wrong, like the station is pretending to be normal.
+    Ahead is the anchor; behind is the long corridor of warnings.
+  exits:
+  - dir: back
+    to: R_SEAM_STATION_12
+    len: 1
+  - dir: ahead
+    to: R_SEAM_EDGE_01
+    len: 1
+- id: R_SEAM_MAZE_01
+  name: Mirror Turn
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze_seed
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_EDGE_01
+    len: 1
+  - dir: wander_maze
+    to: R_SEAM_MAZE_02
+    len: 1
+- id: R_SEAM_MAZE_02
+  name: Mirror Turn
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_01
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_03
+    len: 1
+- id: R_SEAM_MAZE_03
+  name: Looping Hall
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_02
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_04
+    len: 1
+- id: R_SEAM_MAZE_04
+  name: Looping Hall
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_03
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_05
+    len: 1
+- id: R_SEAM_MAZE_05
+  name: False Door
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_04
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_06
+    len: 1
+- id: R_SEAM_MAZE_06
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_05
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_07
+    len: 1
+- id: R_SEAM_MAZE_07
+  name: Looping Hall
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_06
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_08
+    len: 1
+- id: R_SEAM_MAZE_08
+  name: Mirror Turn
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_07
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_09
+    len: 1
+- id: R_SEAM_MAZE_09
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_08
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_10
+    len: 1
+- id: R_SEAM_MAZE_10
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_09
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_11
+    len: 1
+- id: R_SEAM_MAZE_11
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_10
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_12
+    len: 1
+- id: R_SEAM_MAZE_12
+  name: Looping Hall
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_11
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_13
+    len: 1
+- id: R_SEAM_MAZE_13
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_12
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_14
+    len: 1
+- id: R_SEAM_MAZE_14
+  name: Looping Hall
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_13
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_15
+    len: 1
+- id: R_SEAM_MAZE_15
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_14
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_16
+    len: 1
+- id: R_SEAM_MAZE_16
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_15
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_17
+    len: 1
+- id: R_SEAM_MAZE_17
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_16
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_18
+    len: 1
+- id: R_SEAM_MAZE_18
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_17
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_19
+    len: 1
+- id: R_SEAM_MAZE_19
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_18
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_20
+    len: 1
+- id: R_SEAM_MAZE_20
+  name: False Door
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_19
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_21
+    len: 1
+- id: R_SEAM_MAZE_21
+  name: Looping Hall
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_20
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_22
+    len: 1
+- id: R_SEAM_MAZE_22
+  name: Mirror Turn
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_21
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_23
+    len: 1
+- id: R_SEAM_MAZE_23
+  name: Looping Hall
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_22
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_24
+    len: 1
+- id: R_SEAM_MAZE_24
+  name: False Door
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_23
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_25
+    len: 1
+- id: R_SEAM_MAZE_25
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_24
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_26
+    len: 1
+- id: R_SEAM_MAZE_26
+  name: Mirror Turn
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_25
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_27
+    len: 1
+- id: R_SEAM_MAZE_27
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_26
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_28
+    len: 1
+- id: R_SEAM_MAZE_28
+  name: Mirror Turn
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_27
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_29
+    len: 1
+- id: R_SEAM_MAZE_29
+  name: Looping Hall
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_28
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_30
+    len: 1
+- id: R_SEAM_MAZE_30
+  name: Looping Hall
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_29
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_31
+    len: 1
+- id: R_SEAM_MAZE_31
+  name: Looping Hall
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_30
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_32
+    len: 1
+- id: R_SEAM_MAZE_32
+  name: Looping Hall
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_31
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_33
+    len: 1
+- id: R_SEAM_MAZE_33
+  name: Mirror Turn
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_32
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_34
+    len: 1
+- id: R_SEAM_MAZE_34
+  name: Looping Hall
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_33
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_35
+    len: 1
+- id: R_SEAM_MAZE_35
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_34
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_36
+    len: 1
+- id: R_SEAM_MAZE_36
+  name: Looping Hall
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_35
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_37
+    len: 1
+- id: R_SEAM_MAZE_37
+  name: Looping Hall
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_36
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_38
+    len: 1
+- id: R_SEAM_MAZE_38
+  name: Mirror Turn
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_37
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_39
+    len: 1
+- id: R_SEAM_MAZE_39
+  name: Mirror Turn
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_38
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_40
+    len: 1
+- id: R_SEAM_MAZE_40
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_39
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_41
+    len: 1
+- id: R_SEAM_MAZE_41
+  name: Looping Hall
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_40
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_42
+    len: 1
+- id: R_SEAM_MAZE_42
+  name: Looping Hall
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_41
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_43
+    len: 1
+- id: R_SEAM_MAZE_43
+  name: Looping Hall
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_42
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_44
+    len: 1
+- id: R_SEAM_MAZE_44
+  name: Looping Hall
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_43
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_45
+    len: 1
+- id: R_SEAM_MAZE_45
+  name: Mirror Turn
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_44
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_46
+    len: 1
+- id: R_SEAM_MAZE_46
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_45
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_47
+    len: 1
+- id: R_SEAM_MAZE_47
+  name: Mirror Turn
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_46
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_48
+    len: 1
+- id: R_SEAM_MAZE_48
+  name: Mirror Turn
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_47
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_49
+    len: 1
+- id: R_SEAM_MAZE_49
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_48
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_50
+    len: 1
+- id: R_SEAM_MAZE_50
+  name: False Door
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_49
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_51
+    len: 1
+- id: R_SEAM_MAZE_51
+  name: Mirror Turn
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_50
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_52
+    len: 1
+- id: R_SEAM_MAZE_52
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_51
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_53
+    len: 1
+- id: R_SEAM_MAZE_53
+  name: False Door
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_52
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_54
+    len: 1
+- id: R_SEAM_MAZE_54
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_53
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_55
+    len: 1
+- id: R_SEAM_MAZE_55
+  name: False Door
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_54
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_56
+    len: 1
+- id: R_SEAM_MAZE_56
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_55
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_57
+    len: 1
+- id: R_SEAM_MAZE_57
+  name: Looping Hall
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_56
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_58
+    len: 1
+- id: R_SEAM_MAZE_58
+  name: Seam Maze
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_57
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_59
+    len: 1
+- id: R_SEAM_MAZE_59
+  name: Mirror Turn
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    Geometry twists like it is thinking.
+    If you get lost, that is the mechanic.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_58
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_60
+    len: 1
+- id: R_SEAM_MAZE_60
+  name: False Door
+  cluster: CL_SEAM_MAZE
+  tags:
+  - landmark.seam.maze
+  desc: |-
+    A corridor that refuses to stay the same.
+    Keep your party tight and your route explicit.
+  exits:
+  - dir: back
+    to: R_SEAM_MAZE_59
+    len: 1
+  - dir: ahead
+    to: R_SEAM_MAZE_01
+    len: 1
+- id: R_SEAM_RIFT_01
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT1_01
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_02
+    len: 1
+- id: R_SEAM_RIFT_02
+  name: Frayed Corridor
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_01
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_03
+    len: 1
+- id: R_SEAM_RIFT_03
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_02
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_04
+    len: 1
+- id: R_SEAM_RIFT_04
+  name: Rift Scar
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_03
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_05
+    len: 1
+- id: R_SEAM_RIFT_05
+  name: Rift Scar
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_04
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_06
+    len: 1
+- id: R_SEAM_RIFT_06
+  name: Rift Scar
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_05
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_07
+    len: 1
+- id: R_SEAM_RIFT_07
+  name: Frayed Corridor
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_06
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_08
+    len: 1
+- id: R_SEAM_RIFT_08
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_07
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_09
+    len: 1
+- id: R_SEAM_RIFT_09
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_08
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_10
+    len: 1
+- id: R_SEAM_RIFT_10
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_09
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_11
+    len: 1
+- id: R_SEAM_RIFT_11
+  name: Rift Scar
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_10
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_12
+    len: 1
+- id: R_SEAM_RIFT_12
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_11
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_13
+    len: 1
+- id: R_SEAM_RIFT_13
+  name: Rift Scar
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_12
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_14
+    len: 1
+- id: R_SEAM_RIFT_14
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_13
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_15
+    len: 1
+- id: R_SEAM_RIFT_15
+  name: Frayed Corridor
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_14
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_16
+    len: 1
+- id: R_SEAM_RIFT_16
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_15
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_17
+    len: 1
+- id: R_SEAM_RIFT_17
+  name: Rift Scar
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_16
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_18
+    len: 1
+- id: R_SEAM_RIFT_18
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_17
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_19
+    len: 1
+- id: R_SEAM_RIFT_19
+  name: Rift Scar
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_18
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_20
+    len: 1
+- id: R_SEAM_RIFT_20
+  name: Rift Scar
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_19
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_21
+    len: 1
+- id: R_SEAM_RIFT_21
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_20
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_22
+    len: 1
+- id: R_SEAM_RIFT_22
+  name: Rift Scar
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_21
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_23
+    len: 1
+- id: R_SEAM_RIFT_23
+  name: Frayed Corridor
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_22
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_24
+    len: 1
+- id: R_SEAM_RIFT_24
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_23
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_25
+    len: 1
+- id: R_SEAM_RIFT_25
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_24
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_26
+    len: 1
+- id: R_SEAM_RIFT_26
+  name: Rift Scar
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_25
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_27
+    len: 1
+- id: R_SEAM_RIFT_27
+  name: Frayed Corridor
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_26
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_28
+    len: 1
+- id: R_SEAM_RIFT_28
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_27
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_29
+    len: 1
+- id: R_SEAM_RIFT_29
+  name: Frayed Corridor
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_28
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_30
+    len: 1
+- id: R_SEAM_RIFT_30
+  name: Frayed Corridor
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_29
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_31
+    len: 1
+- id: R_SEAM_RIFT_31
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_30
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_32
+    len: 1
+- id: R_SEAM_RIFT_32
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_31
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_33
+    len: 1
+- id: R_SEAM_RIFT_33
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_32
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_34
+    len: 1
+- id: R_SEAM_RIFT_34
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_33
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_35
+    len: 1
+- id: R_SEAM_RIFT_35
+  name: Rift Scar
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_34
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_36
+    len: 1
+- id: R_SEAM_RIFT_36
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_35
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_37
+    len: 1
+- id: R_SEAM_RIFT_37
+  name: Frayed Corridor
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_36
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_38
+    len: 1
+- id: R_SEAM_RIFT_38
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_37
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_39
+    len: 1
+- id: R_SEAM_RIFT_39
+  name: Frayed Corridor
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_38
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_40
+    len: 1
+- id: R_SEAM_RIFT_40
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_39
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_41
+    len: 1
+- id: R_SEAM_RIFT_41
+  name: Frayed Corridor
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_40
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_42
+    len: 1
+- id: R_SEAM_RIFT_42
+  name: Frayed Corridor
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_41
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_43
+    len: 1
+- id: R_SEAM_RIFT_43
+  name: Rift Scar
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_42
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_44
+    len: 1
+- id: R_SEAM_RIFT_44
+  name: Frayed Corridor
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_43
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_45
+    len: 1
+- id: R_SEAM_RIFT_45
+  name: Rift Scar
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_44
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_46
+    len: 1
+- id: R_SEAM_RIFT_46
+  name: Frayed Corridor
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_45
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_47
+    len: 1
+- id: R_SEAM_RIFT_47
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_46
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_48
+    len: 1
+- id: R_SEAM_RIFT_48
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_47
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_49
+    len: 1
+- id: R_SEAM_RIFT_49
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_48
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_50
+    len: 1
+- id: R_SEAM_RIFT_50
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_49
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_51
+    len: 1
+- id: R_SEAM_RIFT_51
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_50
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_52
+    len: 1
+- id: R_SEAM_RIFT_52
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_51
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_53
+    len: 1
+- id: R_SEAM_RIFT_53
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_52
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_54
+    len: 1
+- id: R_SEAM_RIFT_54
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_53
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_55
+    len: 1
+- id: R_SEAM_RIFT_55
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_54
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_56
+    len: 1
+- id: R_SEAM_RIFT_56
+  name: Rift Scar
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_55
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_57
+    len: 1
+- id: R_SEAM_RIFT_57
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_56
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_58
+    len: 1
+- id: R_SEAM_RIFT_58
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_57
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_59
+    len: 1
+- id: R_SEAM_RIFT_59
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_58
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_60
+    len: 1
+- id: R_SEAM_RIFT_60
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_59
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_61
+    len: 1
+- id: R_SEAM_RIFT_61
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_60
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_62
+    len: 1
+- id: R_SEAM_RIFT_62
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_61
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_63
+    len: 1
+- id: R_SEAM_RIFT_63
+  name: Rift Scar
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_62
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_64
+    len: 1
+- id: R_SEAM_RIFT_64
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_63
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_65
+    len: 1
+- id: R_SEAM_RIFT_65
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_64
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_66
+    len: 1
+- id: R_SEAM_RIFT_66
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_65
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_67
+    len: 1
+- id: R_SEAM_RIFT_67
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_66
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_68
+    len: 1
+- id: R_SEAM_RIFT_68
+  name: Static Cut
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_67
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_69
+    len: 1
+- id: R_SEAM_RIFT_69
+  name: Rift Scar
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_68
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_70
+    len: 1
+- id: R_SEAM_RIFT_70
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_69
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_71
+    len: 1
+- id: R_SEAM_RIFT_71
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_70
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_72
+    len: 1
+- id: R_SEAM_RIFT_72
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_71
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_73
+    len: 1
+- id: R_SEAM_RIFT_73
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_72
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_74
+    len: 1
+- id: R_SEAM_RIFT_74
+  name: Rift Scar
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_73
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_75
+    len: 1
+- id: R_SEAM_RIFT_75
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_74
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_76
+    len: 1
+- id: R_SEAM_RIFT_76
+  name: Impossible Angle
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_75
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_77
+    len: 1
+- id: R_SEAM_RIFT_77
+  name: Rift Scar
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    Reality looks scraped, like the world hit a rough edge.
+    The air tastes like ozone and old dust.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_76
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_78
+    len: 1
+- id: R_SEAM_RIFT_78
+  name: Frayed Corridor
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_77
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT_79
+    len: 1
+- id: R_SEAM_RIFT_79
+  name: Frayed Corridor
+  cluster: CL_SEAM_RIFTS
+  tags:
+  - landmark.seam.rifts
+  desc: |-
+    A rift-worn passage where shadows behave badly.
+    If something feels like a bug, it might be the feature.
+  exits:
+  - dir: back
+    to: R_SEAM_RIFT_78
+    len: 1
+  - dir: ahead
+    to: R_SEAM_RIFT1_01
+    len: 1
+- id: R_SEAM_NEXU_01
+  name: Control Lattice
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXUS_01
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_02
+    len: 1
+- id: R_SEAM_NEXU_02
+  name: Control Lattice
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_01
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_03
+    len: 1
+- id: R_SEAM_NEXU_03
+  name: Anchor Chamber
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_02
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_04
+    len: 1
+- id: R_SEAM_NEXU_04
+  name: Anchor Chamber
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_03
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_05
+    len: 1
+- id: R_SEAM_NEXU_05
+  name: Stabilizer Nexus
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_04
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_06
+    len: 1
+- id: R_SEAM_NEXU_06
+  name: Stabilizer Nexus
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_05
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_07
+    len: 1
+- id: R_SEAM_NEXU_07
+  name: Anchor Chamber
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_06
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_08
+    len: 1
+- id: R_SEAM_NEXU_08
+  name: Restraint Ring
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_07
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_09
+    len: 1
+- id: R_SEAM_NEXU_09
+  name: Restraint Ring
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_08
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_10
+    len: 1
+- id: R_SEAM_NEXU_10
+  name: Control Lattice
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_09
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_11
+    len: 1
+- id: R_SEAM_NEXU_11
+  name: Anchor Chamber
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_10
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_12
+    len: 1
+- id: R_SEAM_NEXU_12
+  name: Restraint Ring
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_11
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_13
+    len: 1
+- id: R_SEAM_NEXU_13
+  name: Anchor Chamber
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_12
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_14
+    len: 1
+- id: R_SEAM_NEXU_14
+  name: Restraint Ring
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_13
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_15
+    len: 1
+- id: R_SEAM_NEXU_15
+  name: Restraint Ring
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_14
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_16
+    len: 1
+- id: R_SEAM_NEXU_16
+  name: Restraint Ring
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_15
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_17
+    len: 1
+- id: R_SEAM_NEXU_17
+  name: Restraint Ring
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_16
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_18
+    len: 1
+- id: R_SEAM_NEXU_18
+  name: Stabilizer Nexus
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_17
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_19
+    len: 1
+- id: R_SEAM_NEXU_19
+  name: Anchor Chamber
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_18
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_20
+    len: 1
+- id: R_SEAM_NEXU_20
+  name: Restraint Ring
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_19
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_21
+    len: 1
+- id: R_SEAM_NEXU_21
+  name: Restraint Ring
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_20
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_22
+    len: 1
+- id: R_SEAM_NEXU_22
+  name: Control Lattice
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_21
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_23
+    len: 1
+- id: R_SEAM_NEXU_23
+  name: Stabilizer Nexus
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_22
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_24
+    len: 1
+- id: R_SEAM_NEXU_24
+  name: Stabilizer Nexus
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_23
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_25
+    len: 1
+- id: R_SEAM_NEXU_25
+  name: Control Lattice
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_24
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_26
+    len: 1
+- id: R_SEAM_NEXU_26
+  name: Anchor Chamber
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_25
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_27
+    len: 1
+- id: R_SEAM_NEXU_27
+  name: Stabilizer Nexus
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_26
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_28
+    len: 1
+- id: R_SEAM_NEXU_28
+  name: Restraint Ring
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_27
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_29
+    len: 1
+- id: R_SEAM_NEXU_29
+  name: Control Lattice
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_28
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_30
+    len: 1
+- id: R_SEAM_NEXU_30
+  name: Restraint Ring
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_29
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_31
+    len: 1
+- id: R_SEAM_NEXU_31
+  name: Stabilizer Nexus
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_30
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_32
+    len: 1
+- id: R_SEAM_NEXU_32
+  name: Stabilizer Nexus
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_31
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_33
+    len: 1
+- id: R_SEAM_NEXU_33
+  name: Restraint Ring
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_32
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_34
+    len: 1
+- id: R_SEAM_NEXU_34
+  name: Stabilizer Nexus
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_33
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_35
+    len: 1
+- id: R_SEAM_NEXU_35
+  name: Stabilizer Nexus
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_34
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_36
+    len: 1
+- id: R_SEAM_NEXU_36
+  name: Control Lattice
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_35
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_37
+    len: 1
+- id: R_SEAM_NEXU_37
+  name: Stabilizer Nexus
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_36
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_38
+    len: 1
+- id: R_SEAM_NEXU_38
+  name: Stabilizer Nexus
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_37
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_39
+    len: 1
+- id: R_SEAM_NEXU_39
+  name: Restraint Ring
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_38
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_40
+    len: 1
+- id: R_SEAM_NEXU_40
+  name: Restraint Ring
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_39
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_41
+    len: 1
+- id: R_SEAM_NEXU_41
+  name: Anchor Chamber
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    Metal latticework and calm, threatening light.
+    This is where the world gets stitched.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_40
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_42
+    len: 1
+- id: R_SEAM_NEXU_42
+  name: Control Lattice
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_41
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_43
+    len: 1
+- id: R_SEAM_NEXU_43
+  name: Control Lattice
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_42
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXU_44
+    len: 1
+- id: R_SEAM_NEXU_44
+  name: Stabilizer Nexus
+  cluster: CL_SEAM_STABILIZER_NEXUS
+  tags:
+  - landmark.seam.stabilizer_nexus
+  desc: |-
+    A chamber built to hold the boundary together.
+    The hum here feels like pressure under glass.
+  exits:
+  - dir: back
+    to: R_SEAM_NEXU_43
+    len: 1
+  - dir: ahead
+    to: R_SEAM_NEXUS_01
+    len: 1

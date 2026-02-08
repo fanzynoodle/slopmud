@@ -1,0 +1,1074 @@
+version: 1
+zone_id: hillfort_ruins
+zone_name: Hillfort Ruins
+area_id: A01
+level_band:
+- 4
+- 7
+start_room: P_HILLFORT_QUARRY
+rooms:
+- id: P_HILLFORT_CHECKPOINT
+  name: Old Road Checkpoint Transfer
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - portal.P_HILLFORT_CHECKPOINT
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies Old Road Checkpoint.
+  exits:
+  - dir: out
+    to: P_CHECKPOINT_HILLFORT
+    len: 1
+  - dir: in
+    to: R_HILL_APPROACH_01
+    len: 1
+- id: P_HILLFORT_QUARRY
+  name: Quarry Transfer
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - portal.P_HILLFORT_QUARRY
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies Quarry.
+  exits:
+  - dir: out
+    to: P_QUARRY_HILLFORT
+    len: 1
+  - dir: in
+    to: R_HILL_APPROACH_01
+    len: 1
+- id: R_HILL_CMD_01
+  name: Command Bunker
+  cluster: CL_HILLFORT_COMMAND_BUNKER
+  tags:
+  - HUB_HILLFORT_COMMAND
+  - safe_pocket
+  desc: |-
+    Concrete, dust, and the faint smell of ozone.
+    Someone rebuilt a little safety inside the ruin.
+  exits:
+  - dir: west
+    to: R_HILL_APPROACH_01
+    len: 1
+  - dir: east
+    to: R_HILL_COURT_01
+    len: 1
+  - dir: wander_bunker
+    to: R_HILL_BUNKER_01
+    len: 1
+- id: R_HILL_APPROACH_01
+  name: Hillfort Approach
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - portal.P_HILLFORT_QUARRY
+  - portal.P_HILLFORT_CHECKPOINT
+  desc: |-
+    A broken road climbs into crumbled stone and wind.
+    Graffiti marks routes as SAFE and NOT SAFE in big letters.
+  exits:
+  - dir: east
+    to: R_HILL_CMD_01
+    len: 1
+  - dir: quarry
+    to: P_HILLFORT_QUARRY
+    len: 1
+  - dir: checkpoint
+    to: P_HILLFORT_CHECKPOINT
+    len: 1
+  - dir: wander_approach
+    to: R_HILL_APPROACH_02
+    len: 1
+- id: R_HILL_COURT_01
+  name: Courtyard Fork
+  cluster: CL_HILLFORT_COURTYARDS
+  tags: []
+  desc: |-
+    A courtyard fork with three broken signal lines and a sealed hall.
+    A cracked sign reads: BANNER HALL SEALED UNTIL 3 SIGNALS RESTORED.
+  exits:
+  - dir: west
+    to: R_HILL_CMD_01
+    len: 1
+  - dir: north
+    to: R_HILL_PYLON_01
+    len: 1
+  - dir: northwest
+    to: R_HILL_PYLON_02
+    len: 1
+  - dir: northeast
+    to: R_HILL_PYLON_03
+    len: 1
+  - dir: south
+    to: R_HILL_HALL_01
+    len: 1
+    state: sealed
+    gate: q.q6_hillfort_signal.pylons_lit>=3
+  - dir: wander_pylon
+    to: R_HILL_PYLON_04
+    len: 1
+- id: R_HILL_PYLON_01
+  name: Courtyard Rubble
+  cluster: CL_HILLFORT_COURTYARDS
+  tags:
+  - setpiece.q6.pylon_1
+  desc: |-
+    Crumbling fort stone and wind through empty gaps.
+    Patrol routes feel intentional, like a lesson in timing.
+  exits:
+  - dir: south
+    to: R_HILL_COURT_01
+    len: 1
+- id: R_HILL_PYLON_02
+  name: Courtyard Rubble
+  cluster: CL_HILLFORT_COURTYARDS
+  tags:
+  - setpiece.q6.pylon_2
+  desc: |-
+    Crumbling fort stone and wind through empty gaps.
+    Patrol routes feel intentional, like a lesson in timing.
+  exits:
+  - dir: southeast
+    to: R_HILL_COURT_01
+    len: 1
+- id: R_HILL_PYLON_03
+  name: Ward Pylon Path
+  cluster: CL_HILLFORT_COURTYARDS
+  tags:
+  - setpiece.q6.pylon_3
+  desc: |-
+    Rubble and old pylons break up sightlines.
+    Pick your route instead of taking every fight.
+  exits:
+  - dir: southwest
+    to: R_HILL_COURT_01
+    len: 1
+- id: R_HILL_BANNER_02
+  name: Banner Hall
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - setpiece.q6.banner_hall
+  desc: |-
+    A wide hall where every sound carries.
+    You can almost feel the shape of a boss arena.
+  exits:
+  - dir: north
+    to: R_HILL_HALL_02
+    len: 1
+  - dir: wander_hall
+    to: R_HILL_HALL_03
+    len: 1
+- id: R_HILL_APPROACH_02
+  name: Graffiti Switchback
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - landmark.graffiti_switchback
+  desc: |-
+    A switchback climb with SAFE and NOT SAFE graffiti in big, helpful letters.
+    You can hear patrol boots up ahead if you stop moving for a second.
+  exits:
+  - dir: back
+    to: R_HILL_APPROACH_01
+    len: 1
+  - dir: ahead
+    to: R_HILL_APPROACH_03
+    len: 1
+- id: R_HILL_APPROACH_03
+  name: Wind Gap
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - landmark.wind_gap
+  desc: |-
+    Wind funnels through a broken wall and turns every sound into a warning.
+    The gap makes patrol timing easier to read if you listen.
+  exits:
+  - dir: back
+    to: R_HILL_APPROACH_02
+    len: 1
+  - dir: ahead
+    to: R_HILL_APPROACH_04
+    len: 1
+- id: R_HILL_APPROACH_04
+  name: Broken Signal Line
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - landmark.signal_line
+  desc: |-
+    A snapped cable snakes along the stones and disappears into rubble.
+    It used to carry signal to the pylons, and it still feels important.
+  exits:
+  - dir: back
+    to: R_HILL_APPROACH_03
+    len: 1
+  - dir: ahead
+    to: R_HILL_APPROACH_05
+    len: 1
+- id: R_HILL_APPROACH_05
+  name: Rampart Teeth
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - landmark.rampart_teeth
+  desc: |-
+    Broken rampart stones stick up like teeth and break sightlines into chunks.
+    This is a reset lane: pull back here if the approach gets messy.
+  exits:
+  - dir: back
+    to: R_HILL_APPROACH_04
+    len: 1
+  - dir: ahead
+    to: R_HILL_APPROACH_06
+    len: 1
+- id: R_HILL_APPROACH_06
+  name: Ozone Stain
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - landmark.ozone_stain
+  desc: |-
+    The stone is stained dark, like something hot struck it and left a memory behind.
+    The air smells faintly of ozone when the wind shifts.
+  exits:
+  - dir: back
+    to: R_HILL_APPROACH_05
+    len: 1
+  - dir: ahead
+    to: R_HILL_APPROACH_07
+    len: 1
+- id: R_HILL_APPROACH_07
+  name: Collapsed Walkway
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - landmark.collapsed_walkway
+  desc: |-
+    A collapsed walkway forces you into single-file for a few steps.
+    It is a bad place to fight and a good place to retreat through.
+  exits:
+  - dir: back
+    to: R_HILL_APPROACH_06
+    len: 1
+  - dir: ahead
+    to: R_HILL_APPROACH_08
+    len: 1
+- id: R_HILL_APPROACH_08
+  name: Pylon Shadow
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - landmark.pylon_shadow
+  desc: |-
+    An old pylon stump throws a hard shadow across the lane.
+    The shadow makes distance feel wrong, which is exactly why patrols like it.
+  exits:
+  - dir: back
+    to: R_HILL_APPROACH_07
+    len: 1
+  - dir: ahead
+    to: R_HILL_APPROACH_09
+    len: 1
+- id: R_HILL_APPROACH_09
+  name: Shattered Parapet
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - landmark.shattered_parapet
+  desc: |-
+    A parapet wall lies shattered, giving you a wide view for a few breaths.
+    From here you can see the approach hub if you need to reset.
+  exits:
+  - dir: back
+    to: R_HILL_APPROACH_08
+    len: 1
+  - dir: ahead
+    to: R_HILL_APPROACH_10
+    len: 1
+- id: R_HILL_APPROACH_10
+  name: Patrol Timing Marker
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - landmark.patrol_marker
+  desc: |-
+    Chalk ticks on stone count a patrol loop: 1, 2, 3, then a long pause.
+    Someone tried to make timing learnable, not mysterious.
+  exits:
+  - dir: back
+    to: R_HILL_APPROACH_09
+    len: 1
+  - dir: ahead
+    to: R_HILL_APPROACH_11
+    len: 1
+- id: R_HILL_APPROACH_11
+  name: Loose Flagstones
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - landmark.loose_flagstones
+  desc: |-
+    Loose flagstones clack underfoot if you move too fast.
+    Quiet movement is hard here, so plan around being heard.
+  exits:
+  - dir: back
+    to: R_HILL_APPROACH_10
+    len: 1
+  - dir: ahead
+    to: R_HILL_APPROACH_12
+    len: 1
+- id: R_HILL_APPROACH_12
+  name: Cracked Arch
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - landmark.cracked_arch
+  desc: |-
+    A cracked arch frames the wind and channels sound into the courtyard.
+    You can tell when patrols are moving, even if you cannot see them yet.
+  exits:
+  - dir: back
+    to: R_HILL_APPROACH_11
+    len: 1
+  - dir: ahead
+    to: R_HILL_APPROACH_13
+    len: 1
+- id: R_HILL_APPROACH_13
+  name: Warded Fragments
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - landmark.warded_fragments
+  desc: |-
+    Fragments of ward pylons litter the path, all angles and dead glow.
+    The geometry still breaks sightlines if you fight near it.
+  exits:
+  - dir: back
+    to: R_HILL_APPROACH_12
+    len: 1
+  - dir: ahead
+    to: R_HILL_APPROACH_14
+    len: 1
+- id: R_HILL_APPROACH_14
+  name: Broken Stair Run
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - landmark.broken_stairs
+  desc: |-
+    Broken stairs climb and drop in uneven steps and steal party formation.
+    If you rush, you arrive staggered and pay for it.
+  exits:
+  - dir: back
+    to: R_HILL_APPROACH_13
+    len: 1
+  - dir: ahead
+    to: R_HILL_APPROACH_15
+    len: 1
+- id: R_HILL_APPROACH_15
+  name: Banner Pole Stub
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - landmark.banner_stub
+  desc: |-
+    A snapped banner pole still stands, cloth scraps flapping like signals.
+    The wind here is loud enough to hide footsteps if you time it.
+  exits:
+  - dir: back
+    to: R_HILL_APPROACH_14
+    len: 1
+  - dir: ahead
+    to: R_HILL_APPROACH_16
+    len: 1
+- id: R_HILL_APPROACH_16
+  name: Corner Peek
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - landmark.corner_peek
+  desc: |-
+    A clean corner lets you peek into the next lane without committing.
+    Use the corner to avoid taking every patrol fight.
+  exits:
+  - dir: back
+    to: R_HILL_APPROACH_15
+    len: 1
+  - dir: ahead
+    to: R_HILL_APPROACH_17
+    len: 1
+- id: R_HILL_APPROACH_17
+  name: Rubble Funnel
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - landmark.rubble_funnel
+  desc: |-
+    Rubble funnels the approach into a narrow lane with nowhere to spread.
+    Commit to small pulls, or reset back toward the bunker.
+  exits:
+  - dir: back
+    to: R_HILL_APPROACH_16
+    len: 1
+  - dir: ahead
+    to: R_HILL_APPROACH_18
+    len: 1
+- id: R_HILL_APPROACH_18
+  name: Approach Loopback
+  cluster: CL_HILLFORT_APPROACH
+  tags:
+  - landmark.approach_loopback
+  desc: |-
+    The path loops back to the approach hub, not a dead end.
+    It feels deliberate: a reset path for parties that want to play clean.
+  exits:
+  - dir: back
+    to: R_HILL_APPROACH_17
+    len: 1
+  - dir: ahead
+    to: R_HILL_APPROACH_01
+    len: 1
+- id: R_HILL_HALL_01
+  name: Banner Hall
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - landmark.hillfort.banner_hall
+  desc: |-
+    A wide hall where every sound carries.
+    You can almost feel the shape of a boss arena.
+  exits:
+  - dir: north
+    to: R_HILL_COURT_01
+    len: 1
+  - dir: south
+    to: R_HILL_HALL_02
+    len: 1
+- id: R_HILL_HALL_02
+  name: Trophy Arch
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - landmark.hillfort.banner_hall
+  desc: |-
+    Stone flags and torn banners.
+    This room wants an ending.
+  exits:
+  - dir: north
+    to: R_HILL_HALL_01
+    len: 1
+  - dir: south
+    to: R_HILL_BANNER_02
+    len: 1
+- id: R_HILL_HALL_03
+  name: Cracked Gallery
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - landmark.hillfort.banner_hall
+  desc: |-
+    Stone flags and torn banners.
+    This room wants an ending.
+  exits:
+  - dir: back
+    to: R_HILL_BANNER_02
+    len: 1
+  - dir: ahead
+    to: R_HILL_HALL_04
+    len: 1
+- id: R_HILL_HALL_04
+  name: Old Parade Way
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - landmark.hillfort.banner_hall
+  desc: |-
+    A wide hall where every sound carries.
+    You can almost feel the shape of a boss arena.
+  exits:
+  - dir: back
+    to: R_HILL_HALL_03
+    len: 1
+  - dir: ahead
+    to: R_HILL_HALL_05
+    len: 1
+- id: R_HILL_HALL_05
+  name: Old Parade Way
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - landmark.hillfort.banner_hall
+  desc: |-
+    A wide hall where every sound carries.
+    You can almost feel the shape of a boss arena.
+  exits:
+  - dir: back
+    to: R_HILL_HALL_04
+    len: 1
+  - dir: ahead
+    to: R_HILL_HALL_06
+    len: 1
+- id: R_HILL_HALL_06
+  name: Cracked Gallery
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - landmark.hillfort.banner_hall
+  desc: |-
+    Stone flags and torn banners.
+    This room wants an ending.
+  exits:
+  - dir: back
+    to: R_HILL_HALL_05
+    len: 1
+  - dir: ahead
+    to: R_HILL_HALL_07
+    len: 1
+- id: R_HILL_HALL_07
+  name: Cracked Gallery
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - landmark.hillfort.banner_hall
+  desc: |-
+    Stone flags and torn banners.
+    This room wants an ending.
+  exits:
+  - dir: back
+    to: R_HILL_HALL_06
+    len: 1
+  - dir: ahead
+    to: R_HILL_HALL_08
+    len: 1
+- id: R_HILL_HALL_08
+  name: Old Parade Way
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - landmark.hillfort.banner_hall
+  desc: |-
+    A wide hall where every sound carries.
+    You can almost feel the shape of a boss arena.
+  exits:
+  - dir: back
+    to: R_HILL_HALL_07
+    len: 1
+  - dir: ahead
+    to: R_HILL_HALL_09
+    len: 1
+- id: R_HILL_HALL_09
+  name: Banner Hall
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - landmark.hillfort.banner_hall
+  desc: |-
+    A wide hall where every sound carries.
+    You can almost feel the shape of a boss arena.
+  exits:
+  - dir: back
+    to: R_HILL_HALL_08
+    len: 1
+  - dir: ahead
+    to: R_HILL_HALL_10
+    len: 1
+- id: R_HILL_HALL_10
+  name: Banner Hall
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - landmark.hillfort.banner_hall
+  desc: |-
+    A wide hall where every sound carries.
+    You can almost feel the shape of a boss arena.
+  exits:
+  - dir: back
+    to: R_HILL_HALL_09
+    len: 1
+  - dir: ahead
+    to: R_HILL_HALL_11
+    len: 1
+- id: R_HILL_HALL_11
+  name: Banner Hall
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - landmark.hillfort.banner_hall
+  desc: |-
+    A wide hall where every sound carries.
+    You can almost feel the shape of a boss arena.
+  exits:
+  - dir: back
+    to: R_HILL_HALL_10
+    len: 1
+  - dir: ahead
+    to: R_HILL_HALL_12
+    len: 1
+- id: R_HILL_HALL_12
+  name: Banner Hall
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - landmark.hillfort.banner_hall
+  desc: |-
+    A wide hall where every sound carries.
+    You can almost feel the shape of a boss arena.
+  exits:
+  - dir: back
+    to: R_HILL_HALL_11
+    len: 1
+  - dir: ahead
+    to: R_HILL_HALL_13
+    len: 1
+- id: R_HILL_HALL_13
+  name: Cracked Gallery
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - landmark.hillfort.banner_hall
+  desc: |-
+    Stone flags and torn banners.
+    This room wants an ending.
+  exits:
+  - dir: back
+    to: R_HILL_HALL_12
+    len: 1
+  - dir: ahead
+    to: R_HILL_HALL_14
+    len: 1
+- id: R_HILL_HALL_14
+  name: Banner Hall
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - landmark.hillfort.banner_hall
+  desc: |-
+    A wide hall where every sound carries.
+    You can almost feel the shape of a boss arena.
+  exits:
+  - dir: back
+    to: R_HILL_HALL_13
+    len: 1
+  - dir: ahead
+    to: R_HILL_HALL_15
+    len: 1
+- id: R_HILL_HALL_15
+  name: Old Parade Way
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - landmark.hillfort.banner_hall
+  desc: |-
+    A wide hall where every sound carries.
+    You can almost feel the shape of a boss arena.
+  exits:
+  - dir: back
+    to: R_HILL_HALL_14
+    len: 1
+  - dir: ahead
+    to: R_HILL_HALL_16
+    len: 1
+- id: R_HILL_HALL_16
+  name: Cracked Gallery
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - landmark.hillfort.banner_hall
+  desc: |-
+    Stone flags and torn banners.
+    This room wants an ending.
+  exits:
+  - dir: back
+    to: R_HILL_HALL_15
+    len: 1
+  - dir: ahead
+    to: R_HILL_HALL_17
+    len: 1
+- id: R_HILL_HALL_17
+  name: Trophy Arch
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - landmark.hillfort.banner_hall
+  desc: |-
+    Stone flags and torn banners.
+    This room wants an ending.
+  exits:
+  - dir: back
+    to: R_HILL_HALL_16
+    len: 1
+  - dir: ahead
+    to: R_HILL_HALL_18
+    len: 1
+- id: R_HILL_HALL_18
+  name: Banner Hall
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - landmark.hillfort.banner_hall
+  desc: |-
+    A wide hall where every sound carries.
+    You can almost feel the shape of a boss arena.
+  exits:
+  - dir: back
+    to: R_HILL_HALL_17
+    len: 1
+  - dir: ahead
+    to: R_HILL_HALL_19
+    len: 1
+- id: R_HILL_HALL_19
+  name: Banner Hall
+  cluster: CL_HILLFORT_BANNER_HALL
+  tags:
+  - landmark.hillfort.banner_hall
+  desc: |-
+    A wide hall where every sound carries.
+    You can almost feel the shape of a boss arena.
+  exits:
+  - dir: back
+    to: R_HILL_HALL_18
+    len: 1
+  - dir: ahead
+    to: R_HILL_BANNER_02
+    len: 1
+- id: R_HILL_BUNKER_01
+  name: Safe Niche
+  cluster: CL_HILLFORT_COMMAND_BUNKER
+  tags:
+  - landmark.hillfort.command_bunker
+  desc: |-
+    A sheltered pocket with old maps and newer chalk.
+    It feels like a place you can breathe without being hunted.
+  exits:
+  - dir: back
+    to: R_HILL_CMD_01
+    len: 1
+  - dir: ahead
+    to: R_HILL_BUNKER_02
+    len: 1
+- id: R_HILL_BUNKER_02
+  name: Command Bunker
+  cluster: CL_HILLFORT_COMMAND_BUNKER
+  tags:
+  - landmark.hillfort.command_bunker
+  desc: |-
+    A sheltered pocket with old maps and newer chalk.
+    It feels like a place you can breathe without being hunted.
+  exits:
+  - dir: back
+    to: R_HILL_BUNKER_01
+    len: 1
+  - dir: ahead
+    to: R_HILL_BUNKER_03
+    len: 1
+- id: R_HILL_BUNKER_03
+  name: Ward Console
+  cluster: CL_HILLFORT_COMMAND_BUNKER
+  tags:
+  - landmark.hillfort.command_bunker
+  desc: |-
+    Concrete, dust, and the faint smell of ozone.
+    Someone rebuilt a little safety inside the ruin.
+  exits:
+  - dir: back
+    to: R_HILL_BUNKER_02
+    len: 1
+  - dir: ahead
+    to: R_HILL_BUNKER_04
+    len: 1
+- id: R_HILL_BUNKER_04
+  name: Briefing Room
+  cluster: CL_HILLFORT_COMMAND_BUNKER
+  tags:
+  - landmark.hillfort.command_bunker
+  desc: |-
+    Concrete, dust, and the faint smell of ozone.
+    Someone rebuilt a little safety inside the ruin.
+  exits:
+  - dir: back
+    to: R_HILL_BUNKER_03
+    len: 1
+  - dir: ahead
+    to: R_HILL_BUNKER_05
+    len: 1
+- id: R_HILL_BUNKER_05
+  name: Command Bunker
+  cluster: CL_HILLFORT_COMMAND_BUNKER
+  tags:
+  - landmark.hillfort.command_bunker
+  desc: |-
+    A sheltered pocket with old maps and newer chalk.
+    It feels like a place you can breathe without being hunted.
+  exits:
+  - dir: back
+    to: R_HILL_BUNKER_04
+    len: 1
+  - dir: ahead
+    to: R_HILL_BUNKER_06
+    len: 1
+- id: R_HILL_BUNKER_06
+  name: Command Bunker
+  cluster: CL_HILLFORT_COMMAND_BUNKER
+  tags:
+  - landmark.hillfort.command_bunker
+  desc: |-
+    A sheltered pocket with old maps and newer chalk.
+    It feels like a place you can breathe without being hunted.
+  exits:
+  - dir: back
+    to: R_HILL_BUNKER_05
+    len: 1
+  - dir: ahead
+    to: R_HILL_BUNKER_07
+    len: 1
+- id: R_HILL_BUNKER_07
+  name: Command Bunker
+  cluster: CL_HILLFORT_COMMAND_BUNKER
+  tags:
+  - landmark.hillfort.command_bunker
+  desc: |-
+    A sheltered pocket with old maps and newer chalk.
+    It feels like a place you can breathe without being hunted.
+  exits:
+  - dir: back
+    to: R_HILL_BUNKER_06
+    len: 1
+  - dir: ahead
+    to: R_HILL_BUNKER_08
+    len: 1
+- id: R_HILL_BUNKER_08
+  name: Briefing Room
+  cluster: CL_HILLFORT_COMMAND_BUNKER
+  tags:
+  - landmark.hillfort.command_bunker
+  desc: |-
+    Concrete, dust, and the faint smell of ozone.
+    Someone rebuilt a little safety inside the ruin.
+  exits:
+  - dir: back
+    to: R_HILL_BUNKER_07
+    len: 1
+  - dir: ahead
+    to: R_HILL_BUNKER_09
+    len: 1
+- id: R_HILL_BUNKER_09
+  name: Safe Niche
+  cluster: CL_HILLFORT_COMMAND_BUNKER
+  tags:
+  - landmark.hillfort.command_bunker
+  desc: |-
+    A sheltered pocket with old maps and newer chalk.
+    It feels like a place you can breathe without being hunted.
+  exits:
+  - dir: back
+    to: R_HILL_BUNKER_08
+    len: 1
+  - dir: ahead
+    to: R_HILL_CMD_01
+    len: 1
+- id: R_HILL_PYLON_04
+  name: Broken Rampart
+  cluster: CL_HILLFORT_COURTYARDS
+  tags:
+  - landmark.hillfort.courtyards
+  desc: |-
+    Crumbling fort stone and wind through empty gaps.
+    Patrol routes feel intentional, like a lesson in timing.
+  exits:
+  - dir: back
+    to: R_HILL_COURT_01
+    len: 1
+  - dir: ahead
+    to: R_HILL_PYLON_05
+    len: 1
+- id: R_HILL_PYLON_05
+  name: Broken Rampart
+  cluster: CL_HILLFORT_COURTYARDS
+  tags:
+  - landmark.hillfort.courtyards
+  desc: |-
+    Crumbling fort stone and wind through empty gaps.
+    Patrol routes feel intentional, like a lesson in timing.
+  exits:
+  - dir: back
+    to: R_HILL_PYLON_04
+    len: 1
+  - dir: ahead
+    to: R_HILL_PYLON_06
+    len: 1
+- id: R_HILL_PYLON_06
+  name: Ward Pylon Path
+  cluster: CL_HILLFORT_COURTYARDS
+  tags:
+  - landmark.hillfort.courtyards
+  desc: |-
+    Rubble and old pylons break up sightlines.
+    Pick your route instead of taking every fight.
+  exits:
+  - dir: back
+    to: R_HILL_PYLON_05
+    len: 1
+  - dir: ahead
+    to: R_HILL_PYLON_07
+    len: 1
+- id: R_HILL_PYLON_07
+  name: Collapsed Walk
+  cluster: CL_HILLFORT_COURTYARDS
+  tags:
+  - landmark.hillfort.courtyards
+  desc: |-
+    Rubble and old pylons break up sightlines.
+    Pick your route instead of taking every fight.
+  exits:
+  - dir: back
+    to: R_HILL_PYLON_06
+    len: 1
+  - dir: ahead
+    to: R_HILL_PYLON_08
+    len: 1
+- id: R_HILL_PYLON_08
+  name: Ward Pylon Path
+  cluster: CL_HILLFORT_COURTYARDS
+  tags:
+  - landmark.hillfort.courtyards
+  desc: |-
+    Rubble and old pylons break up sightlines.
+    Pick your route instead of taking every fight.
+  exits:
+  - dir: back
+    to: R_HILL_PYLON_07
+    len: 1
+  - dir: ahead
+    to: R_HILL_PYLON_09
+    len: 1
+- id: R_HILL_PYLON_09
+  name: Broken Rampart
+  cluster: CL_HILLFORT_COURTYARDS
+  tags:
+  - landmark.hillfort.courtyards
+  desc: |-
+    Crumbling fort stone and wind through empty gaps.
+    Patrol routes feel intentional, like a lesson in timing.
+  exits:
+  - dir: back
+    to: R_HILL_PYLON_08
+    len: 1
+  - dir: ahead
+    to: R_HILL_PYLON_10
+    len: 1
+- id: R_HILL_PYLON_10
+  name: Ward Pylon Path
+  cluster: CL_HILLFORT_COURTYARDS
+  tags:
+  - landmark.hillfort.courtyards
+  desc: |-
+    Rubble and old pylons break up sightlines.
+    Pick your route instead of taking every fight.
+  exits:
+  - dir: back
+    to: R_HILL_PYLON_09
+    len: 1
+  - dir: ahead
+    to: R_HILL_PYLON_11
+    len: 1
+- id: R_HILL_PYLON_11
+  name: Ward Pylon Path
+  cluster: CL_HILLFORT_COURTYARDS
+  tags:
+  - landmark.hillfort.courtyards
+  desc: |-
+    Rubble and old pylons break up sightlines.
+    Pick your route instead of taking every fight.
+  exits:
+  - dir: back
+    to: R_HILL_PYLON_10
+    len: 1
+  - dir: ahead
+    to: R_HILL_PYLON_12
+    len: 1
+- id: R_HILL_PYLON_12
+  name: Ward Pylon Path
+  cluster: CL_HILLFORT_COURTYARDS
+  tags:
+  - landmark.hillfort.courtyards
+  desc: |-
+    Rubble and old pylons break up sightlines.
+    Pick your route instead of taking every fight.
+  exits:
+  - dir: back
+    to: R_HILL_PYLON_11
+    len: 1
+  - dir: ahead
+    to: R_HILL_PYLON_13
+    len: 1
+- id: R_HILL_PYLON_13
+  name: Courtyard Rubble
+  cluster: CL_HILLFORT_COURTYARDS
+  tags:
+  - landmark.hillfort.courtyards
+  desc: |-
+    Crumbling fort stone and wind through empty gaps.
+    Patrol routes feel intentional, like a lesson in timing.
+  exits:
+  - dir: back
+    to: R_HILL_PYLON_12
+    len: 1
+  - dir: ahead
+    to: R_HILL_PYLON_14
+    len: 1
+- id: R_HILL_PYLON_14
+  name: Broken Rampart
+  cluster: CL_HILLFORT_COURTYARDS
+  tags:
+  - landmark.hillfort.courtyards
+  desc: |-
+    Crumbling fort stone and wind through empty gaps.
+    Patrol routes feel intentional, like a lesson in timing.
+  exits:
+  - dir: back
+    to: R_HILL_PYLON_13
+    len: 1
+  - dir: ahead
+    to: R_HILL_PYLON_15
+    len: 1
+- id: R_HILL_PYLON_15
+  name: Courtyard Rubble
+  cluster: CL_HILLFORT_COURTYARDS
+  tags:
+  - landmark.hillfort.courtyards
+  desc: |-
+    Crumbling fort stone and wind through empty gaps.
+    Patrol routes feel intentional, like a lesson in timing.
+  exits:
+  - dir: back
+    to: R_HILL_PYLON_14
+    len: 1
+  - dir: ahead
+    to: R_HILL_PYLON_16
+    len: 1
+- id: R_HILL_PYLON_16
+  name: Courtyard Rubble
+  cluster: CL_HILLFORT_COURTYARDS
+  tags:
+  - landmark.hillfort.courtyards
+  desc: |-
+    Crumbling fort stone and wind through empty gaps.
+    Patrol routes feel intentional, like a lesson in timing.
+  exits:
+  - dir: back
+    to: R_HILL_PYLON_15
+    len: 1
+  - dir: ahead
+    to: R_HILL_PYLON_17
+    len: 1
+- id: R_HILL_PYLON_17
+  name: Broken Rampart
+  cluster: CL_HILLFORT_COURTYARDS
+  tags:
+  - landmark.hillfort.courtyards
+  desc: |-
+    Crumbling fort stone and wind through empty gaps.
+    Patrol routes feel intentional, like a lesson in timing.
+  exits:
+  - dir: back
+    to: R_HILL_PYLON_16
+    len: 1
+  - dir: ahead
+    to: R_HILL_PYLON_18
+    len: 1
+- id: R_HILL_PYLON_18
+  name: Courtyard Rubble
+  cluster: CL_HILLFORT_COURTYARDS
+  tags:
+  - landmark.hillfort.courtyards
+  desc: |-
+    Crumbling fort stone and wind through empty gaps.
+    Patrol routes feel intentional, like a lesson in timing.
+  exits:
+  - dir: back
+    to: R_HILL_PYLON_17
+    len: 1
+  - dir: ahead
+    to: R_HILL_PYLON_19
+    len: 1
+- id: R_HILL_PYLON_19
+  name: Broken Rampart
+  cluster: CL_HILLFORT_COURTYARDS
+  tags:
+  - landmark.hillfort.courtyards
+  desc: |-
+    Crumbling fort stone and wind through empty gaps.
+    Patrol routes feel intentional, like a lesson in timing.
+  exits:
+  - dir: back
+    to: R_HILL_PYLON_18
+    len: 1
+  - dir: ahead
+    to: R_HILL_COURT_01
+    len: 1

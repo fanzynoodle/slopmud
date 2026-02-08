@@ -1,532 +1,742 @@
 version: 1
 zone_id: newbie_school
-zone_name: "Newbie School"
+zone_name: Newbie School
 area_id: A01
-level_band: [1, 2]
-
+level_band:
+- 1
+- 2
 start_room: R_NS_ORIENT_01
-
 rooms:
-  # ---------------- CL_NS_ORIENTATION (12 rooms) ----------------
-  - id: R_NS_ORIENT_01
-    name: "Orientation Wing"
-    cluster: CL_NS_ORIENTATION
-    tags: [HUB_NS_ORIENTATION]
-    desc: |
-      Sterile halls, gentle signage, and a low training hum.
-      A calm instructor watches like you are not the first confused arrival today.
-    exits:
-      - { dir: east, to: R_NS_ORIENT_02, len: 1 }
-      - { dir: west, to: R_NS_ORIENT_05, len: 1 }
-      - { dir: north, to: R_NS_ORIENT_08, len: 1 }
-
-  - id: R_NS_ORIENT_02
-    name: "Badge Desk"
-    cluster: CL_NS_ORIENTATION
-    desc: |
-      A white desk, a badge printer, and a patient line of empty lanyards.
-      Someone has written in marker: "names matter. so do backups."
-    exits:
-      - { dir: west, to: R_NS_ORIENT_01, len: 1 }
-      - { dir: north, to: R_NS_ORIENT_03, len: 1 }
-
-  - id: R_NS_ORIENT_03
-    name: "Hands Drill"
-    cluster: CL_NS_ORIENTATION
-    desc: |
-      A sealed bin sits on a steel table. A placard shows a cartoon hand picking up a tool.
-      The bin clicks, waiting for you to try something obvious.
-    exits:
-      - { dir: south, to: R_NS_ORIENT_02, len: 1 }
-      - { dir: west, to: R_NS_ORIENT_04, len: 1 }
-
-  - id: R_NS_ORIENT_04
-    name: "Wearables Drill"
-    cluster: CL_NS_ORIENTATION
-    desc: |
-      Mirror panels line the wall. An equipment rack holds a few harmless training pieces.
-      A tiny sign reads: "put it on. take it off. do it twice so it sticks."
-    exits:
-      - { dir: east, to: R_NS_ORIENT_03, len: 1 }
-      - { dir: south, to: R_NS_DORMS_01, len: 1 }
-
-  - id: R_NS_ORIENT_05
-    name: "Hall Of Heroes Alcove"
-    cluster: CL_NS_ORIENTATION
-    desc: |
-      Two stone sentinels flank a small side hall: Hatchet (a chipped blade) and Javelin (point held outward).
-      Names are etched into the wall like a promise that worlds can last.
-    exits:
-      - { dir: east, to: R_NS_ORIENT_01, len: 1 }
-      - { dir: west, to: R_NS_ORIENT_06, len: 1 }
-
-  - id: R_NS_ORIENT_06
-    name: "Help Kiosk"
-    cluster: CL_NS_ORIENTATION
-    desc: |
-      A terminal blinks: HELP. RULES. SAFETY.
-      It feels like a trap for cynics and a lifeline for everyone else.
-    exits:
-      - { dir: east, to: R_NS_ORIENT_05, len: 1 }
-      - { dir: north, to: R_NS_ORIENT_07, len: 1 }
-
-  - id: R_NS_ORIENT_07
-    name: "Verb Drill Annex"
-    cluster: CL_NS_ORIENTATION
-    desc: |
-      Three painted arrows point at three identical practice stations.
-      A speaker crackles: "slow is fine. consistent is better."
-    exits:
-      - { dir: south, to: R_NS_ORIENT_06, len: 1 }
-      - { dir: east, to: R_NS_ORIENT_01, len: 1 }
-
-  - id: R_NS_ORIENT_08
-    name: "Map Wall"
-    cluster: CL_NS_ORIENTATION
-    desc: |
-      A wall-sized diagram shows the campus like it wants to be a friendly maze.
-      The edges of the map are torn where the world keeps expanding.
-    exits:
-      - { dir: south, to: R_NS_ORIENT_01, len: 1 }
-      - { dir: east, to: R_NS_ORIENT_09, len: 1 }
-
-  - id: R_NS_ORIENT_09
-    name: "Locker Alcove"
-    cluster: CL_NS_ORIENTATION
-    desc: |
-      A row of lockers waits with the dignity of unused storage.
-      One door hangs slightly crooked, like it wants you to test it.
-    exits:
-      - { dir: west, to: R_NS_ORIENT_08, len: 1 }
-      - { dir: south, to: R_NS_ORIENT_10, len: 1 }
-
-  - id: R_NS_ORIENT_10
-    name: "Quiet Corner"
-    cluster: CL_NS_ORIENTATION
-    desc: |
-      A bench faces a blank wall. Someone has left a paper cup and a polite apology note.
-      The quiet here is intentional.
-    exits:
-      - { dir: north, to: R_NS_ORIENT_09, len: 1 }
-      - { dir: west, to: R_NS_ORIENT_01, len: 1 }
-
-  - id: R_NS_EXIT_01
-    name: "Corridor To Town"
-    cluster: CL_NS_ORIENTATION
-    desc: |
-      A long white corridor ends at a security archway.
-      Through a window you can see the town gate plaza, bright and ordinary on purpose.
-    exits:
-      - { dir: south, to: R_NS_SIMYARD_01, len: 1 }
-      - { dir: north, to: P_NS_TOWN, len: 1 }
-
-  - id: P_NS_TOWN
-    name: "Town Gate Transfer"
-    cluster: CL_NS_ORIENTATION
-    tags: [portal.P_NS_TOWN]
-    desc: |
-      A security archway scans quietly and then pretends it did not.
-      Beyond is the town gate, close enough to smell food you did not earn.
-    exits:
-      - { dir: south, to: R_NS_EXIT_01, len: 1 }
-      - { dir: north, to: P_TOWN_NS, len: 1 }
-
-  # ---------------- CL_NS_DORMS (10 rooms) ----------------
-  - id: R_NS_DORMS_01
-    name: "Dorm Hall"
-    cluster: CL_NS_DORMS
-    desc: |
-      A dorm corridor with soft lighting and a faint detergent smell.
-      Doors are numbered like the building expects you to stay awhile.
-    exits:
-      - { dir: north, to: R_NS_ORIENT_04, len: 1 }
-      - { dir: east, to: R_NS_DORMS_02, len: 1 }
-      - { dir: south, to: R_NS_DORMS_03, len: 1 }
-
-  - id: R_NS_DORMS_02
-    name: "Sticky Door Drill"
-    cluster: CL_NS_DORMS
-    desc: |
-      Three identical doors. One sticks just enough to make you try again.
-      A printed label reads: "movement is a skill. take the hint."
-    exits:
-      - { dir: west, to: R_NS_DORMS_01, len: 1 }
-      - { dir: north, to: R_NS_LABS_01, len: 1 }
-      - { dir: south, to: R_NS_DORMS_05, len: 1 }
-
-  - id: R_NS_DORMS_03
-    name: "Common Room"
-    cluster: CL_NS_DORMS
-    desc: |
-      A battered sofa, a small table, and a screen showing looping welcome messages.
-      The furniture looks like it has survived many honest naps.
-    exits:
-      - { dir: north, to: R_NS_DORMS_01, len: 1 }
-      - { dir: east, to: R_NS_DORMS_04, len: 1 }
-      - { dir: south, to: R_NS_DORMS_06, len: 1 }
-
-  - id: R_NS_DORMS_04
-    name: "Quiet Bunk"
-    cluster: CL_NS_DORMS
-    desc: |
-      A narrow bunk bed and a little shelf for things you pretend are important.
-      The pillow is too clean, like it has never been trusted.
-    exits:
-      - { dir: west, to: R_NS_DORMS_03, len: 1 }
-      - { dir: east, to: R_NS_DORMS_05, len: 1 }
-
-  - id: R_NS_DORMS_05
-    name: "Supply Closet"
-    cluster: CL_NS_DORMS
-    desc: |
-      A closet of low-value consumables: bandages, water packets, and cheap disinfectant.
-      Nothing here is rare. That is the lesson.
-    exits:
-      - { dir: north, to: R_NS_DORMS_02, len: 1 }
-      - { dir: west, to: R_NS_DORMS_04, len: 1 }
-
-  - id: R_NS_DORMS_06
-    name: "Washroom"
-    cluster: CL_NS_DORMS
-    desc: |
-      White tile and a drain that works.
-      A sign reads: "clean hands. clean gear. clean exits."
-    exits:
-      - { dir: north, to: R_NS_DORMS_03, len: 1 }
-      - { dir: east, to: R_NS_DORMS_08, len: 1 }
-
-  - id: R_NS_DORMS_07
-    name: "Notice Board"
-    cluster: CL_NS_DORMS
-    desc: |
-      A cork board full of handwritten notes: lost items, meal times, and tiny dares.
-      Someone has pinned a card that simply says: "try searching."
-    exits:
-      - { dir: north, to: R_NS_DORMS_01, len: 1 }
-      - { dir: east, to: R_NS_DORMS_10, len: 1 }
-      - { dir: west, to: R_NS_DORMS_09, len: 1 }
-
-  - id: R_NS_DORMS_08
-    name: "Laundry Nook"
-    cluster: CL_NS_DORMS
-    desc: |
-      A pair of machines thrum politely. Someone has left a sock like a warning.
-      The floor is always slightly damp.
-    exits:
-      - { dir: west, to: R_NS_DORMS_06, len: 1 }
-      - { dir: north, to: R_NS_DORMS_09, len: 1 }
-
-  - id: R_NS_DORMS_09
-    name: "Micro Library"
-    cluster: CL_NS_DORMS
-    desc: |
-      A shelf of pamphlets: etiquette, safety, and a thin booklet titled "exits are real."
-      The pages smell like cheap ink and sincere effort.
-    exits:
-      - { dir: south, to: R_NS_DORMS_08, len: 1 }
-      - { dir: east, to: R_NS_DORMS_07, len: 1 }
-
-  - id: R_NS_DORMS_10
-    name: "Courtyard Window"
-    cluster: CL_NS_DORMS
-    desc: |
-      A wide window looks out on a small interior courtyard: plants, benches, and a maintenance drone that pretends to nap.
-      It is the first place here that feels alive.
-    exits:
-      - { dir: west, to: R_NS_DORMS_07, len: 1 }
-
-  # ---------------- CL_NS_LABS (16 rooms) ----------------
-  - id: R_NS_LABS_01
-    name: "Combat Labs Antechamber"
-    cluster: CL_NS_LABS
-    tags: [HUB_NS_LABS]
-    desc: |
-      A lab doorway with bold warning stripes and a friendly explanation underneath.
-      A robot voice says: "simulation only. pain is a message."
-    exits:
-      - { dir: south, to: R_NS_DORMS_02, len: 1 }
-      - { dir: east, to: R_NS_LABS_02, len: 1 }
-      - { dir: north, to: R_NS_LABS_07, len: 1 }
-
-  - id: R_NS_LABS_02
-    name: "Prep Bay"
-    cluster: CL_NS_LABS
-    desc: |
-      Lockers line the wall. A dispenser offers a disposable healing pack.
-      The floor is marked with arrows that try to keep you calm.
-    exits:
-      - { dir: west, to: R_NS_LABS_01, len: 1 }
-      - { dir: east, to: R_NS_LABS_03, len: 1 }
-      - { dir: north, to: R_NS_LABS_08, len: 1 }
-
-  - id: R_NS_LABS_03
-    name: "Scenario Room: Solo Target"
-    cluster: CL_NS_LABS
-    desc: |
-      A small ring with scuffed floors and neat chalk lines.
-      A drain in the corner smells like a dare.
-    exits:
-      - { dir: west, to: R_NS_LABS_02, len: 1 }
-      - { dir: east, to: R_NS_LABS_04, len: 1 }
-      - { dir: south, to: R_NS_LABS_09, len: 1 }
-
-  - id: R_NS_LABS_04
-    name: "Scenario Room: Two Targets"
-    cluster: CL_NS_LABS
-    desc: |
-      Two silhouettes flicker on the far wall, inviting you to make a mess of target selection.
-      A speaker chirps: "it is okay to panic. do not stay there."
-    exits:
-      - { dir: west, to: R_NS_LABS_03, len: 1 }
-      - { dir: east, to: R_NS_LABS_05, len: 1 }
-
-  - id: R_NS_LABS_05
-    name: "Scenario Room: Hazard Strip"
-    cluster: CL_NS_LABS
-    desc: |
-      A band of floor plates pulses with a patient rhythm.
-      The lesson is simple: standing still is a choice.
-    exits:
-      - { dir: west, to: R_NS_LABS_04, len: 1 }
-      - { dir: north, to: R_NS_LABS_06, len: 1 }
-      - { dir: east, to: R_NS_LABS_12, len: 1 }
-
-  - id: R_NS_LABS_06
-    name: "Med Bay"
-    cluster: CL_NS_LABS
-    desc: |
-      A clean room with a single cot and a cabinet of cheap miracles.
-      A sign reads: "failure is data. you are not in trouble."
-    exits:
-      - { dir: south, to: R_NS_LABS_05, len: 1 }
-      - { dir: north, to: R_NS_SIMYARD_01, len: 1 }
-      - { dir: east, to: R_NS_LABS_13, len: 1 }
-
-  - id: R_NS_LABS_07
-    name: "Observation Gallery"
-    cluster: CL_NS_LABS
-    desc: |
-      A glass wall overlooks the training rooms.
-      Someone has drawn a smiley face on the corner in dry erase marker.
-    exits:
-      - { dir: south, to: R_NS_LABS_01, len: 1 }
-      - { dir: east, to: R_NS_LABS_08, len: 1 }
-      - { dir: north, to: R_NS_LABS_15, len: 1 }
-
-  - id: R_NS_LABS_08
-    name: "Equipment Storage"
-    cluster: CL_NS_LABS
-    desc: |
-      Shelves of training gear, neatly labeled and slightly too tidy.
-      A cracked helmet sits on top, like a warning you can pick up.
-    exits:
-      - { dir: west, to: R_NS_LABS_07, len: 1 }
-      - { dir: south, to: R_NS_LABS_02, len: 1 }
-
-  - id: R_NS_LABS_09
-    name: "Sparring Pods"
-    cluster: CL_NS_LABS
-    desc: |
-      A row of small pods hums with ready simulations.
-      The air smells like warm plastic and adrenaline you haven't earned yet.
-    exits:
-      - { dir: north, to: R_NS_LABS_03, len: 1 }
-      - { dir: east, to: R_NS_LABS_10, len: 1 }
-
-  - id: R_NS_LABS_10
-    name: "Range Lane"
-    cluster: CL_NS_LABS
-    desc: |
-      A long lane with target lights at the far end.
-      The targets look embarrassed to exist.
-    exits:
-      - { dir: west, to: R_NS_LABS_09, len: 1 }
-      - { dir: east, to: R_NS_LABS_11, len: 1 }
-
-  - id: R_NS_LABS_11
-    name: "Maintenance Crawl"
-    cluster: CL_NS_LABS
-    desc: |
-      A low corridor full of access panels and bundled cables.
-      The lights here flicker like the building is thinking.
-    exits:
-      - { dir: west, to: R_NS_LABS_10, len: 1 }
-      - { dir: north, to: R_NS_LABS_12, len: 1 }
-      - { dir: south, to: R_NS_LABS_16, len: 1 }
-
-  - id: R_NS_LABS_12
-    name: "Hazard Control Booth"
-    cluster: CL_NS_LABS
-    desc: |
-      A booth of toggles and screens. Each button is labeled like it wants to be trusted.
-      The hazard strip's rhythm is visible here, cold and honest.
-    exits:
-      - { dir: west, to: R_NS_LABS_05, len: 1 }
-      - { dir: south, to: R_NS_LABS_11, len: 1 }
-
-  - id: R_NS_LABS_13
-    name: "Recovery Benches"
-    cluster: CL_NS_LABS
-    desc: |
-      A row of benches with disposable towels and water packets.
-      The building offers you hydration like it is a philosophy.
-    exits:
-      - { dir: west, to: R_NS_LABS_06, len: 1 }
-      - { dir: east, to: R_NS_LABS_14, len: 1 }
-
-  - id: R_NS_LABS_14
-    name: "Sim Control"
-    cluster: CL_NS_LABS
-    desc: |
-      Banks of controls hum behind a locked screen.
-      Someone has taped a note over one panel: "do not get clever."
-    exits:
-      - { dir: west, to: R_NS_LABS_13, len: 1 }
-      - { dir: north, to: R_NS_LABS_15, len: 1 }
-
-  - id: R_NS_LABS_15
-    name: "Debrief Room"
-    cluster: CL_NS_LABS
-    desc: |
-      A circle of chairs around a table with a single scar down the middle.
-      The room smells like old coffee and new resolve.
-    exits:
-      - { dir: south, to: R_NS_LABS_07, len: 1 }
-      - { dir: east, to: R_NS_LABS_16, len: 1 }
-      - { dir: west, to: R_NS_LABS_14, len: 1 }
-
-  - id: R_NS_LABS_16
-    name: "Emergency Exit"
-    cluster: CL_NS_LABS
-    desc: |
-      A heavy door with a red bar you are not supposed to touch.
-      The panel beside it reads: "alarm test: always successful."
-    exits:
-      - { dir: north, to: R_NS_LABS_11, len: 1 }
-      - { dir: west, to: R_NS_LABS_15, len: 1 }
-
-  # ---------------- CL_NS_SIM_YARD (12 rooms) ----------------
-  - id: R_NS_SIMYARD_01
-    name: "Sim Yard Drill Ring"
-    cluster: CL_NS_SIM_YARD
-    desc: |
-      A small yard with a marked drill ring and a wide, forgiving fence.
-      Two trainees wait nearby, stretching like they are trying not to look nervous.
-    exits:
-      - { dir: south, to: R_NS_LABS_06, len: 1 }
-      - { dir: north, to: R_NS_EXIT_01, len: 1 }
-      - { dir: east, to: R_NS_SIMYARD_02, len: 1 }
-      - { dir: west, to: R_NS_SIMYARD_03, len: 1 }
-
-  - id: R_NS_SIMYARD_02
-    name: "Perimeter Track"
-    cluster: CL_NS_SIM_YARD
-    desc: |
-      A packed dirt track circles the yard.
-      Painted markers label distances like this is a sport, not a warning.
-    exits:
-      - { dir: west, to: R_NS_SIMYARD_01, len: 1 }
-      - { dir: east, to: R_NS_SIMYARD_04, len: 1 }
-
-  - id: R_NS_SIMYARD_03
-    name: "Equipment Cage"
-    cluster: CL_NS_SIM_YARD
-    desc: |
-      A fenced cage of practice gear: shields, dull blades, and padded poles.
-      A little keypad waits for someone authorized. It does not look at you.
-    exits:
-      - { dir: east, to: R_NS_SIMYARD_01, len: 1 }
-      - { dir: north, to: R_NS_SIMYARD_06, len: 1 }
-
-  - id: R_NS_SIMYARD_04
-    name: "Bleachers"
-    cluster: CL_NS_SIM_YARD
-    desc: |
-      Aluminum bleachers creak when you step on them.
-      Someone has carved a tiny map into the seat with a coin.
-    exits:
-      - { dir: west, to: R_NS_SIMYARD_02, len: 1 }
-      - { dir: east, to: R_NS_SIMYARD_05, len: 1 }
-
-  - id: R_NS_SIMYARD_05
-    name: "Wind Break"
-    cluster: CL_NS_SIM_YARD
-    desc: |
-      Canvas panels cut the wind into manageable pieces.
-      You can hear the building exhale behind you.
-    exits:
-      - { dir: west, to: R_NS_SIMYARD_04, len: 1 }
-      - { dir: east, to: R_NS_SIMYARD_10, len: 1 }
-
-  - id: R_NS_SIMYARD_06
-    name: "Rope Bridge"
-    cluster: CL_NS_SIM_YARD
-    desc: |
-      A short rope bridge spans a shallow gravel pit.
-      It sways just enough to feel like a joke at your expense.
-    exits:
-      - { dir: south, to: R_NS_SIMYARD_03, len: 1 }
-      - { dir: east, to: R_NS_SIMYARD_07, len: 1 }
-      - { dir: north, to: R_NS_SIMYARD_12, len: 1 }
-
-  - id: R_NS_SIMYARD_07
-    name: "Sandbox"
-    cluster: CL_NS_SIM_YARD
-    desc: |
-      A sandbox of fine grit with footprints that never quite match.
-      It looks like a good place to learn what "too much aggro" feels like.
-    exits:
-      - { dir: west, to: R_NS_SIMYARD_06, len: 1 }
-      - { dir: east, to: R_NS_SIMYARD_08, len: 1 }
-
-  - id: R_NS_SIMYARD_08
-    name: "Target Grove"
-    cluster: CL_NS_SIM_YARD
-    desc: |
-      A cluster of wooden posts painted with simple faces.
-      Someone has given one of them a tiny hat.
-    exits:
-      - { dir: west, to: R_NS_SIMYARD_07, len: 1 }
-      - { dir: east, to: R_NS_SIMYARD_09, len: 1 }
-
-  - id: R_NS_SIMYARD_09
-    name: "Gatehouse"
-    cluster: CL_NS_SIM_YARD
-    desc: |
-      A small gatehouse with a whistle on a hook.
-      The whistle looks unused, which is either good or suspicious.
-    exits:
-      - { dir: west, to: R_NS_SIMYARD_08, len: 1 }
-      - { dir: south, to: R_NS_SIMYARD_11, len: 1 }
-
-  - id: R_NS_SIMYARD_10
-    name: "Shade Arbor"
-    cluster: CL_NS_SIM_YARD
-    desc: |
-      A simple arbor covered in synthetic leaves.
-      The shade feels like a reward even though it is just fabric.
-    exits:
-      - { dir: west, to: R_NS_SIMYARD_05, len: 1 }
-      - { dir: north, to: R_NS_SIMYARD_11, len: 1 }
-
-  - id: R_NS_SIMYARD_11
-    name: "Water Spigot"
-    cluster: CL_NS_SIM_YARD
-    desc: |
-      A metal spigot and a drain that does not smell like a trap.
-      Someone has etched: "drink. then think."
-    exits:
-      - { dir: north, to: R_NS_SIMYARD_09, len: 1 }
-      - { dir: south, to: R_NS_SIMYARD_10, len: 1 }
-      - { dir: west, to: R_NS_SIMYARD_12, len: 1 }
-
-  - id: R_NS_SIMYARD_12
-    name: "Service Tunnel"
-    cluster: CL_NS_SIM_YARD
-    desc: |
-      A short tunnel under the yard with conduit strapped to the walls.
-      The air is cooler here, and the lights are a little too dim.
-    exits:
-      - { dir: south, to: R_NS_SIMYARD_06, len: 1 }
-      - { dir: east, to: R_NS_SIMYARD_11, len: 1 }
-
+- id: R_NS_ORIENT_01
+  name: Orientation Wing
+  cluster: CL_NS_ORIENTATION
+  tags:
+  - HUB_NS_ORIENTATION
+  - setpiece.q1.orientation_start
+  desc: |
+    Sterile halls, gentle signage, and a low training hum.
+    A calm instructor watches like you are not the first confused arrival today.
+    This place is built to let you fail safely.
+  exits:
+  - dir: east
+    to: R_NS_ORIENT_02
+    len: 1
+  - dir: west
+    to: R_NS_ORIENT_05
+    len: 1
+  - dir: north
+    to: R_NS_ORIENT_08
+    len: 1
+- id: R_NS_ORIENT_02
+  name: Badge Desk
+  cluster: CL_NS_ORIENTATION
+  tags:
+  - setpiece.q1.badge_desk
+  desc: |
+    A white desk, a badge printer, and a patient line of empty lanyards.
+    Someone has written in marker: "names matter. so do backups."
+  exits:
+  - dir: west
+    to: R_NS_ORIENT_01
+    len: 1
+  - dir: north
+    to: R_NS_ORIENT_03
+    len: 1
+- id: R_NS_ORIENT_03
+  name: Hands Drill
+  cluster: CL_NS_ORIENTATION
+  tags:
+  - setpiece.q1.drill_hands
+  desc: |
+    A sealed bin sits on a steel table. A placard shows a cartoon hand picking up a tool.
+    The bin clicks, waiting for you to try something obvious.
+  exits:
+  - dir: south
+    to: R_NS_ORIENT_02
+    len: 1
+  - dir: west
+    to: R_NS_ORIENT_04
+    len: 1
+- id: R_NS_ORIENT_04
+  name: Wearables Drill
+  cluster: CL_NS_ORIENTATION
+  tags:
+  - setpiece.q1.drill_wearables
+  desc: |
+    Mirror panels line the wall. An equipment rack holds a few harmless training pieces.
+    A tiny sign reads: "put it on. take it off. do it twice so it sticks."
+  exits:
+  - dir: east
+    to: R_NS_ORIENT_03
+    len: 1
+  - dir: south
+    to: R_NS_DORMS_01
+    len: 1
+- id: R_NS_ORIENT_05
+  name: Hall Of Heroes Alcove
+  cluster: CL_NS_ORIENTATION
+  desc: |
+    Two stone sentinels flank a small side hall: Hatchet (a chipped blade) and Javelin (point held outward).
+    Names are etched into the wall like a promise that worlds can last.
+    A few stand out, cut deeper than the rest: Trubshaw. Bartle. Aradune.
+  exits:
+  - dir: east
+    to: R_NS_ORIENT_01
+    len: 1
+  - dir: west
+    to: R_NS_ORIENT_06
+    len: 1
+- id: R_NS_ORIENT_06
+  name: Help Kiosk
+  cluster: CL_NS_ORIENTATION
+  desc: |
+    A terminal blinks: HELP. RULES. SAFETY.
+    It feels like a trap for cynics and a lifeline for everyone else.
+  exits:
+  - dir: east
+    to: R_NS_ORIENT_05
+    len: 1
+  - dir: north
+    to: R_NS_ORIENT_07
+    len: 1
+- id: R_NS_ORIENT_07
+  name: Verb Drill Annex
+  cluster: CL_NS_ORIENTATION
+  desc: |
+    Three painted arrows point at three identical practice stations.
+    A speaker crackles: "slow is fine. consistent is better."
+  exits:
+  - dir: south
+    to: R_NS_ORIENT_06
+    len: 1
+  - dir: east
+    to: R_NS_ORIENT_01
+    len: 1
+- id: R_NS_ORIENT_08
+  name: Map Wall
+  cluster: CL_NS_ORIENTATION
+  desc: |
+    A wall-sized diagram shows the campus like it wants to be a friendly maze.
+    The edges of the map are torn where the world keeps expanding.
+  exits:
+  - dir: south
+    to: R_NS_ORIENT_01
+    len: 1
+  - dir: east
+    to: R_NS_ORIENT_09
+    len: 1
+- id: R_NS_ORIENT_09
+  name: Locker Alcove
+  cluster: CL_NS_ORIENTATION
+  desc: |
+    A row of lockers waits with the dignity of unused storage.
+    One door hangs slightly crooked, like it wants you to test it.
+  exits:
+  - dir: west
+    to: R_NS_ORIENT_08
+    len: 1
+  - dir: south
+    to: R_NS_ORIENT_10
+    len: 1
+- id: R_NS_ORIENT_10
+  name: Quiet Corner
+  cluster: CL_NS_ORIENTATION
+  desc: |
+    A bench faces a blank wall. Someone has left a paper cup and a polite apology note.
+    The quiet here is intentional.
+  exits:
+  - dir: north
+    to: R_NS_ORIENT_09
+    len: 1
+  - dir: west
+    to: R_NS_ORIENT_01
+    len: 1
+- id: R_NS_EXIT_01
+  name: Corridor To Town
+  cluster: CL_NS_ORIENTATION
+  tags:
+  - setpiece.q1.exit_corridor
+  desc: |
+    A long white corridor ends at a security archway.
+    Through a window you can see the town gate plaza, bright and ordinary on purpose.
+  exits:
+  - dir: south
+    to: R_NS_SIMYARD_01
+    len: 1
+  - dir: north
+    to: P_NS_TOWN
+    len: 1
+- id: P_NS_TOWN
+  name: Town Gate Transfer
+  cluster: CL_NS_ORIENTATION
+  tags:
+  - portal.P_NS_TOWN
+  - setpiece.q1.security_arch
+  desc: |
+    A security archway scans quietly and then pretends it did not.
+    Beyond is the town gate, close enough to smell food you did not earn.
+  exits:
+  - dir: south
+    to: R_NS_EXIT_01
+    len: 1
+  - dir: north
+    to: P_TOWN_NS
+    len: 1
+- id: R_NS_DORMS_01
+  name: Dorm Hall
+  cluster: CL_NS_DORMS
+  desc: |
+    A dorm corridor with soft lighting and a faint detergent smell.
+    Doors are numbered like the building expects you to stay awhile.
+  exits:
+  - dir: north
+    to: R_NS_ORIENT_04
+    len: 1
+  - dir: east
+    to: R_NS_DORMS_02
+    len: 1
+  - dir: south
+    to: R_NS_DORMS_03
+    len: 1
+- id: R_NS_DORMS_02
+  name: Sticky Door Drill
+  cluster: CL_NS_DORMS
+  tags:
+  - setpiece.q1.drill_doors
+  desc: |
+    Three identical doors. One sticks just enough to make you try again.
+    A printed label reads: "movement is a skill. take the hint."
+  exits:
+  - dir: west
+    to: R_NS_DORMS_01
+    len: 1
+  - dir: north
+    to: R_NS_LABS_01
+    len: 1
+  - dir: south
+    to: R_NS_DORMS_05
+    len: 1
+- id: R_NS_DORMS_03
+  name: Common Room
+  cluster: CL_NS_DORMS
+  desc: |
+    A battered sofa, a small table, and a screen showing looping welcome messages.
+    The furniture looks like it has survived many honest naps.
+  exits:
+  - dir: north
+    to: R_NS_DORMS_01
+    len: 1
+  - dir: east
+    to: R_NS_DORMS_04
+    len: 1
+  - dir: south
+    to: R_NS_DORMS_06
+    len: 1
+- id: R_NS_DORMS_04
+  name: Quiet Bunk
+  cluster: CL_NS_DORMS
+  desc: |
+    A narrow bunk bed and a little shelf for things you pretend are important.
+    The pillow is too clean, like it has never been trusted.
+  exits:
+  - dir: west
+    to: R_NS_DORMS_03
+    len: 1
+  - dir: east
+    to: R_NS_DORMS_05
+    len: 1
+- id: R_NS_DORMS_05
+  name: Supply Closet
+  cluster: CL_NS_DORMS
+  tags:
+  - setpiece.q1.supply_closet
+  desc: |
+    A closet of low-value consumables: bandages, water packets, and cheap disinfectant.
+    Nothing here is rare. That is the lesson.
+  exits:
+  - dir: north
+    to: R_NS_DORMS_02
+    len: 1
+  - dir: west
+    to: R_NS_DORMS_04
+    len: 1
+- id: R_NS_DORMS_06
+  name: Washroom
+  cluster: CL_NS_DORMS
+  desc: |
+    White tile and a drain that works.
+    A sign reads: "clean hands. clean gear. clean exits."
+  exits:
+  - dir: north
+    to: R_NS_DORMS_03
+    len: 1
+  - dir: east
+    to: R_NS_DORMS_08
+    len: 1
+- id: R_NS_DORMS_07
+  name: Notice Board
+  cluster: CL_NS_DORMS
+  desc: |
+    A cork board full of handwritten notes: lost items, meal times, and tiny dares.
+    Someone has pinned a card that simply says: "try searching."
+  exits:
+  - dir: north
+    to: R_NS_DORMS_01
+    len: 1
+  - dir: east
+    to: R_NS_DORMS_10
+    len: 1
+  - dir: west
+    to: R_NS_DORMS_09
+    len: 1
+- id: R_NS_DORMS_08
+  name: Laundry Nook
+  cluster: CL_NS_DORMS
+  desc: |
+    A pair of machines thrum politely. Someone has left a sock like a warning.
+    The floor is always slightly damp.
+  exits:
+  - dir: west
+    to: R_NS_DORMS_06
+    len: 1
+  - dir: north
+    to: R_NS_DORMS_09
+    len: 1
+- id: R_NS_DORMS_09
+  name: Micro Library
+  cluster: CL_NS_DORMS
+  desc: |
+    A shelf of pamphlets: etiquette, safety, and a thin booklet titled "exits are real."
+    The pages smell like cheap ink and sincere effort.
+  exits:
+  - dir: south
+    to: R_NS_DORMS_08
+    len: 1
+  - dir: east
+    to: R_NS_DORMS_07
+    len: 1
+- id: R_NS_DORMS_10
+  name: Courtyard Window
+  cluster: CL_NS_DORMS
+  desc: |
+    A wide window looks out on a small interior courtyard: plants, benches, and a maintenance drone that pretends to nap.
+    It is the first place here that feels alive.
+  exits:
+  - dir: west
+    to: R_NS_DORMS_07
+    len: 1
+- id: R_NS_LABS_01
+  name: Combat Labs Antechamber
+  cluster: CL_NS_LABS
+  tags:
+  - HUB_NS_LABS
+  - setpiece.q1.labs_brief
+  desc: |
+    A lab doorway with bold warning stripes and a friendly explanation underneath.
+    A robot voice says: "simulation only. pain is a message."
+  exits:
+  - dir: south
+    to: R_NS_DORMS_02
+    len: 1
+  - dir: east
+    to: R_NS_LABS_02
+    len: 1
+  - dir: north
+    to: R_NS_LABS_07
+    len: 1
+- id: R_NS_LABS_02
+  name: Prep Bay
+  cluster: CL_NS_LABS
+  tags:
+  - setpiece.q1.prep_bay
+  desc: |
+    Lockers line the wall. A dispenser offers a disposable healing pack.
+    The floor is marked with arrows that try to keep you calm.
+  exits:
+  - dir: west
+    to: R_NS_LABS_01
+    len: 1
+  - dir: east
+    to: R_NS_LABS_03
+    len: 1
+  - dir: north
+    to: R_NS_LABS_08
+    len: 1
+- id: R_NS_LABS_03
+  name: 'Scenario Room: Solo Target'
+  cluster: CL_NS_LABS
+  tags:
+  - setpiece.q1.scenario_solo_target
+  desc: |
+    A small ring with scuffed floors and neat chalk lines.
+    A drain in the corner smells like a dare.
+  exits:
+  - dir: west
+    to: R_NS_LABS_02
+    len: 1
+  - dir: east
+    to: R_NS_LABS_04
+    len: 1
+  - dir: south
+    to: R_NS_LABS_09
+    len: 1
+- id: R_NS_LABS_04
+  name: 'Scenario Room: Two Targets'
+  cluster: CL_NS_LABS
+  tags:
+  - setpiece.q1.scenario_two_targets
+  desc: |
+    Two silhouettes flicker on the far wall, inviting you to make a mess of target selection.
+    A speaker chirps: "it is okay to panic. do not stay there."
+  exits:
+  - dir: west
+    to: R_NS_LABS_03
+    len: 1
+  - dir: east
+    to: R_NS_LABS_05
+    len: 1
+- id: R_NS_LABS_05
+  name: 'Scenario Room: Hazard Strip'
+  cluster: CL_NS_LABS
+  tags:
+  - setpiece.q1.hazard_strip
+  desc: |
+    A band of floor plates pulses with a patient rhythm.
+    The lesson is simple: standing still is a choice.
+  exits:
+  - dir: west
+    to: R_NS_LABS_04
+    len: 1
+  - dir: north
+    to: R_NS_LABS_06
+    len: 1
+  - dir: east
+    to: R_NS_LABS_12
+    len: 1
+- id: R_NS_LABS_06
+  name: Med Bay
+  cluster: CL_NS_LABS
+  tags:
+  - setpiece.q1.med_bay
+  desc: |
+    A clean room with a single cot and a cabinet of cheap miracles.
+    A sign reads: "failure is data. you are not in trouble."
+  exits:
+  - dir: south
+    to: R_NS_LABS_05
+    len: 1
+  - dir: north
+    to: R_NS_SIMYARD_01
+    len: 1
+  - dir: east
+    to: R_NS_LABS_13
+    len: 1
+- id: R_NS_LABS_07
+  name: Observation Gallery
+  cluster: CL_NS_LABS
+  desc: |
+    A glass wall overlooks the training rooms.
+    Someone has drawn a smiley face on the corner in dry erase marker.
+  exits:
+  - dir: south
+    to: R_NS_LABS_01
+    len: 1
+  - dir: east
+    to: R_NS_LABS_08
+    len: 1
+  - dir: north
+    to: R_NS_LABS_15
+    len: 1
+- id: R_NS_LABS_08
+  name: Equipment Storage
+  cluster: CL_NS_LABS
+  desc: |
+    Shelves of training gear, neatly labeled and slightly too tidy.
+    A cracked helmet sits on top, like a warning you can pick up.
+  exits:
+  - dir: west
+    to: R_NS_LABS_07
+    len: 1
+  - dir: south
+    to: R_NS_LABS_02
+    len: 1
+- id: R_NS_LABS_09
+  name: Sparring Pods
+  cluster: CL_NS_LABS
+  desc: |
+    A row of small pods hums with ready simulations.
+    The air smells like warm plastic and adrenaline you haven't earned yet.
+  exits:
+  - dir: north
+    to: R_NS_LABS_03
+    len: 1
+  - dir: east
+    to: R_NS_LABS_10
+    len: 1
+- id: R_NS_LABS_10
+  name: Range Lane
+  cluster: CL_NS_LABS
+  desc: |
+    A long lane with target lights at the far end.
+    The targets look embarrassed to exist.
+  exits:
+  - dir: west
+    to: R_NS_LABS_09
+    len: 1
+  - dir: east
+    to: R_NS_LABS_11
+    len: 1
+- id: R_NS_LABS_11
+  name: Maintenance Crawl
+  cluster: CL_NS_LABS
+  desc: |
+    A low corridor full of access panels and bundled cables.
+    The lights here flicker like the building is thinking.
+  exits:
+  - dir: west
+    to: R_NS_LABS_10
+    len: 1
+  - dir: north
+    to: R_NS_LABS_12
+    len: 1
+  - dir: south
+    to: R_NS_LABS_16
+    len: 1
+- id: R_NS_LABS_12
+  name: Hazard Control Booth
+  cluster: CL_NS_LABS
+  desc: |
+    A booth of toggles and screens. Each button is labeled like it wants to be trusted.
+    The hazard strip's rhythm is visible here, cold and honest.
+  exits:
+  - dir: west
+    to: R_NS_LABS_05
+    len: 1
+  - dir: south
+    to: R_NS_LABS_11
+    len: 1
+- id: R_NS_LABS_13
+  name: Recovery Benches
+  cluster: CL_NS_LABS
+  desc: |
+    A row of benches with disposable towels and water packets.
+    The building offers you hydration like it is a philosophy.
+  exits:
+  - dir: west
+    to: R_NS_LABS_06
+    len: 1
+  - dir: east
+    to: R_NS_LABS_14
+    len: 1
+- id: R_NS_LABS_14
+  name: Sim Control
+  cluster: CL_NS_LABS
+  desc: |
+    Banks of controls hum behind a locked screen.
+    Someone has taped a note over one panel: "do not get clever."
+  exits:
+  - dir: west
+    to: R_NS_LABS_13
+    len: 1
+  - dir: north
+    to: R_NS_LABS_15
+    len: 1
+- id: R_NS_LABS_15
+  name: Debrief Room
+  cluster: CL_NS_LABS
+  desc: |
+    A circle of chairs around a table with a single scar down the middle.
+    The room smells like old coffee and new resolve.
+  exits:
+  - dir: south
+    to: R_NS_LABS_07
+    len: 1
+  - dir: east
+    to: R_NS_LABS_16
+    len: 1
+  - dir: west
+    to: R_NS_LABS_14
+    len: 1
+- id: R_NS_LABS_16
+  name: Emergency Exit
+  cluster: CL_NS_LABS
+  desc: |
+    A heavy door with a red bar you are not supposed to touch.
+    The panel beside it reads: "alarm test: always successful."
+  exits:
+  - dir: north
+    to: R_NS_LABS_11
+    len: 1
+  - dir: west
+    to: R_NS_LABS_15
+    len: 1
+- id: R_NS_SIMYARD_01
+  name: Sim Yard Drill Ring
+  cluster: CL_NS_SIM_YARD
+  tags:
+  - setpiece.q1.sim_yard_drill_ring
+  desc: |
+    A small yard with a marked drill ring and a wide, forgiving fence.
+    Two trainees wait nearby, stretching like they are trying not to look nervous.
+  exits:
+  - dir: south
+    to: R_NS_LABS_06
+    len: 1
+  - dir: north
+    to: R_NS_EXIT_01
+    len: 1
+  - dir: east
+    to: R_NS_SIMYARD_02
+    len: 1
+  - dir: west
+    to: R_NS_SIMYARD_03
+    len: 1
+- id: R_NS_SIMYARD_02
+  name: Perimeter Track
+  cluster: CL_NS_SIM_YARD
+  desc: |
+    A packed dirt track circles the yard.
+    Painted markers label distances like this is a sport, not a warning.
+  exits:
+  - dir: west
+    to: R_NS_SIMYARD_01
+    len: 1
+  - dir: east
+    to: R_NS_SIMYARD_04
+    len: 1
+- id: R_NS_SIMYARD_03
+  name: Equipment Cage
+  cluster: CL_NS_SIM_YARD
+  desc: |
+    A fenced cage of practice gear: shields, dull blades, and padded poles.
+    A little keypad waits for someone authorized. It does not look at you.
+  exits:
+  - dir: east
+    to: R_NS_SIMYARD_01
+    len: 1
+  - dir: north
+    to: R_NS_SIMYARD_06
+    len: 1
+- id: R_NS_SIMYARD_04
+  name: Bleachers
+  cluster: CL_NS_SIM_YARD
+  desc: |
+    Aluminum bleachers creak when you step on them.
+    Someone has carved a tiny map into the seat with a coin.
+  exits:
+  - dir: west
+    to: R_NS_SIMYARD_02
+    len: 1
+  - dir: east
+    to: R_NS_SIMYARD_05
+    len: 1
+- id: R_NS_SIMYARD_05
+  name: Wind Break
+  cluster: CL_NS_SIM_YARD
+  desc: |
+    Canvas panels cut the wind into manageable pieces.
+    You can hear the building exhale behind you.
+  exits:
+  - dir: west
+    to: R_NS_SIMYARD_04
+    len: 1
+  - dir: east
+    to: R_NS_SIMYARD_10
+    len: 1
+- id: R_NS_SIMYARD_06
+  name: Rope Bridge
+  cluster: CL_NS_SIM_YARD
+  desc: |
+    A short rope bridge spans a shallow gravel pit.
+    It sways just enough to feel like a joke at your expense.
+  exits:
+  - dir: south
+    to: R_NS_SIMYARD_03
+    len: 1
+  - dir: east
+    to: R_NS_SIMYARD_07
+    len: 1
+  - dir: north
+    to: R_NS_SIMYARD_12
+    len: 1
+- id: R_NS_SIMYARD_07
+  name: Sandbox
+  cluster: CL_NS_SIM_YARD
+  desc: |
+    A sandbox of fine grit with footprints that never quite match.
+    It looks like a good place to learn what "too much aggro" feels like.
+  exits:
+  - dir: west
+    to: R_NS_SIMYARD_06
+    len: 1
+  - dir: east
+    to: R_NS_SIMYARD_08
+    len: 1
+- id: R_NS_SIMYARD_08
+  name: Target Grove
+  cluster: CL_NS_SIM_YARD
+  desc: |
+    A cluster of wooden posts painted with simple faces.
+    Someone has given one of them a tiny hat.
+  exits:
+  - dir: west
+    to: R_NS_SIMYARD_07
+    len: 1
+  - dir: east
+    to: R_NS_SIMYARD_09
+    len: 1
+- id: R_NS_SIMYARD_09
+  name: Gatehouse
+  cluster: CL_NS_SIM_YARD
+  desc: |
+    A small gatehouse with a whistle on a hook.
+    The whistle looks unused, which is either good or suspicious.
+  exits:
+  - dir: west
+    to: R_NS_SIMYARD_08
+    len: 1
+  - dir: south
+    to: R_NS_SIMYARD_11
+    len: 1
+- id: R_NS_SIMYARD_10
+  name: Shade Arbor
+  cluster: CL_NS_SIM_YARD
+  desc: |
+    A simple arbor covered in synthetic leaves.
+    The shade feels like a reward even though it is just fabric.
+  exits:
+  - dir: west
+    to: R_NS_SIMYARD_05
+    len: 1
+  - dir: north
+    to: R_NS_SIMYARD_11
+    len: 1
+- id: R_NS_SIMYARD_11
+  name: Water Spigot
+  cluster: CL_NS_SIM_YARD
+  desc: |
+    A metal spigot and a drain that does not smell like a trap.
+    Someone has etched: "drink. then think."
+  exits:
+  - dir: north
+    to: R_NS_SIMYARD_09
+    len: 1
+  - dir: south
+    to: R_NS_SIMYARD_10
+    len: 1
+  - dir: west
+    to: R_NS_SIMYARD_12
+    len: 1
+- id: R_NS_SIMYARD_12
+  name: Service Tunnel
+  cluster: CL_NS_SIM_YARD
+  desc: |
+    A short tunnel under the yard with conduit strapped to the walls.
+    The air is cooler here, and the lights are a little too dim.
+  exits:
+  - dir: south
+    to: R_NS_SIMYARD_06
+    len: 1
+  - dir: east
+    to: R_NS_SIMYARD_11
+    len: 1

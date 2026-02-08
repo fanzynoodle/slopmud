@@ -4,7 +4,21 @@
   const lineEl = document.getElementById("line");
 
   const menuBtn = document.getElementById("btn-menu");
-  const menuDlg = document.getElementById("menu");
+  const menuDd = document.getElementById("menudd");
+
+  const menuConnect = document.getElementById("menu-connect");
+  const menuOnline = document.getElementById("menu-online");
+  const menuAccount = document.getElementById("menu-account");
+  const menuSso = document.getElementById("menu-sso");
+  const menuSettings = document.getElementById("menu-settings");
+  const menuClear = document.getElementById("menu-clear");
+  const menuNewSession = document.getElementById("menu-new-session");
+
+  const dlgConnect = document.getElementById("dlg-connect");
+  const dlgOnline = document.getElementById("dlg-online");
+  const dlgAccount = document.getElementById("dlg-account");
+  const dlgSso = document.getElementById("dlg-sso");
+  const dlgSettings = document.getElementById("dlg-settings");
 
   const btnConnect = document.getElementById("btn-connect");
   const btnDisconnect = document.getElementById("btn-disconnect");
@@ -269,6 +283,22 @@
     }
   }
 
+  async function logoutResumeSession() {
+    // Best-effort: tell the server to kill the resumable TCP session immediately.
+    // Even if this fails, clearing the resume token ensures a fresh session on reload.
+    const token = localStorage.getItem(LS_RESUME_TOKEN);
+    if (!isValidResumeToken(token)) return;
+    try {
+      await fetch("/api/ws/logout", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ resume: token.trim() }),
+      });
+    } catch {
+      // ignore
+    }
+  }
+
   function scheduleReconnect() {
     if (reconnectTimer) return;
     const delay = Math.min(8000, 500 * Math.pow(2, reconnectAttempts));
@@ -285,6 +315,27 @@
     const raw = lineEl.value;
     lineEl.value = "";
 
+    // Client-side escape hatch: start a new session (clear resume token) so you can
+    // authenticate as a different account name after reload.
+    {
+      const t = (raw || "").trim().toLowerCase();
+      if (t === "/logout" || t === "logout" || t === "/newsession" || t === "newsession") {
+        const ok = window.confirm(
+          "Log out and start a new session? This will close the websocket and clear the saved resume token."
+        );
+        if (!ok) return;
+        logoutResumeSession();
+        try {
+          localStorage.removeItem(LS_RESUME_TOKEN);
+        } catch {
+          // ignore
+        }
+        disconnect();
+        location.reload();
+        return;
+      }
+    }
+
     const payload = raw + "\n";
 
     // Send as text; servers that care about bytes can accept Binary too.
@@ -295,42 +346,125 @@
   setStatus("disconnected", "");
   lineEl && lineEl.focus();
 
+  function closeMenu() {
+    if (!menuDd) return;
+    menuDd.setAttribute("hidden", "");
+    menuBtn && menuBtn.setAttribute("aria-expanded", "false");
+  }
+
+  function openMenu() {
+    if (!menuDd) return;
+    menuDd.removeAttribute("hidden");
+    menuBtn && menuBtn.setAttribute("aria-expanded", "true");
+  }
+
+  function toggleMenu() {
+    if (!menuDd) return;
+    if (menuDd.hasAttribute("hidden")) openMenu();
+    else closeMenu();
+  }
+
+  function openDialog(dlg, focusEl) {
+    closeMenu();
+    if (!dlg || typeof dlg.showModal !== "function") return;
+    dlg.showModal();
+    if (focusEl) {
+      try {
+        focusEl.focus();
+        focusEl.select && focusEl.select();
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  document.addEventListener("click", () => closeMenu());
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!menuDd || menuDd.hasAttribute("hidden")) return;
+    e.preventDefault();
+    closeMenu();
+    menuBtn && menuBtn.focus();
+  });
+  menuDd && menuDd.addEventListener("click", (e) => e.stopPropagation());
+
   menuBtn &&
-    menuBtn.addEventListener("click", () => {
-      if (!menuDlg || typeof menuDlg.showModal !== "function") return;
-      menuDlg.showModal();
-      wsUrlEl && wsUrlEl.focus();
-      wsUrlEl && wsUrlEl.select && wsUrlEl.select();
+    menuBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleMenu();
+      if (menuDd && !menuDd.hasAttribute("hidden")) {
+        menuConnect && menuConnect.focus();
+      }
     });
 
-  menuDlg &&
-    menuDlg.addEventListener("close", () => {
-      saveSettings();
-      lineEl && lineEl.focus();
-    });
+  for (const d of [dlgConnect, dlgOnline, dlgAccount, dlgSso, dlgSettings]) {
+    d &&
+      d.addEventListener("close", () => {
+        saveSettings();
+        lineEl && lineEl.focus();
+      });
+  }
 
   btnConnect && btnConnect.addEventListener("click", () => {
     shouldReconnect = true;
     connect();
   });
-  btnDisconnect && btnDisconnect.addEventListener("click", disconnect);
-  btnNewSession &&
-    btnNewSession.addEventListener("click", () => {
+  btnDisconnect &&
+    btnDisconnect.addEventListener("click", async () => {
       const ok = window.confirm(
-        "Start a new session? This clears the saved resume token so you can choose a different account name."
+        "Disconnect only? Click Cancel to log out (kill the resumable session) so a refresh starts fresh."
       );
-      if (!ok) return;
-      try {
-        localStorage.removeItem(LS_RESUME_TOKEN);
-      } catch {
-        // ignore
+      if (!ok) {
+        await logoutResumeSession();
+        try {
+          localStorage.removeItem(LS_RESUME_TOKEN);
+        } catch {
+          // ignore
+        }
+        disconnect();
+        location.reload();
+        return;
       }
-      location.reload();
+      disconnect();
     });
+
+  function handleNewSession() {
+    const ok = window.confirm(
+      "Start a new session? This clears the saved resume token so you can choose a different account name."
+    );
+    if (!ok) return;
+    logoutResumeSession();
+    try {
+      localStorage.removeItem(LS_RESUME_TOKEN);
+    } catch {
+      // ignore
+    }
+    location.reload();
+  }
+
+  btnNewSession && btnNewSession.addEventListener("click", handleNewSession);
   btnClear && btnClear.addEventListener("click", () => {
     clear();
     lineEl && lineEl.focus();
   });
+
+  menuConnect && menuConnect.addEventListener("click", () => openDialog(dlgConnect, wsUrlEl));
+  menuOnline && menuOnline.addEventListener("click", () => openDialog(dlgOnline, null));
+  menuAccount && menuAccount.addEventListener("click", () => openDialog(dlgAccount, acctEmailEl));
+  menuSso && menuSso.addEventListener("click", () => openDialog(dlgSso, null));
+  menuSettings && menuSettings.addEventListener("click", () => openDialog(dlgSettings, optScroll));
+  menuClear &&
+    menuClear.addEventListener("click", () => {
+      closeMenu();
+      clear();
+      lineEl && lineEl.focus();
+    });
+  menuNewSession &&
+    menuNewSession.addEventListener("click", () => {
+      closeMenu();
+      handleNewSession();
+    });
 
   btnEmailShow && btnEmailShow.addEventListener("click", () => sendCmd("account email"));
   btnEmailSet &&

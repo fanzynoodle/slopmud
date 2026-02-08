@@ -10,18 +10,20 @@ on:
         type: choice
         options:
           - dev
-          - test
+          - stg
   push:
     # Intentionally *not* main: avoid accidentally deploying whatever is on main until branches are in place.
     branches:
       - dev
-      - test
+      - stg
+      - uat # legacy alias for stg
+      - test # legacy alias for stg
 
 permissions:
   contents: read
 
 concurrency:
-  group: enterprise-cicd-${{ github.ref }}
+  group: enterprise-cicd-${{ github.event_name == 'workflow_dispatch' && (inputs.track == 'uat' && 'stg' || inputs.track == 'test' && 'stg' || inputs.track) || (github.ref_name == 'uat' && 'stg' || github.ref_name == 'test' && 'stg' || github.ref_name) }}
   cancel-in-progress: true
 
 env:
@@ -37,6 +39,7 @@ jobs:
 
     outputs:
       track: ${{ steps.meta.outputs.track }}
+      deploy_env: ${{ steps.meta.outputs.deploy_env }}
       sha: ${{ steps.meta.outputs.sha }}
       artifact_path: ${{ steps.meta.outputs.artifact_path }}
       bucket: ${{ steps.s3.outputs.bucket }}
@@ -64,6 +67,16 @@ jobs:
 
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "track=$track" >> "$GITHUB_OUTPUT"
+
+          case "$track" in
+            dev) deploy_env="dev" ;;
+            stg) deploy_env="stg" ;;
+            staging) deploy_env="stg" ;; # alias (spelled out)
+            uat) deploy_env="stg" ;; # legacy alias
+            test) deploy_env="stg" ;; # legacy alias
+            *) echo "unknown track: $track" >&2; exit 2 ;;
+          esac
+          echo "deploy_env=$deploy_env" >> "$GITHUB_OUTPUT"
 
       - name: Assert Runner Build Deps
         shell: bash
@@ -95,9 +108,9 @@ jobs:
         id: build_asset
         shell: bash
         env:
-          TRACK: ${{ steps.meta.outputs.track }}
-          # Clean rebuild only on the test branch/track.
-          CLEAN_BUILD: ${{ steps.meta.outputs.track == 'test' && '1' || '0' }}
+          TRACK: ${{ steps.meta.outputs.deploy_env }}
+          # Clean rebuild only on the staging branch/track.
+          CLEAN_BUILD: ${{ steps.meta.outputs.deploy_env == 'stg' && '1' || '0' }}
         run: |
           set -euo pipefail
           artifact_path="$(./scripts/cicd/build_assets.sh)"
@@ -107,7 +120,7 @@ jobs:
         id: s3
         shell: bash
         env:
-          TRACK: ${{ steps.meta.outputs.track }}
+          TRACK: ${{ steps.meta.outputs.deploy_env }}
           SHA: ${{ steps.meta.outputs.sha }}
           ARTIFACT_PATH: ${{ steps.build_asset.outputs.artifact_path }}
         run: |
@@ -134,7 +147,7 @@ jobs:
           echo "key=$key" >> "$GITHUB_OUTPUT"
 
   deploy_testing:
-    name: Deploy To Testing
+    name: Deploy To Staging
     runs-on: [self-hosted, Linux]
     timeout-minutes: 20
     needs: build
@@ -154,40 +167,34 @@ jobs:
       - name: Deploy
         shell: bash
         env:
-          TRACK: ${{ needs.build.outputs.track }}
+          DEPLOY_ENV: ${{ needs.build.outputs.deploy_env }}
           ARTIFACT_PATH: ${{ needs.build.outputs.artifact_path }}
           BUCKET: ${{ needs.build.outputs.bucket }}
           KEY: ${{ needs.build.outputs.key }}
         run: |
           set -euo pipefail
 
-          case "$TRACK" in
-            dev) env_name="dev" ;;
-            test) env_name="stg" ;;
-            *) echo "unknown track: $TRACK" >&2; exit 2 ;;
-          esac
-
           if [[ -n "${BUCKET}" && -n "${KEY}" ]]; then
             sudo -n /usr/local/bin/slopmud-shuttle-assets \
-              --env "$env_name" \
+              --env "$DEPLOY_ENV" \
               --from-s3 "s3://${BUCKET}/${KEY}"
           else
             sudo -n /usr/local/bin/slopmud-shuttle-assets \
-              --env "$env_name" \
+              --env "$DEPLOY_ENV" \
               --from-file "$ARTIFACT_PATH"
           fi
 
       - name: Smoke Test
         shell: bash
         env:
-          TRACK: ${{ needs.build.outputs.track }}
+          DEPLOY_ENV: ${{ needs.build.outputs.deploy_env }}
         run: |
           set -euo pipefail
 
-          case "$TRACK" in
+          case "$DEPLOY_ENV" in
             dev) port="4000" ;;
-            test) port="4023" ;;
-            *) echo "unknown track: $TRACK" >&2; exit 2 ;;
+            stg) port="4023" ;;
+            *) echo "unknown deploy env: $DEPLOY_ENV" >&2; exit 2 ;;
           esac
 
           python3 ./scripts/cicd/smoke_telnet.py --host 127.0.0.1 --port "$port"
@@ -197,7 +204,7 @@ jobs:
     runs-on: [self-hosted, Linux]
     timeout-minutes: 30
     needs: [build, deploy_testing]
-    if: needs.build.outputs.track == 'test'
+    if: needs.build.outputs.deploy_env == 'stg'
 
     steps:
       - name: Checkout
@@ -211,15 +218,16 @@ jobs:
           set -euo pipefail
           sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null 2>&1
 
-      - name: Copy Tested Asset -> prod/
+      - name: Copy STG Asset -> prod/
         shell: bash
         env:
           BUCKET: ${{ needs.build.outputs.bucket }}
           SHA: ${{ needs.build.outputs.sha }}
+          DEPLOY_ENV: ${{ needs.build.outputs.deploy_env }}
         run: |
           set -euo pipefail
           aws s3 cp \
-            "s3://${BUCKET}/test/${SHA}/artifact.tgz" \
+            "s3://${BUCKET}/${DEPLOY_ENV}/${SHA}/artifact.tgz" \
             "s3://${BUCKET}/prod/${SHA}/artifact.tgz"
 
       - name: Store Local Prod Asset (No Rebuild)

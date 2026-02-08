@@ -1,11 +1,12 @@
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
+use std::time::Duration;
 
 use axum::{
     Router,
-    extract::{Host, ws},
-    http::Uri,
-    response::Redirect,
+    extract::{ConnectInfo, Host, State, ws},
+    http::{StatusCode, Uri, header},
+    response::{IntoResponse, Redirect},
     routing::get,
 };
 use axum_server::tls_rustls::RustlsConfig;
@@ -18,8 +19,8 @@ use tracing::{Level, info};
 fn usage_and_exit() -> ! {
     eprintln!(
         "static_web\n\n\
-USAGE:\n  static_web [--bind HOST:PORT] [--dir PATH] [--https-bind HOST:PORT --tls-cert PATH --tls-key PATH] [--session-tcp-addr HOST:PORT]\n\n\
-ENV:\n  BIND             default 0.0.0.0:8080\n  STATIC_DIR       default web_homepage\n  HTTPS_BIND       optional\n  TLS_CERT         required if HTTPS_BIND set\n  TLS_KEY          required if HTTPS_BIND set\n  SESSION_TCP_ADDR default 127.0.0.1:23 (used by /ws)\n"
+USAGE:\n  static_web [--bind HOST:PORT] [--dir PATH] [--https-bind HOST:PORT --tls-cert PATH --tls-key PATH] [--session-tcp-addr HOST:PORT] [--admin-tcp-addr HOST:PORT]\n\n\
+ENV:\n  BIND             default 0.0.0.0:8080\n  STATIC_DIR       default web_homepage\n  HTTPS_BIND       optional\n  TLS_CERT         required if HTTPS_BIND set\n  TLS_KEY          required if HTTPS_BIND set\n  SESSION_TCP_ADDR default 127.0.0.1:23 (used by /ws)\n  SLOPMUD_ADMIN_ADDR default 127.0.0.1:4011 (used by /api/online; falls back to SLOPMUD_ADMIN_BIND)\n"
     );
     std::process::exit(2);
 }
@@ -32,6 +33,7 @@ struct Config {
     tls_cert: Option<PathBuf>,
     tls_key: Option<PathBuf>,
     session_tcp_addr: SocketAddr,
+    admin_tcp_addr: SocketAddr,
 }
 
 fn parse_args() -> Config {
@@ -53,6 +55,12 @@ fn parse_args() -> Config {
 
     let mut session_tcp_addr: SocketAddr = std::env::var("SESSION_TCP_ADDR")
         .unwrap_or_else(|_| "127.0.0.1:23".to_string())
+        .parse()
+        .unwrap_or_else(|_| usage_and_exit());
+
+    let mut admin_tcp_addr: SocketAddr = std::env::var("SLOPMUD_ADMIN_ADDR")
+        .or_else(|_| std::env::var("SLOPMUD_ADMIN_BIND"))
+        .unwrap_or_else(|_| "127.0.0.1:4011".to_string())
         .parse()
         .unwrap_or_else(|_| usage_and_exit());
 
@@ -83,6 +91,10 @@ fn parse_args() -> Config {
                 let v = it.next().unwrap_or_else(|| usage_and_exit());
                 session_tcp_addr = v.parse().unwrap_or_else(|_| usage_and_exit());
             }
+            "--admin-tcp-addr" => {
+                let v = it.next().unwrap_or_else(|| usage_and_exit());
+                admin_tcp_addr = v.parse().unwrap_or_else(|_| usage_and_exit());
+            }
             "-h" | "--help" => usage_and_exit(),
             _ => usage_and_exit(),
         }
@@ -95,6 +107,7 @@ fn parse_args() -> Config {
         tls_cert,
         tls_key,
         session_tcp_addr,
+        admin_tcp_addr,
     }
 }
 
@@ -107,18 +120,61 @@ async fn redirect_to_https(Host(host): Host, uri: Uri) -> Redirect {
 
 async fn ws_session(
     ws: ws::WebSocketUpgrade,
-    axum::extract::State(state): axum::extract::State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    State(state): State<AppState>,
 ) -> axum::response::Response {
-    ws.on_upgrade(move |socket| async move { ws_session_task(socket, state).await })
+    ws.on_upgrade(move |socket| async move { ws_session_task(socket, state, peer).await })
 }
 
 #[derive(Clone, Debug)]
 struct AppState {
     session_tcp_addr: SocketAddr,
+    admin_tcp_addr: SocketAddr,
 }
 
-async fn ws_session_task(mut socket: ws::WebSocket, state: AppState) {
-    let stream = match tokio::net::TcpStream::connect(state.session_tcp_addr).await {
+async fn api_online(State(state): State<AppState>) -> impl IntoResponse {
+    let addr = state.admin_tcp_addr;
+    let req = b"{\"type\":\"list_sessions\"}\n";
+    let res = tokio::time::timeout(Duration::from_secs(2), async move {
+        let mut stream = tokio::net::TcpStream::connect(addr).await?;
+        tokio::io::AsyncWriteExt::write_all(&mut stream, req).await?;
+        let mut rd = tokio::io::BufReader::new(stream);
+        let mut line = Vec::new();
+        tokio::io::AsyncBufReadExt::read_until(&mut rd, b'\n', &mut line).await?;
+        Ok::<Vec<u8>, std::io::Error>(line)
+    })
+    .await;
+
+    match res {
+        Ok(Ok(line)) if !line.is_empty() => (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "application/json")],
+            String::from_utf8_lossy(&line).into_owned(),
+        )
+            .into_response(),
+        Ok(Ok(_)) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            [(header::CONTENT_TYPE, "application/json")],
+            "{\"type\":\"err\",\"message\":\"empty admin response\"}\n".to_string(),
+        )
+            .into_response(),
+        Ok(Err(_)) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            [(header::CONTENT_TYPE, "application/json")],
+            "{\"type\":\"err\",\"message\":\"admin unavailable\"}\n".to_string(),
+        )
+            .into_response(),
+        Err(_) => (
+            StatusCode::GATEWAY_TIMEOUT,
+            [(header::CONTENT_TYPE, "application/json")],
+            "{\"type\":\"err\",\"message\":\"admin timeout\"}\n".to_string(),
+        )
+            .into_response(),
+    }
+}
+
+async fn ws_session_task(mut socket: ws::WebSocket, state: AppState, peer: SocketAddr) {
+    let mut stream = match tokio::net::TcpStream::connect(state.session_tcp_addr).await {
         Ok(s) => s,
         Err(e) => {
             let _ = socket
@@ -131,6 +187,42 @@ async fn ws_session_task(mut socket: ws::WebSocket, state: AppState) {
             return;
         }
     };
+
+    // Pass the real client IP to the broker via PROXY protocol v1.
+    // The broker only trusts PROXY headers from loopback peers.
+    let src_ip = peer.ip();
+    let (family, dst_ip): (&str, IpAddr) = match src_ip {
+        IpAddr::V4(_) => (
+            "TCP4",
+            match state.session_tcp_addr.ip() {
+                IpAddr::V4(v4) => IpAddr::V4(v4),
+                IpAddr::V6(_) => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+            },
+        ),
+        IpAddr::V6(_) => (
+            "TCP6",
+            match state.session_tcp_addr.ip() {
+                IpAddr::V6(v6) => IpAddr::V6(v6),
+                IpAddr::V4(_) => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+            },
+        ),
+    };
+    let proxy_line = format!(
+        "PROXY {family} {src} {dst} {sport} {dport}\r\n",
+        src = src_ip,
+        dst = dst_ip,
+        sport = peer.port(),
+        dport = state.session_tcp_addr.port()
+    );
+    if let Err(e) = tokio::io::AsyncWriteExt::write_all(&mut stream, proxy_line.as_bytes()).await {
+        let _ = socket
+            .send(ws::Message::Text(format!(
+                "ERROR: failed to send proxy header: {e}\n"
+            )))
+            .await;
+        let _ = socket.close().await;
+        return;
+    }
 
     let (mut tcp_r, mut tcp_w) = stream.into_split();
     let (mut ws_w, mut ws_r) = socket.split();
@@ -148,9 +240,7 @@ async fn ws_session_task(mut socket: ws::WebSocket, state: AppState) {
 
     let ws_writer = tokio::spawn(async move {
         while let Some(m) = ws_rx.recv().await {
-            ws_w.send(m)
-                .await
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            ws_w.send(m).await.map_err(std::io::Error::other)?;
         }
         Ok::<(), std::io::Error>(())
     });
@@ -180,7 +270,7 @@ async fn ws_session_task(mut socket: ws::WebSocket, state: AppState) {
     let ws_tx_ws = ws_tx.clone();
     let mut ws_reader = tokio::spawn(async move {
         while let Some(msg) = ws_r.next().await {
-            match msg.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))? {
+            match msg.map_err(std::io::Error::other)? {
                 ws::Message::Text(s) => {
                     let _ = tcp_tx_ws.send(s.into_bytes()).await;
                 }
@@ -224,8 +314,14 @@ async fn main() {
         .init();
 
     let cfg = parse_args();
+
+    // rustls 0.23: if multiple crypto providers are enabled (ring + aws-lc-rs),
+    // the application must pick one process-wide provider before any config builders run.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     let state = AppState {
         session_tcp_addr: cfg.session_tcp_addr,
+        admin_tcp_addr: cfg.admin_tcp_addr,
     };
 
     let https_enabled = cfg.https_bind.is_some();
@@ -237,6 +333,7 @@ async fn main() {
     let service = ServeDir::new(&cfg.static_dir);
     let app_https = Router::new()
         .route("/healthz", get(|| async { "ok\n" }))
+        .route("/api/online", get(api_online))
         .route("/ws", get(ws_session))
         .with_state(state.clone())
         .fallback_service(service)
@@ -274,10 +371,13 @@ async fn main() {
             .expect("http bind failed");
         let rx = shutdown_rx.clone();
         joins.push(tokio::spawn(async move {
-            axum::serve(listener, app_http)
-                .with_graceful_shutdown(wait_for_shutdown(rx))
-                .await
-                .expect("http server failed");
+            axum::serve(
+                listener,
+                app_http.into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .with_graceful_shutdown(wait_for_shutdown(rx))
+            .await
+            .expect("http server failed");
         }));
     }
 
@@ -304,7 +404,7 @@ async fn main() {
 
             axum_server::bind_rustls(https_bind, rustls)
                 .handle(handle)
-                .serve(app_https.into_make_service())
+                .serve(app_https.into_make_service_with_connect_info::<SocketAddr>())
                 .await
                 .expect("https server failed");
         }));

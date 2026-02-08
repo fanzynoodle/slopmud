@@ -1,0 +1,1916 @@
+version: 1
+zone_id: factory_district_outskirts
+zone_name: Factory District (Outskirts)
+area_id: A01
+level_band:
+- 7
+- 10
+start_room: P_FACTORY_LIBRARY
+rooms:
+- id: P_FACTORY_LIBRARY
+  name: Sunken Library Transfer
+  cluster: CL_FACTORY_GATE
+  tags:
+  - portal.P_FACTORY_LIBRARY
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies Sunken Library.
+  exits:
+  - dir: out
+    to: P_LIB_FACTORY
+    len: 2
+    state: sealed
+    gate: gate.factory.entry
+  - dir: in
+    to: R_FAC_GATE_01
+    len: 1
+- id: P_FACTORY_RESERVOIR
+  name: The Reservoir Transfer
+  cluster: CL_FACTORY_GATE
+  tags:
+  - portal.P_FACTORY_RESERVOIR
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies The Reservoir.
+  exits:
+  - dir: out
+    to: P_RESERVOIR_FACTORY
+    len: 1
+    state: sealed
+    gate: gate.factory.shortcut_to_reservoir
+  - dir: in
+    to: R_FAC_SWITCH_01
+    len: 1
+- id: P_FACTORY_UNDERRAIL
+  name: The Underrail Transfer
+  cluster: CL_FACTORY_SWITCHROOM
+  tags:
+  - portal.P_FACTORY_UNDERRAIL
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies The Underrail.
+  exits:
+  - dir: out
+    to: P_UNDERRAIL_FACTORY
+    len: 2
+    state: sealed
+    gate: gate.underrail.entry
+  - dir: in
+    to: R_FAC_SWITCH_01
+    len: 1
+- id: R_FAC_SWITCH_01
+  name: Factory District (Outskirts) Anchor
+  cluster: CL_FACTORY_SWITCHROOM
+  tags:
+  - HUB_FACTORY_SWITCHROOM
+  - portal.P_FACTORY_UNDERRAIL
+  - safe_pocket
+  desc: |-
+    Control panels blink with stubborn intent and routing diagrams hang like threats.
+    This is a safe pocket: stop here, read the signage, and decide which line to disable next.
+  exits:
+  - dir: back
+    to: R_FAC_GATE_01
+    len: 1
+  - dir: west
+    to: R_FAC_ROUTE_01
+    len: 1
+  - dir: east
+    to: R_FAC_ROUTE_02
+    len: 1
+  - dir: north
+    to: R_FAC_ROUTE_03
+    len: 1
+  - dir: south
+    to: R_FAC_ARENA_GATE_01
+    len: 1
+    state: sealed
+    gate: q.q7_conveyor_war.lines_disabled>=3
+  - dir: underrail
+    to: P_FACTORY_UNDERRAIL
+    len: 1
+    state: sealed
+    gate: gate.underrail.entry
+  - dir: reservoir
+    to: P_FACTORY_RESERVOIR
+    len: 1
+    state: sealed
+    gate: gate.factory.shortcut_to_reservoir
+  - dir: wander_switchroom
+    to: R_FAC_SWITCHROOM_01
+    len: 1
+- id: R_FAC_ROUTE_01
+  name: Line 1 Approach
+  cluster: CL_FACTORY_CONVEYORS
+  tags: []
+  desc: |-
+    A tight corridor marked with LINE-1 stencils and warning bands.
+    Turret housings make the corners feel hostile.
+  exits:
+  - dir: east
+    to: R_FAC_SWITCH_01
+    len: 1
+  - dir: west
+    to: R_FAC_LINE1_01
+    len: 1
+- id: R_FAC_ROUTE_02
+  name: Line 2 Approach
+  cluster: CL_FACTORY_CONVEYORS
+  tags: []
+  desc: |-
+    Belts and knockback arrows are painted into the floor like grammar.
+    Safe squares are marked. Everything else is a lesson.
+  exits:
+  - dir: west
+    to: R_FAC_SWITCH_01
+    len: 1
+  - dir: east
+    to: R_FAC_FOUNDRY_01
+    len: 1
+- id: R_FAC_ROUTE_03
+  name: Line 3 Approach
+  cluster: CL_FACTORY_CONVEYORS
+  tags: []
+  desc: |-
+    A belt maze with a suggested vent route above.
+    The signs are polite. The machines are not.
+  exits:
+  - dir: south
+    to: R_FAC_SWITCH_01
+    len: 1
+  - dir: north
+    to: R_FAC_LINE3_01
+    len: 1
+- id: R_FAC_ARENA_GATE_01
+  name: Arena Gate
+  cluster: CL_FACTORY_SWITCHROOM
+  tags: []
+  desc: |-
+    Alarms dim, like the building is holding its breath.
+    A gate mechanism waits for a full shutdown state.
+  exits:
+  - dir: north
+    to: R_FAC_SWITCH_01
+    len: 1
+  - dir: south
+    to: R_FAC_ARENA_01
+    len: 1
+- id: R_FAC_REWARD_01
+  name: Shutdown Ledger
+  cluster: CL_FACTORY_SWITCHROOM
+  tags: []
+  desc: |-
+    A crew bench and a battered ledger: proof of shutdown, stamped with angry precision.
+    A token slot labeled UNDER-RAIL blinks like it has been waiting.
+  exits:
+  - dir: north
+    to: R_FAC_SWITCH_01
+    len: 1
+  - dir: south
+    to: P_FACTORY_UNDERRAIL
+    len: 1
+    state: sealed
+    gate: gate.underrail.entry
+- id: R_FAC_GATE_01
+  name: Pipe Alley
+  cluster: CL_FACTORY_GATE
+  tags:
+  - portal.P_FACTORY_LIBRARY
+  - portal.P_FACTORY_RESERVOIR
+  desc: |-
+    A tight urban-industrial stretch.
+    Corners hide both cover and danger.
+  exits:
+  - dir: north
+    to: R_FAC_SWITCH_01
+    len: 1
+  - dir: south
+    to: P_FACTORY_LIBRARY
+    len: 1
+  - dir: wander_gate
+    to: R_FAC_GATE_02
+    len: 1
+- id: R_FAC_LINE1_01
+  name: Conveyor Walk
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - setpiece.q7.line_shutdown_1
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: hub
+    to: R_FAC_SWITCH_01
+    len: 1
+  - dir: wander_conveyor
+    to: R_FAC_CONVEYOR_01
+    len: 1
+- id: R_FAC_LINE2_01
+  name: Line Access
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - setpiece.q7.line_shutdown_2
+  desc: |-
+    A loud industrial lane with constant motion.
+    Learn the timing or get punished for standing still.
+  exits:
+  - dir: hub
+    to: R_FAC_SWITCH_01
+    len: 1
+- id: R_FAC_LINE3_01
+  name: Conveyor Walk
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - setpiece.q7.line_shutdown_3
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: hub
+    to: R_FAC_SWITCH_01
+    len: 1
+- id: R_FAC_FOUNDRY_01
+  name: Weld Bay
+  cluster: CL_FACTORY_FOUNDRY
+  tags: []
+  desc: |-
+    A foundry lane of vents and sparks.
+    You can smell hot oil under the air filters.
+  exits:
+  - dir: west
+    to: R_FAC_ROUTE_02
+    len: 1
+  - dir: east
+    to: R_FAC_LINE2_01
+    len: 1
+  - dir: wander_foundry
+    to: R_FAC_FOUNDRY_02
+    len: 1
+- id: R_FAC_ARENA_01
+  name: Loading Lane
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - setpiece.q7.foreman_clank_arena
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_GATE_01
+    len: 1
+  - dir: north
+    to: R_FAC_REWARD_01
+    len: 1
+  - dir: wander_arena
+    to: R_FAC_ARENA_02
+    len: 1
+- id: R_FAC_CONVEYOR_01
+  name: Line Access
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    A loud industrial lane with constant motion.
+    Learn the timing or get punished for standing still.
+  exits:
+  - dir: back
+    to: R_FAC_LINE1_01
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_02
+    len: 1
+- id: R_FAC_CONVEYOR_02
+  name: Conveyor Walk
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_01
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_03
+    len: 1
+- id: R_FAC_CONVEYOR_03
+  name: Conveyor Walk
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_02
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_04
+    len: 1
+- id: R_FAC_CONVEYOR_04
+  name: Jam Point
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_03
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_05
+    len: 1
+- id: R_FAC_CONVEYOR_05
+  name: Belt Overpass
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    A loud industrial lane with constant motion.
+    Learn the timing or get punished for standing still.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_04
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_06
+    len: 1
+- id: R_FAC_CONVEYOR_06
+  name: Belt Overpass
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    A loud industrial lane with constant motion.
+    Learn the timing or get punished for standing still.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_05
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_07
+    len: 1
+- id: R_FAC_CONVEYOR_07
+  name: Conveyor Walk
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_06
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_08
+    len: 1
+- id: R_FAC_CONVEYOR_08
+  name: Belt Overpass
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    A loud industrial lane with constant motion.
+    Learn the timing or get punished for standing still.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_07
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_09
+    len: 1
+- id: R_FAC_CONVEYOR_09
+  name: Belt Overpass
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    A loud industrial lane with constant motion.
+    Learn the timing or get punished for standing still.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_08
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_10
+    len: 1
+- id: R_FAC_CONVEYOR_10
+  name: Jam Point
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_09
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_11
+    len: 1
+- id: R_FAC_CONVEYOR_11
+  name: Line Access
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    A loud industrial lane with constant motion.
+    Learn the timing or get punished for standing still.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_10
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_12
+    len: 1
+- id: R_FAC_CONVEYOR_12
+  name: Line Access
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    A loud industrial lane with constant motion.
+    Learn the timing or get punished for standing still.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_11
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_13
+    len: 1
+- id: R_FAC_CONVEYOR_13
+  name: Jam Point
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_12
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_14
+    len: 1
+- id: R_FAC_CONVEYOR_14
+  name: Line Access
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    A loud industrial lane with constant motion.
+    Learn the timing or get punished for standing still.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_13
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_15
+    len: 1
+- id: R_FAC_CONVEYOR_15
+  name: Jam Point
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_14
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_16
+    len: 1
+- id: R_FAC_CONVEYOR_16
+  name: Line Access
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    A loud industrial lane with constant motion.
+    Learn the timing or get punished for standing still.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_15
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_17
+    len: 1
+- id: R_FAC_CONVEYOR_17
+  name: Conveyor Walk
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_16
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_18
+    len: 1
+- id: R_FAC_CONVEYOR_18
+  name: Line Access
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    A loud industrial lane with constant motion.
+    Learn the timing or get punished for standing still.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_17
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_19
+    len: 1
+- id: R_FAC_CONVEYOR_19
+  name: Conveyor Walk
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_18
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_20
+    len: 1
+- id: R_FAC_CONVEYOR_20
+  name: Line Access
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    A loud industrial lane with constant motion.
+    Learn the timing or get punished for standing still.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_19
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_21
+    len: 1
+- id: R_FAC_CONVEYOR_21
+  name: Line Access
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    A loud industrial lane with constant motion.
+    Learn the timing or get punished for standing still.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_20
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_22
+    len: 1
+- id: R_FAC_CONVEYOR_22
+  name: Jam Point
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_21
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_23
+    len: 1
+- id: R_FAC_CONVEYOR_23
+  name: Jam Point
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_22
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_24
+    len: 1
+- id: R_FAC_CONVEYOR_24
+  name: Line Access
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    A loud industrial lane with constant motion.
+    Learn the timing or get punished for standing still.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_23
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_25
+    len: 1
+- id: R_FAC_CONVEYOR_25
+  name: Jam Point
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_24
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_26
+    len: 1
+- id: R_FAC_CONVEYOR_26
+  name: Belt Overpass
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    A loud industrial lane with constant motion.
+    Learn the timing or get punished for standing still.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_25
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_27
+    len: 1
+- id: R_FAC_CONVEYOR_27
+  name: Belt Overpass
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    A loud industrial lane with constant motion.
+    Learn the timing or get punished for standing still.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_26
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_28
+    len: 1
+- id: R_FAC_CONVEYOR_28
+  name: Conveyor Walk
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_27
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_29
+    len: 1
+- id: R_FAC_CONVEYOR_29
+  name: Conveyor Walk
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_28
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_30
+    len: 1
+- id: R_FAC_CONVEYOR_30
+  name: Conveyor Walk
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_29
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_31
+    len: 1
+- id: R_FAC_CONVEYOR_31
+  name: Conveyor Walk
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_30
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_32
+    len: 1
+- id: R_FAC_CONVEYOR_32
+  name: Jam Point
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_31
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_33
+    len: 1
+- id: R_FAC_CONVEYOR_33
+  name: Line Access
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    A loud industrial lane with constant motion.
+    Learn the timing or get punished for standing still.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_32
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_34
+    len: 1
+- id: R_FAC_CONVEYOR_34
+  name: Line Access
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    A loud industrial lane with constant motion.
+    Learn the timing or get punished for standing still.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_33
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_35
+    len: 1
+- id: R_FAC_CONVEYOR_35
+  name: Conveyor Walk
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_34
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_36
+    len: 1
+- id: R_FAC_CONVEYOR_36
+  name: Belt Overpass
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    A loud industrial lane with constant motion.
+    Learn the timing or get punished for standing still.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_35
+    len: 1
+  - dir: ahead
+    to: R_FAC_CONVEYOR_37
+    len: 1
+- id: R_FAC_CONVEYOR_37
+  name: Conveyor Walk
+  cluster: CL_FACTORY_CONVEYORS
+  tags:
+  - landmark.factory.conveyors
+  desc: |-
+    Conveyor belts and guardrails shape every fight.
+    If you ignore the moving parts, you deserve what happens.
+  exits:
+  - dir: back
+    to: R_FAC_CONVEYOR_36
+    len: 1
+  - dir: ahead
+    to: R_FAC_LINE1_01
+    len: 1
+- id: R_FAC_ARENA_02
+  name: Service Street
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - landmark.factory.foreman_arena
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_01
+    len: 1
+  - dir: ahead
+    to: R_FAC_ARENA_03
+    len: 1
+- id: R_FAC_ARENA_03
+  name: Factory Gate
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - landmark.factory.foreman_arena
+  desc: |-
+    A tight urban-industrial stretch.
+    Corners hide both cover and danger.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_02
+    len: 1
+  - dir: ahead
+    to: R_FAC_ARENA_04
+    len: 1
+- id: R_FAC_ARENA_04
+  name: Service Street
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - landmark.factory.foreman_arena
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_03
+    len: 1
+  - dir: ahead
+    to: R_FAC_ARENA_05
+    len: 1
+- id: R_FAC_ARENA_05
+  name: Service Street
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - landmark.factory.foreman_arena
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_04
+    len: 1
+  - dir: ahead
+    to: R_FAC_ARENA_06
+    len: 1
+- id: R_FAC_ARENA_06
+  name: Loading Lane
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - landmark.factory.foreman_arena
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_05
+    len: 1
+  - dir: ahead
+    to: R_FAC_ARENA_07
+    len: 1
+- id: R_FAC_ARENA_07
+  name: Factory Gate
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - landmark.factory.foreman_arena
+  desc: |-
+    A tight urban-industrial stretch.
+    Corners hide both cover and danger.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_06
+    len: 1
+  - dir: ahead
+    to: R_FAC_ARENA_08
+    len: 1
+- id: R_FAC_ARENA_08
+  name: Service Street
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - landmark.factory.foreman_arena
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_07
+    len: 1
+  - dir: ahead
+    to: R_FAC_ARENA_09
+    len: 1
+- id: R_FAC_ARENA_09
+  name: Pipe Alley
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - landmark.factory.foreman_arena
+  desc: |-
+    A tight urban-industrial stretch.
+    Corners hide both cover and danger.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_08
+    len: 1
+  - dir: ahead
+    to: R_FAC_ARENA_10
+    len: 1
+- id: R_FAC_ARENA_10
+  name: Loading Lane
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - landmark.factory.foreman_arena
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_09
+    len: 1
+  - dir: ahead
+    to: R_FAC_ARENA_11
+    len: 1
+- id: R_FAC_ARENA_11
+  name: Factory Gate
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - landmark.factory.foreman_arena
+  desc: |-
+    A tight urban-industrial stretch.
+    Corners hide both cover and danger.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_10
+    len: 1
+  - dir: ahead
+    to: R_FAC_ARENA_12
+    len: 1
+- id: R_FAC_ARENA_12
+  name: Loading Lane
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - landmark.factory.foreman_arena
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_11
+    len: 1
+  - dir: ahead
+    to: R_FAC_ARENA_13
+    len: 1
+- id: R_FAC_ARENA_13
+  name: Loading Lane
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - landmark.factory.foreman_arena
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_12
+    len: 1
+  - dir: ahead
+    to: R_FAC_ARENA_14
+    len: 1
+- id: R_FAC_ARENA_14
+  name: Service Street
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - landmark.factory.foreman_arena
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_13
+    len: 1
+  - dir: ahead
+    to: R_FAC_ARENA_15
+    len: 1
+- id: R_FAC_ARENA_15
+  name: Service Street
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - landmark.factory.foreman_arena
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_14
+    len: 1
+  - dir: ahead
+    to: R_FAC_ARENA_16
+    len: 1
+- id: R_FAC_ARENA_16
+  name: Loading Lane
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - landmark.factory.foreman_arena
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_15
+    len: 1
+  - dir: ahead
+    to: R_FAC_ARENA_17
+    len: 1
+- id: R_FAC_ARENA_17
+  name: Pipe Alley
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - landmark.factory.foreman_arena
+  desc: |-
+    A tight urban-industrial stretch.
+    Corners hide both cover and danger.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_16
+    len: 1
+  - dir: ahead
+    to: R_FAC_ARENA_18
+    len: 1
+- id: R_FAC_ARENA_18
+  name: Pipe Alley
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - landmark.factory.foreman_arena
+  desc: |-
+    A tight urban-industrial stretch.
+    Corners hide both cover and danger.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_17
+    len: 1
+  - dir: ahead
+    to: R_FAC_ARENA_19
+    len: 1
+- id: R_FAC_ARENA_19
+  name: Factory Gate
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - landmark.factory.foreman_arena
+  desc: |-
+    A tight urban-industrial stretch.
+    Corners hide both cover and danger.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_18
+    len: 1
+  - dir: ahead
+    to: R_FAC_ARENA_20
+    len: 1
+- id: R_FAC_ARENA_20
+  name: Pipe Alley
+  cluster: CL_FACTORY_FOREMAN_ARENA
+  tags:
+  - landmark.factory.foreman_arena
+  desc: |-
+    A tight urban-industrial stretch.
+    Corners hide both cover and danger.
+  exits:
+  - dir: back
+    to: R_FAC_ARENA_19
+    len: 1
+  - dir: ahead
+    to: R_FAC_ARENA_01
+    len: 1
+- id: R_FAC_FOUNDRY_02
+  name: Slag Pit Edge
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    Heat wavers off metal you shouldn't touch.
+    The room teaches interrupts the hard way.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_01
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_03
+    len: 1
+- id: R_FAC_FOUNDRY_03
+  name: Heat Channel
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    A foundry lane of vents and sparks.
+    You can smell hot oil under the air filters.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_02
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_04
+    len: 1
+- id: R_FAC_FOUNDRY_04
+  name: Heat Channel
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    A foundry lane of vents and sparks.
+    You can smell hot oil under the air filters.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_03
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_05
+    len: 1
+- id: R_FAC_FOUNDRY_05
+  name: Slag Pit Edge
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    Heat wavers off metal you shouldn't touch.
+    The room teaches interrupts the hard way.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_04
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_06
+    len: 1
+- id: R_FAC_FOUNDRY_06
+  name: Heat Channel
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    A foundry lane of vents and sparks.
+    You can smell hot oil under the air filters.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_05
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_07
+    len: 1
+- id: R_FAC_FOUNDRY_07
+  name: Heat Channel
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    A foundry lane of vents and sparks.
+    You can smell hot oil under the air filters.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_06
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_08
+    len: 1
+- id: R_FAC_FOUNDRY_08
+  name: Foundry Catwalk
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    Heat wavers off metal you shouldn't touch.
+    The room teaches interrupts the hard way.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_07
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_09
+    len: 1
+- id: R_FAC_FOUNDRY_09
+  name: Weld Bay
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    A foundry lane of vents and sparks.
+    You can smell hot oil under the air filters.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_08
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_10
+    len: 1
+- id: R_FAC_FOUNDRY_10
+  name: Weld Bay
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    A foundry lane of vents and sparks.
+    You can smell hot oil under the air filters.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_09
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_11
+    len: 1
+- id: R_FAC_FOUNDRY_11
+  name: Heat Channel
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    A foundry lane of vents and sparks.
+    You can smell hot oil under the air filters.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_10
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_12
+    len: 1
+- id: R_FAC_FOUNDRY_12
+  name: Foundry Catwalk
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    Heat wavers off metal you shouldn't touch.
+    The room teaches interrupts the hard way.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_11
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_13
+    len: 1
+- id: R_FAC_FOUNDRY_13
+  name: Heat Channel
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    A foundry lane of vents and sparks.
+    You can smell hot oil under the air filters.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_12
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_14
+    len: 1
+- id: R_FAC_FOUNDRY_14
+  name: Heat Channel
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    A foundry lane of vents and sparks.
+    You can smell hot oil under the air filters.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_13
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_15
+    len: 1
+- id: R_FAC_FOUNDRY_15
+  name: Slag Pit Edge
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    Heat wavers off metal you shouldn't touch.
+    The room teaches interrupts the hard way.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_14
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_16
+    len: 1
+- id: R_FAC_FOUNDRY_16
+  name: Heat Channel
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    A foundry lane of vents and sparks.
+    You can smell hot oil under the air filters.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_15
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_17
+    len: 1
+- id: R_FAC_FOUNDRY_17
+  name: Slag Pit Edge
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    Heat wavers off metal you shouldn't touch.
+    The room teaches interrupts the hard way.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_16
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_18
+    len: 1
+- id: R_FAC_FOUNDRY_18
+  name: Foundry Catwalk
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    Heat wavers off metal you shouldn't touch.
+    The room teaches interrupts the hard way.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_17
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_19
+    len: 1
+- id: R_FAC_FOUNDRY_19
+  name: Foundry Catwalk
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    Heat wavers off metal you shouldn't touch.
+    The room teaches interrupts the hard way.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_18
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_20
+    len: 1
+- id: R_FAC_FOUNDRY_20
+  name: Slag Pit Edge
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    Heat wavers off metal you shouldn't touch.
+    The room teaches interrupts the hard way.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_19
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_21
+    len: 1
+- id: R_FAC_FOUNDRY_21
+  name: Heat Channel
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    A foundry lane of vents and sparks.
+    You can smell hot oil under the air filters.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_20
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_22
+    len: 1
+- id: R_FAC_FOUNDRY_22
+  name: Foundry Catwalk
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    Heat wavers off metal you shouldn't touch.
+    The room teaches interrupts the hard way.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_21
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_23
+    len: 1
+- id: R_FAC_FOUNDRY_23
+  name: Slag Pit Edge
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    Heat wavers off metal you shouldn't touch.
+    The room teaches interrupts the hard way.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_22
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_24
+    len: 1
+- id: R_FAC_FOUNDRY_24
+  name: Slag Pit Edge
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    Heat wavers off metal you shouldn't touch.
+    The room teaches interrupts the hard way.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_23
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_25
+    len: 1
+- id: R_FAC_FOUNDRY_25
+  name: Heat Channel
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    A foundry lane of vents and sparks.
+    You can smell hot oil under the air filters.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_24
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_26
+    len: 1
+- id: R_FAC_FOUNDRY_26
+  name: Heat Channel
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    A foundry lane of vents and sparks.
+    You can smell hot oil under the air filters.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_25
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_27
+    len: 1
+- id: R_FAC_FOUNDRY_27
+  name: Heat Channel
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    A foundry lane of vents and sparks.
+    You can smell hot oil under the air filters.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_26
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_28
+    len: 1
+- id: R_FAC_FOUNDRY_28
+  name: Weld Bay
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    A foundry lane of vents and sparks.
+    You can smell hot oil under the air filters.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_27
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_29
+    len: 1
+- id: R_FAC_FOUNDRY_29
+  name: Slag Pit Edge
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    Heat wavers off metal you shouldn't touch.
+    The room teaches interrupts the hard way.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_28
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_30
+    len: 1
+- id: R_FAC_FOUNDRY_30
+  name: Foundry Catwalk
+  cluster: CL_FACTORY_FOUNDRY
+  tags:
+  - landmark.factory.foundry
+  desc: |-
+    Heat wavers off metal you shouldn't touch.
+    The room teaches interrupts the hard way.
+  exits:
+  - dir: back
+    to: R_FAC_FOUNDRY_29
+    len: 1
+  - dir: ahead
+    to: R_FAC_FOUNDRY_01
+    len: 1
+- id: R_FAC_GATE_02
+  name: Loading Lane
+  cluster: CL_FACTORY_GATE
+  tags:
+  - landmark.factory.gate
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_GATE_01
+    len: 1
+  - dir: ahead
+    to: R_FAC_GATE_03
+    len: 1
+- id: R_FAC_GATE_03
+  name: Pipe Alley
+  cluster: CL_FACTORY_GATE
+  tags:
+  - landmark.factory.gate
+  desc: |-
+    A tight urban-industrial stretch.
+    Corners hide both cover and danger.
+  exits:
+  - dir: back
+    to: R_FAC_GATE_02
+    len: 1
+  - dir: ahead
+    to: R_FAC_GATE_04
+    len: 1
+- id: R_FAC_GATE_04
+  name: Pipe Alley
+  cluster: CL_FACTORY_GATE
+  tags:
+  - landmark.factory.gate
+  desc: |-
+    A tight urban-industrial stretch.
+    Corners hide both cover and danger.
+  exits:
+  - dir: back
+    to: R_FAC_GATE_03
+    len: 1
+  - dir: ahead
+    to: R_FAC_GATE_05
+    len: 1
+- id: R_FAC_GATE_05
+  name: Loading Lane
+  cluster: CL_FACTORY_GATE
+  tags:
+  - landmark.factory.gate
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_GATE_04
+    len: 1
+  - dir: ahead
+    to: R_FAC_GATE_06
+    len: 1
+- id: R_FAC_GATE_06
+  name: Pipe Alley
+  cluster: CL_FACTORY_GATE
+  tags:
+  - landmark.factory.gate
+  desc: |-
+    A tight urban-industrial stretch.
+    Corners hide both cover and danger.
+  exits:
+  - dir: back
+    to: R_FAC_GATE_05
+    len: 1
+  - dir: ahead
+    to: R_FAC_GATE_07
+    len: 1
+- id: R_FAC_GATE_07
+  name: Factory Gate
+  cluster: CL_FACTORY_GATE
+  tags:
+  - landmark.factory.gate
+  desc: |-
+    A tight urban-industrial stretch.
+    Corners hide both cover and danger.
+  exits:
+  - dir: back
+    to: R_FAC_GATE_06
+    len: 1
+  - dir: ahead
+    to: R_FAC_GATE_08
+    len: 1
+- id: R_FAC_GATE_08
+  name: Pipe Alley
+  cluster: CL_FACTORY_GATE
+  tags:
+  - landmark.factory.gate
+  desc: |-
+    A tight urban-industrial stretch.
+    Corners hide both cover and danger.
+  exits:
+  - dir: back
+    to: R_FAC_GATE_07
+    len: 1
+  - dir: ahead
+    to: R_FAC_GATE_09
+    len: 1
+- id: R_FAC_GATE_09
+  name: Factory Gate
+  cluster: CL_FACTORY_GATE
+  tags:
+  - landmark.factory.gate
+  desc: |-
+    A tight urban-industrial stretch.
+    Corners hide both cover and danger.
+  exits:
+  - dir: back
+    to: R_FAC_GATE_08
+    len: 1
+  - dir: ahead
+    to: R_FAC_GATE_10
+    len: 1
+- id: R_FAC_GATE_10
+  name: Loading Lane
+  cluster: CL_FACTORY_GATE
+  tags:
+  - landmark.factory.gate
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_GATE_09
+    len: 1
+  - dir: ahead
+    to: R_FAC_GATE_11
+    len: 1
+- id: R_FAC_GATE_11
+  name: Pipe Alley
+  cluster: CL_FACTORY_GATE
+  tags:
+  - landmark.factory.gate
+  desc: |-
+    A tight urban-industrial stretch.
+    Corners hide both cover and danger.
+  exits:
+  - dir: back
+    to: R_FAC_GATE_10
+    len: 1
+  - dir: ahead
+    to: R_FAC_GATE_12
+    len: 1
+- id: R_FAC_GATE_12
+  name: Service Street
+  cluster: CL_FACTORY_GATE
+  tags:
+  - landmark.factory.gate
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_GATE_11
+    len: 1
+  - dir: ahead
+    to: R_FAC_GATE_13
+    len: 1
+- id: R_FAC_GATE_13
+  name: Factory Gate
+  cluster: CL_FACTORY_GATE
+  tags:
+  - landmark.factory.gate
+  desc: |-
+    A tight urban-industrial stretch.
+    Corners hide both cover and danger.
+  exits:
+  - dir: back
+    to: R_FAC_GATE_12
+    len: 1
+  - dir: ahead
+    to: R_FAC_GATE_14
+    len: 1
+- id: R_FAC_GATE_14
+  name: Loading Lane
+  cluster: CL_FACTORY_GATE
+  tags:
+  - landmark.factory.gate
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_GATE_13
+    len: 1
+  - dir: ahead
+    to: R_FAC_GATE_15
+    len: 1
+- id: R_FAC_GATE_15
+  name: Factory Gate
+  cluster: CL_FACTORY_GATE
+  tags:
+  - landmark.factory.gate
+  desc: |-
+    A tight urban-industrial stretch.
+    Corners hide both cover and danger.
+  exits:
+  - dir: back
+    to: R_FAC_GATE_14
+    len: 1
+  - dir: ahead
+    to: R_FAC_GATE_16
+    len: 1
+- id: R_FAC_GATE_16
+  name: Loading Lane
+  cluster: CL_FACTORY_GATE
+  tags:
+  - landmark.factory.gate
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_GATE_15
+    len: 1
+  - dir: ahead
+    to: R_FAC_GATE_17
+    len: 1
+- id: R_FAC_GATE_17
+  name: Service Street
+  cluster: CL_FACTORY_GATE
+  tags:
+  - landmark.factory.gate
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_GATE_16
+    len: 1
+  - dir: ahead
+    to: R_FAC_GATE_18
+    len: 1
+- id: R_FAC_GATE_18
+  name: Loading Lane
+  cluster: CL_FACTORY_GATE
+  tags:
+  - landmark.factory.gate
+  desc: |-
+    Concrete corridors and industrial noise.
+    Line-of-sight is a weapon here.
+  exits:
+  - dir: back
+    to: R_FAC_GATE_17
+    len: 1
+  - dir: ahead
+    to: R_FAC_GATE_01
+    len: 1
+- id: R_FAC_SWITCHROOM_01
+  name: Switchroom Hall
+  cluster: CL_FACTORY_SWITCHROOM
+  tags:
+  - landmark.factory.switchroom
+  desc: |-
+    Control panels blink with stubborn intent.
+    This is where routes and systems get decided.
+  exits:
+  - dir: back
+    to: R_FAC_SWITCH_01
+    len: 1
+  - dir: ahead
+    to: R_FAC_SWITCHROOM_02
+    len: 1
+- id: R_FAC_SWITCHROOM_02
+  name: Switchroom Hall
+  cluster: CL_FACTORY_SWITCHROOM
+  tags:
+  - landmark.factory.switchroom
+  desc: |-
+    Control panels blink with stubborn intent.
+    This is where routes and systems get decided.
+  exits:
+  - dir: back
+    to: R_FAC_SWITCHROOM_01
+    len: 1
+  - dir: ahead
+    to: R_FAC_SWITCHROOM_03
+    len: 1
+- id: R_FAC_SWITCHROOM_03
+  name: Breaker Panel
+  cluster: CL_FACTORY_SWITCHROOM
+  tags:
+  - landmark.factory.switchroom
+  desc: |-
+    Control panels blink with stubborn intent.
+    This is where routes and systems get decided.
+  exits:
+  - dir: back
+    to: R_FAC_SWITCHROOM_02
+    len: 1
+  - dir: ahead
+    to: R_FAC_SWITCHROOM_04
+    len: 1
+- id: R_FAC_SWITCHROOM_04
+  name: Breaker Panel
+  cluster: CL_FACTORY_SWITCHROOM
+  tags:
+  - landmark.factory.switchroom
+  desc: |-
+    Control panels blink with stubborn intent.
+    This is where routes and systems get decided.
+  exits:
+  - dir: back
+    to: R_FAC_SWITCHROOM_03
+    len: 1
+  - dir: ahead
+    to: R_FAC_SWITCHROOM_05
+    len: 1
+- id: R_FAC_SWITCHROOM_05
+  name: Breaker Panel
+  cluster: CL_FACTORY_SWITCHROOM
+  tags:
+  - landmark.factory.switchroom
+  desc: |-
+    Control panels blink with stubborn intent.
+    This is where routes and systems get decided.
+  exits:
+  - dir: back
+    to: R_FAC_SWITCHROOM_04
+    len: 1
+  - dir: ahead
+    to: R_FAC_SWITCHROOM_06
+    len: 1
+- id: R_FAC_SWITCHROOM_06
+  name: Control Closet
+  cluster: CL_FACTORY_SWITCHROOM
+  tags:
+  - landmark.factory.switchroom
+  desc: |-
+    A narrow room of switches and warnings.
+    Everything is labeled, but not helpfully.
+  exits:
+  - dir: back
+    to: R_FAC_SWITCHROOM_05
+    len: 1
+  - dir: ahead
+    to: R_FAC_SWITCHROOM_07
+    len: 1
+- id: R_FAC_SWITCHROOM_07
+  name: Relay Aisle
+  cluster: CL_FACTORY_SWITCHROOM
+  tags:
+  - landmark.factory.switchroom
+  desc: |-
+    A narrow room of switches and warnings.
+    Everything is labeled, but not helpfully.
+  exits:
+  - dir: back
+    to: R_FAC_SWITCHROOM_06
+    len: 1
+  - dir: ahead
+    to: R_FAC_SWITCHROOM_08
+    len: 1
+- id: R_FAC_SWITCHROOM_08
+  name: Control Closet
+  cluster: CL_FACTORY_SWITCHROOM
+  tags:
+  - landmark.factory.switchroom
+  desc: |-
+    A narrow room of switches and warnings.
+    Everything is labeled, but not helpfully.
+  exits:
+  - dir: back
+    to: R_FAC_SWITCHROOM_07
+    len: 1
+  - dir: ahead
+    to: R_FAC_SWITCH_01
+    len: 1

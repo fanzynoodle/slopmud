@@ -1,0 +1,2088 @@
+version: 1
+zone_id: crater_gardens
+zone_name: Crater Gardens
+area_id: A01
+level_band:
+- 13
+- 16
+start_room: P_GARDENS_WASTES
+rooms:
+- id: P_GARDENS_CORE
+  name: The Core Transfer
+  cluster: CL_GARDENS_GREENHOUSE
+  tags:
+  - portal.P_GARDENS_CORE
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies The Core.
+  exits:
+  - dir: out
+    to: P_CORE_GARDENS
+    len: 4
+    state: sealed
+    gate: gate.core.entry
+  - dir: in
+    to: R_GARDENS_GREENHOUSE_01
+    len: 1
+- id: P_GARDENS_WASTES
+  name: Glass Wastes Transfer
+  cluster: CL_GARDENS_GREENHOUSE
+  tags:
+  - portal.P_GARDENS_WASTES
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies Glass Wastes.
+  exits:
+  - dir: out
+    to: P_WASTES_GARDENS
+    len: 3
+    state: sealed
+    gate: gate.crater_gardens.entry
+  - dir: in
+    to: R_GARDENS_GREENHOUSE_01
+    len: 1
+- id: R_GARDENS_GREENHOUSE_01
+  name: Crater Gardens Anchor
+  cluster: CL_GARDENS_GREENHOUSE
+  tags:
+  - HUB_GARDENS_GREENHOUSE
+  - portal.P_GARDENS_WASTES
+  - portal.P_GARDENS_CORE
+  - safe_pocket
+  desc: |-
+    A greenhouse threshold with decon spray and clean lines.
+    Inside, the plants feel engineered, not grown.
+  exits:
+  - dir: to_P_GARDENS_CORE
+    to: P_GARDENS_CORE
+    len: 1
+  - dir: to_P_GARDENS_WASTES
+    to: P_GARDENS_WASTES
+    len: 1
+  - dir: to_R_GARDENS_WILDS_01
+    to: R_GARDENS_WILDS_01
+    len: 1
+  - dir: to_R_GARDENS_SERVICE_01
+    to: R_GARDENS_SERVICE_01
+    len: 1
+  - dir: to_R_GARDENS_DECON_01
+    to: R_GARDENS_DECON_01
+    len: 1
+    state: sealed
+    gate: q.q12_bloom_contract.samples>=1
+  - dir: wander_greenhouse
+    to: R_GARDENS_GREENHOUSE_02
+    len: 1
+- id: R_GARDENS_SERVICE_01
+  name: Service Tunnels
+  cluster: CL_GARDENS_GREENHOUSE
+  tags: []
+  desc: |-
+    A maintenance tunnel behind greenhouse panels.
+    Markers match the service icon from the entry signage.
+  exits:
+  - dir: west
+    to: R_GARDENS_GREENHOUSE_01
+    len: 1
+  - dir: north
+    to: R_GARDENS_WILDS_02
+    len: 1
+- id: R_GARDENS_DECON_01
+  name: Decon Chamber
+  cluster: CL_GARDENS_GREENHOUSE
+  tags:
+  - safe_pocket
+  desc: |-
+    A decontam chamber that smells like citrus and antiseptic.
+    The floor drains look like they have seen worse choices than yours.
+  exits:
+  - dir: east
+    to: R_GARDENS_GREENHOUSE_01
+    len: 1
+- id: R_GARDENS_WILDS_01
+  name: Overgrown Path
+  cluster: CL_GARDENS_WILDS
+  tags: []
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: hub
+    to: R_GARDENS_GREENHOUSE_01
+    len: 1
+  - dir: north
+    to: R_GARDENS_GROVE_1_01
+    len: 1
+  - dir: wander_wild
+    to: R_GARDENS_WILD_01
+    len: 1
+- id: R_GARDENS_GROVE_1_01
+  name: Bloom Grove
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - setpiece.q12.bloom_grove_1
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: south
+    to: R_GARDENS_WILDS_01
+    len: 1
+  - dir: east
+    to: R_GARDENS_WILDS_02
+    len: 1
+  - dir: wander_grove
+    to: R_GARDENS_GROVE_01
+    len: 1
+- id: R_GARDENS_WILDS_02
+  name: Vine Approach
+  cluster: CL_GARDENS_WILDS
+  tags: []
+  desc: |-
+    The wilds narrow into intentional lanes.
+    Spore pulses feel timed, not random.
+  exits:
+  - dir: south
+    to: R_GARDENS_GROVE_1_01
+    len: 1
+  - dir: north
+    to: R_GARDENS_GROVE_2_01
+    len: 1
+  - dir: service
+    to: R_GARDENS_SERVICE_01
+    len: 1
+- id: R_GARDENS_GROVE_2_01
+  name: Bloom Grove
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - setpiece.q12.bloom_grove_2
+  desc: |-
+    Windbreak panels and vine lanes turn movement into a rule set.
+    If you stand in the wrong square, the garden punishes you.
+  exits:
+  - dir: west
+    to: R_GARDENS_WILDS_02
+    len: 1
+  - dir: east
+    to: R_GARDENS_WILDS_03
+    len: 1
+- id: R_GARDENS_WILDS_03
+  name: Caretaker Patrol Lane
+  cluster: CL_GARDENS_WILDS
+  tags: []
+  desc: |-
+    A patrol-heavy lane with warning placards and fresh scrape marks.
+    Something sanitizes intruders with too much enthusiasm.
+  exits:
+  - dir: west
+    to: R_GARDENS_GROVE_2_01
+    len: 1
+  - dir: north
+    to: R_GARDENS_GROVE_3_01
+    len: 1
+- id: R_GARDENS_GROVE_3_01
+  name: Bloom Grove
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - setpiece.q12.bloom_grove_3
+  desc: |-
+    A grove with a caretaker lane wired into its geometry.
+    Harvest windows feel earned, not granted.
+  exits:
+  - dir: west
+    to: R_GARDENS_WILDS_03
+    len: 1
+  - dir: east
+    to: R_GARDENS_ENGINE_GATE_01
+    len: 1
+- id: R_GARDENS_ENGINE_GATE_01
+  name: Root Engine Gate
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags: []
+  desc: |-
+    A sample check station built into old machinery.
+    The gate mechanism refuses to pretend partial completion is enough.
+  exits:
+  - dir: south
+    to: R_GARDENS_GROVE_3_01
+    len: 1
+  - dir: north
+    to: R_GARDENS_ENGINE_01
+    len: 1
+    state: sealed
+    gate: q.q12_bloom_contract.samples>=3
+- id: R_GARDENS_ENGINE_01
+  name: Root Engine Way
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - setpiece.q12.root_engine_arena
+  desc: |-
+    Roots wrap around ancient machinery that still pulses.
+    This route points toward a multi-stage fight.
+  exits:
+  - dir: south
+    to: R_GARDENS_ENGINE_GATE_01
+    len: 1
+  - dir: wander_engine
+    to: R_GARDENS_ENGINE_02
+    len: 1
+- id: R_GARDENS_GROVE_01
+  name: Spore Drift
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_1_01
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_02
+    len: 1
+- id: R_GARDENS_GROVE_02
+  name: Caretaker Lane
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_01
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_03
+    len: 1
+- id: R_GARDENS_GROVE_03
+  name: Caretaker Lane
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_02
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_04
+    len: 1
+- id: R_GARDENS_GROVE_04
+  name: Spore Drift
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_03
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_05
+    len: 1
+- id: R_GARDENS_GROVE_05
+  name: Vine Arch
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_04
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_06
+    len: 1
+- id: R_GARDENS_GROVE_06
+  name: Spore Drift
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_05
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_07
+    len: 1
+- id: R_GARDENS_GROVE_07
+  name: Vine Arch
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_06
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_08
+    len: 1
+- id: R_GARDENS_GROVE_08
+  name: Spore Drift
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_07
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_09
+    len: 1
+- id: R_GARDENS_GROVE_09
+  name: Vine Arch
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_08
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_10
+    len: 1
+- id: R_GARDENS_GROVE_10
+  name: Spore Drift
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_09
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_11
+    len: 1
+- id: R_GARDENS_GROVE_11
+  name: Bloom Grove
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_10
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_12
+    len: 1
+- id: R_GARDENS_GROVE_12
+  name: Vine Arch
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_11
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_13
+    len: 1
+- id: R_GARDENS_GROVE_13
+  name: Caretaker Lane
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_12
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_14
+    len: 1
+- id: R_GARDENS_GROVE_14
+  name: Spore Drift
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_13
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_15
+    len: 1
+- id: R_GARDENS_GROVE_15
+  name: Caretaker Lane
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_14
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_16
+    len: 1
+- id: R_GARDENS_GROVE_16
+  name: Vine Arch
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_15
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_17
+    len: 1
+- id: R_GARDENS_GROVE_17
+  name: Spore Drift
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_16
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_18
+    len: 1
+- id: R_GARDENS_GROVE_18
+  name: Spore Drift
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_17
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_19
+    len: 1
+- id: R_GARDENS_GROVE_19
+  name: Caretaker Lane
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_18
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_20
+    len: 1
+- id: R_GARDENS_GROVE_20
+  name: Caretaker Lane
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_19
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_21
+    len: 1
+- id: R_GARDENS_GROVE_21
+  name: Bloom Grove
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_20
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_22
+    len: 1
+- id: R_GARDENS_GROVE_22
+  name: Bloom Grove
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_21
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_23
+    len: 1
+- id: R_GARDENS_GROVE_23
+  name: Spore Drift
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_22
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_24
+    len: 1
+- id: R_GARDENS_GROVE_24
+  name: Spore Drift
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_23
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_25
+    len: 1
+- id: R_GARDENS_GROVE_25
+  name: Caretaker Lane
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_24
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_26
+    len: 1
+- id: R_GARDENS_GROVE_26
+  name: Bloom Grove
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_25
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_27
+    len: 1
+- id: R_GARDENS_GROVE_27
+  name: Bloom Grove
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_26
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_28
+    len: 1
+- id: R_GARDENS_GROVE_28
+  name: Caretaker Lane
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_27
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_29
+    len: 1
+- id: R_GARDENS_GROVE_29
+  name: Bloom Grove
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_28
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_30
+    len: 1
+- id: R_GARDENS_GROVE_30
+  name: Vine Arch
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_29
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_31
+    len: 1
+- id: R_GARDENS_GROVE_31
+  name: Vine Arch
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_30
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_32
+    len: 1
+- id: R_GARDENS_GROVE_32
+  name: Caretaker Lane
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_31
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_33
+    len: 1
+- id: R_GARDENS_GROVE_33
+  name: Vine Arch
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_32
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_34
+    len: 1
+- id: R_GARDENS_GROVE_34
+  name: Caretaker Lane
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_33
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_35
+    len: 1
+- id: R_GARDENS_GROVE_35
+  name: Spore Drift
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_34
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_36
+    len: 1
+- id: R_GARDENS_GROVE_36
+  name: Caretaker Lane
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_35
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_37
+    len: 1
+- id: R_GARDENS_GROVE_37
+  name: Bloom Grove
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_36
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_38
+    len: 1
+- id: R_GARDENS_GROVE_38
+  name: Bloom Grove
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    Engineered plants crowd the path with deliberate beauty.
+    Something here is harvesting you back.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_37
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_39
+    len: 1
+- id: R_GARDENS_GROVE_39
+  name: Vine Arch
+  cluster: CL_GARDENS_BLOOM_GROVES
+  tags:
+  - landmark.crater_gardens.bloom_groves
+  desc: |-
+    A grove where flowers look too perfect.
+    If you linger, something notices.
+  exits:
+  - dir: back
+    to: R_GARDENS_GROVE_38
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GROVE_1_01
+    len: 1
+- id: R_GARDENS_GREENHOUSE_02
+  name: Decon Pad
+  cluster: CL_GARDENS_GREENHOUSE
+  tags:
+  - landmark.crater_gardens.greenhouse
+  desc: |-
+    Glass panels and humming fans.
+    This is a hub that insists on safety protocols.
+  exits:
+  - dir: back
+    to: R_GARDENS_GREENHOUSE_01
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GREENHOUSE_03
+    len: 1
+- id: R_GARDENS_GREENHOUSE_03
+  name: Glass Door
+  cluster: CL_GARDENS_GREENHOUSE
+  tags:
+  - landmark.crater_gardens.greenhouse
+  desc: |-
+    A greenhouse threshold with decon spray and clean lines.
+    Inside, the plants feel engineered, not grown.
+  exits:
+  - dir: back
+    to: R_GARDENS_GREENHOUSE_02
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GREENHOUSE_04
+    len: 1
+- id: R_GARDENS_GREENHOUSE_04
+  name: Humidity Lock
+  cluster: CL_GARDENS_GREENHOUSE
+  tags:
+  - landmark.crater_gardens.greenhouse
+  desc: |-
+    Glass panels and humming fans.
+    This is a hub that insists on safety protocols.
+  exits:
+  - dir: back
+    to: R_GARDENS_GREENHOUSE_03
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GREENHOUSE_05
+    len: 1
+- id: R_GARDENS_GREENHOUSE_05
+  name: Glass Door
+  cluster: CL_GARDENS_GREENHOUSE
+  tags:
+  - landmark.crater_gardens.greenhouse
+  desc: |-
+    A greenhouse threshold with decon spray and clean lines.
+    Inside, the plants feel engineered, not grown.
+  exits:
+  - dir: back
+    to: R_GARDENS_GREENHOUSE_04
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GREENHOUSE_06
+    len: 1
+- id: R_GARDENS_GREENHOUSE_06
+  name: Glass Door
+  cluster: CL_GARDENS_GREENHOUSE
+  tags:
+  - landmark.crater_gardens.greenhouse
+  desc: |-
+    A greenhouse threshold with decon spray and clean lines.
+    Inside, the plants feel engineered, not grown.
+  exits:
+  - dir: back
+    to: R_GARDENS_GREENHOUSE_05
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GREENHOUSE_07
+    len: 1
+- id: R_GARDENS_GREENHOUSE_07
+  name: Humidity Lock
+  cluster: CL_GARDENS_GREENHOUSE
+  tags:
+  - landmark.crater_gardens.greenhouse
+  desc: |-
+    Glass panels and humming fans.
+    This is a hub that insists on safety protocols.
+  exits:
+  - dir: back
+    to: R_GARDENS_GREENHOUSE_06
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GREENHOUSE_08
+    len: 1
+- id: R_GARDENS_GREENHOUSE_08
+  name: Greenhouse Gate
+  cluster: CL_GARDENS_GREENHOUSE
+  tags:
+  - landmark.crater_gardens.greenhouse
+  desc: |-
+    A greenhouse threshold with decon spray and clean lines.
+    Inside, the plants feel engineered, not grown.
+  exits:
+  - dir: back
+    to: R_GARDENS_GREENHOUSE_07
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_GREENHOUSE_01
+    len: 1
+- id: R_GARDENS_ENGINE_02
+  name: Root Engine Way
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    Roots wrap around ancient machinery that still pulses.
+    This route points toward a multi-stage fight.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_01
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_03
+    len: 1
+- id: R_GARDENS_ENGINE_03
+  name: Root Engine Way
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    Roots wrap around ancient machinery that still pulses.
+    This route points toward a multi-stage fight.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_02
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_04
+    len: 1
+- id: R_GARDENS_ENGINE_04
+  name: Root Engine Way
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    Roots wrap around ancient machinery that still pulses.
+    This route points toward a multi-stage fight.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_03
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_05
+    len: 1
+- id: R_GARDENS_ENGINE_05
+  name: Feedline Trench
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    A low thrum vibrates through soil and metal.
+    The garden is not the thing in charge here.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_04
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_06
+    len: 1
+- id: R_GARDENS_ENGINE_06
+  name: Thrum Chamber
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    A low thrum vibrates through soil and metal.
+    The garden is not the thing in charge here.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_05
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_07
+    len: 1
+- id: R_GARDENS_ENGINE_07
+  name: Pressure Root
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    Roots wrap around ancient machinery that still pulses.
+    This route points toward a multi-stage fight.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_06
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_08
+    len: 1
+- id: R_GARDENS_ENGINE_08
+  name: Thrum Chamber
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    A low thrum vibrates through soil and metal.
+    The garden is not the thing in charge here.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_07
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_09
+    len: 1
+- id: R_GARDENS_ENGINE_09
+  name: Thrum Chamber
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    A low thrum vibrates through soil and metal.
+    The garden is not the thing in charge here.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_08
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_10
+    len: 1
+- id: R_GARDENS_ENGINE_10
+  name: Feedline Trench
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    A low thrum vibrates through soil and metal.
+    The garden is not the thing in charge here.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_09
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_11
+    len: 1
+- id: R_GARDENS_ENGINE_11
+  name: Thrum Chamber
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    A low thrum vibrates through soil and metal.
+    The garden is not the thing in charge here.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_10
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_12
+    len: 1
+- id: R_GARDENS_ENGINE_12
+  name: Thrum Chamber
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    A low thrum vibrates through soil and metal.
+    The garden is not the thing in charge here.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_11
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_13
+    len: 1
+- id: R_GARDENS_ENGINE_13
+  name: Root Engine Way
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    Roots wrap around ancient machinery that still pulses.
+    This route points toward a multi-stage fight.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_12
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_14
+    len: 1
+- id: R_GARDENS_ENGINE_14
+  name: Pressure Root
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    Roots wrap around ancient machinery that still pulses.
+    This route points toward a multi-stage fight.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_13
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_15
+    len: 1
+- id: R_GARDENS_ENGINE_15
+  name: Root Engine Way
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    Roots wrap around ancient machinery that still pulses.
+    This route points toward a multi-stage fight.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_14
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_16
+    len: 1
+- id: R_GARDENS_ENGINE_16
+  name: Thrum Chamber
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    A low thrum vibrates through soil and metal.
+    The garden is not the thing in charge here.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_15
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_17
+    len: 1
+- id: R_GARDENS_ENGINE_17
+  name: Feedline Trench
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    A low thrum vibrates through soil and metal.
+    The garden is not the thing in charge here.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_16
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_18
+    len: 1
+- id: R_GARDENS_ENGINE_18
+  name: Thrum Chamber
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    A low thrum vibrates through soil and metal.
+    The garden is not the thing in charge here.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_17
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_19
+    len: 1
+- id: R_GARDENS_ENGINE_19
+  name: Thrum Chamber
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    A low thrum vibrates through soil and metal.
+    The garden is not the thing in charge here.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_18
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_20
+    len: 1
+- id: R_GARDENS_ENGINE_20
+  name: Root Engine Way
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    Roots wrap around ancient machinery that still pulses.
+    This route points toward a multi-stage fight.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_19
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_21
+    len: 1
+- id: R_GARDENS_ENGINE_21
+  name: Pressure Root
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    Roots wrap around ancient machinery that still pulses.
+    This route points toward a multi-stage fight.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_20
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_22
+    len: 1
+- id: R_GARDENS_ENGINE_22
+  name: Feedline Trench
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    A low thrum vibrates through soil and metal.
+    The garden is not the thing in charge here.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_21
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_23
+    len: 1
+- id: R_GARDENS_ENGINE_23
+  name: Pressure Root
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    Roots wrap around ancient machinery that still pulses.
+    This route points toward a multi-stage fight.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_22
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_24
+    len: 1
+- id: R_GARDENS_ENGINE_24
+  name: Thrum Chamber
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    A low thrum vibrates through soil and metal.
+    The garden is not the thing in charge here.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_23
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_25
+    len: 1
+- id: R_GARDENS_ENGINE_25
+  name: Root Engine Way
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    Roots wrap around ancient machinery that still pulses.
+    This route points toward a multi-stage fight.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_24
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_26
+    len: 1
+- id: R_GARDENS_ENGINE_26
+  name: Root Engine Way
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    Roots wrap around ancient machinery that still pulses.
+    This route points toward a multi-stage fight.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_25
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_27
+    len: 1
+- id: R_GARDENS_ENGINE_27
+  name: Feedline Trench
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    A low thrum vibrates through soil and metal.
+    The garden is not the thing in charge here.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_26
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_28
+    len: 1
+- id: R_GARDENS_ENGINE_28
+  name: Pressure Root
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    Roots wrap around ancient machinery that still pulses.
+    This route points toward a multi-stage fight.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_27
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_29
+    len: 1
+- id: R_GARDENS_ENGINE_29
+  name: Pressure Root
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    Roots wrap around ancient machinery that still pulses.
+    This route points toward a multi-stage fight.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_28
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_30
+    len: 1
+- id: R_GARDENS_ENGINE_30
+  name: Root Engine Way
+  cluster: CL_GARDENS_ROOT_ENGINE
+  tags:
+  - landmark.crater_gardens.root_engine
+  desc: |-
+    Roots wrap around ancient machinery that still pulses.
+    This route points toward a multi-stage fight.
+  exits:
+  - dir: back
+    to: R_GARDENS_ENGINE_29
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_ENGINE_01
+    len: 1
+- id: R_GARDENS_WILD_01
+  name: Rusty Trellis
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILDS_01
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_02
+    len: 1
+- id: R_GARDENS_WILD_02
+  name: Overgrown Path
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_01
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_03
+    len: 1
+- id: R_GARDENS_WILD_03
+  name: Rusty Trellis
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_02
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_04
+    len: 1
+- id: R_GARDENS_WILD_04
+  name: Sunken Bed
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_03
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_05
+    len: 1
+- id: R_GARDENS_WILD_05
+  name: Rusty Trellis
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_04
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_06
+    len: 1
+- id: R_GARDENS_WILD_06
+  name: Rusty Trellis
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_05
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_07
+    len: 1
+- id: R_GARDENS_WILD_07
+  name: Overgrown Path
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_06
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_08
+    len: 1
+- id: R_GARDENS_WILD_08
+  name: Sunken Bed
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_07
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_09
+    len: 1
+- id: R_GARDENS_WILD_09
+  name: Overgrown Path
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_08
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_10
+    len: 1
+- id: R_GARDENS_WILD_10
+  name: Overgrown Path
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_09
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_11
+    len: 1
+- id: R_GARDENS_WILD_11
+  name: Overgrown Path
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_10
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_12
+    len: 1
+- id: R_GARDENS_WILD_12
+  name: Garden Wilds
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_11
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_13
+    len: 1
+- id: R_GARDENS_WILD_13
+  name: Garden Wilds
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_12
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_14
+    len: 1
+- id: R_GARDENS_WILD_14
+  name: Rusty Trellis
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_13
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_15
+    len: 1
+- id: R_GARDENS_WILD_15
+  name: Sunken Bed
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_14
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_16
+    len: 1
+- id: R_GARDENS_WILD_16
+  name: Garden Wilds
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_15
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_17
+    len: 1
+- id: R_GARDENS_WILD_17
+  name: Overgrown Path
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_16
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_18
+    len: 1
+- id: R_GARDENS_WILD_18
+  name: Sunken Bed
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_17
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_19
+    len: 1
+- id: R_GARDENS_WILD_19
+  name: Sunken Bed
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_18
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_20
+    len: 1
+- id: R_GARDENS_WILD_20
+  name: Overgrown Path
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_19
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_21
+    len: 1
+- id: R_GARDENS_WILD_21
+  name: Overgrown Path
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_20
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_22
+    len: 1
+- id: R_GARDENS_WILD_22
+  name: Garden Wilds
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_21
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_23
+    len: 1
+- id: R_GARDENS_WILD_23
+  name: Overgrown Path
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_22
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_24
+    len: 1
+- id: R_GARDENS_WILD_24
+  name: Sunken Bed
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_23
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_25
+    len: 1
+- id: R_GARDENS_WILD_25
+  name: Rusty Trellis
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_24
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_26
+    len: 1
+- id: R_GARDENS_WILD_26
+  name: Garden Wilds
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_25
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_27
+    len: 1
+- id: R_GARDENS_WILD_27
+  name: Sunken Bed
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_26
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_28
+    len: 1
+- id: R_GARDENS_WILD_28
+  name: Rusty Trellis
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_27
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_29
+    len: 1
+- id: R_GARDENS_WILD_29
+  name: Garden Wilds
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_28
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_30
+    len: 1
+- id: R_GARDENS_WILD_30
+  name: Overgrown Path
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_29
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_31
+    len: 1
+- id: R_GARDENS_WILD_31
+  name: Rusty Trellis
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_30
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_32
+    len: 1
+- id: R_GARDENS_WILD_32
+  name: Sunken Bed
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_31
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_33
+    len: 1
+- id: R_GARDENS_WILD_33
+  name: Garden Wilds
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_32
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_34
+    len: 1
+- id: R_GARDENS_WILD_34
+  name: Rusty Trellis
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_33
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_35
+    len: 1
+- id: R_GARDENS_WILD_35
+  name: Rusty Trellis
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_34
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_36
+    len: 1
+- id: R_GARDENS_WILD_36
+  name: Garden Wilds
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_35
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_37
+    len: 1
+- id: R_GARDENS_WILD_37
+  name: Garden Wilds
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_36
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_38
+    len: 1
+- id: R_GARDENS_WILD_38
+  name: Garden Wilds
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_37
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_39
+    len: 1
+- id: R_GARDENS_WILD_39
+  name: Rusty Trellis
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_38
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_40
+    len: 1
+- id: R_GARDENS_WILD_40
+  name: Garden Wilds
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_39
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_41
+    len: 1
+- id: R_GARDENS_WILD_41
+  name: Rusty Trellis
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_40
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_42
+    len: 1
+- id: R_GARDENS_WILD_42
+  name: Rusty Trellis
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_41
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_43
+    len: 1
+- id: R_GARDENS_WILD_43
+  name: Overgrown Path
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_42
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_44
+    len: 1
+- id: R_GARDENS_WILD_44
+  name: Sunken Bed
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_43
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_45
+    len: 1
+- id: R_GARDENS_WILD_45
+  name: Rusty Trellis
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_44
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_46
+    len: 1
+- id: R_GARDENS_WILD_46
+  name: Sunken Bed
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_45
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_47
+    len: 1
+- id: R_GARDENS_WILD_47
+  name: Rusty Trellis
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_46
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_48
+    len: 1
+- id: R_GARDENS_WILD_48
+  name: Rusty Trellis
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Plants reclaim metal with quiet stubbornness.
+    You can smell pollen and hot oil together.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_47
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILD_49
+    len: 1
+- id: R_GARDENS_WILD_49
+  name: Garden Wilds
+  cluster: CL_GARDENS_WILDS
+  tags:
+  - landmark.crater_gardens.wilds
+  desc: |-
+    Overgrowth hides old machinery in plain sight.
+    The wilderness is curated, not natural.
+  exits:
+  - dir: back
+    to: R_GARDENS_WILD_48
+    len: 1
+  - dir: ahead
+    to: R_GARDENS_WILDS_01
+    len: 1

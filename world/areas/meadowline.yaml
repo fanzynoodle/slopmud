@@ -1,0 +1,1384 @@
+version: 1
+zone_id: meadowline
+zone_name: Meadowline
+area_id: A01
+level_band:
+- 2
+- 3
+start_room: P_MEADOW_TOWN
+rooms:
+- id: P_MEADOW_TOWN
+  name: Town Trailhead
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - portal.P_MEADOW_TOWN
+  desc: |
+    A trailhead with clean sightlines and an obvious way back to town.
+    A painted sign reads: "MEADOWLINE" in letters that expect you to return.
+  exits:
+  - dir: west
+    to: P_TOWN_MEADOW
+    len: 1
+  - dir: east
+    to: R_MEADOW_TRAIL_01
+    len: 1
+- id: R_MEADOW_TRAIL_01
+  name: Pest Sweep Signpost
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - portal.P_MEADOW_TOWN
+  desc: |
+    A painted signpost marks "PEST SWEEP" and points back toward town.
+    The landmarks here are friendly on purpose.
+  exits:
+  - dir: town
+    to: P_MEADOW_TOWN
+    len: 1
+  - dir: east
+    to: R_MEADOW_TRAIL_02
+    len: 1
+  - dir: wander_trail
+    to: R_MEADOW_TRAIL_03
+    len: 1
+- id: R_MEADOW_TRAIL_02
+  name: Open Grass
+  cluster: CL_MEADOW_TRAILS
+  desc: |
+    Open grass with clear sight lines. Pests move in packs and test your pacing.
+    If you pull too much, the trail behind you stays readable for a reset.
+  exits:
+  - dir: west
+    to: R_MEADOW_TRAIL_01
+    len: 1
+  - dir: east
+    to: R_MEADOW_POND_01
+    len: 1
+- id: R_MEADOW_POND_01
+  name: Shallow Pond
+  cluster: CL_MEADOW_PONDS
+  desc: |
+    Shallow water and reeds. Footing gets worse and visibility gets narrower.
+    Any slow zone needs to be described in plain words here.
+  exits:
+  - dir: west
+    to: R_MEADOW_TRAIL_02
+    len: 1
+  - dir: east
+    to: R_MEADOW_PEST_01
+    len: 1
+  - dir: wander_pond
+    to: R_MEADOW_POND_02
+    len: 1
+- id: R_MEADOW_PEST_01
+  name: Pest Field Edge
+  cluster: CL_MEADOW_PEST_FIELDS
+  desc: |
+    The field edge is churned and loud. Easy to overpull.
+    Pack boundaries stay readable if you fight near the trail and fall back when things go wrong.
+  exits:
+  - dir: west
+    to: R_MEADOW_TRAIL_02
+    len: 1
+  - dir: east
+    to: R_MEADOW_PEST_02
+    len: 1
+  - dir: wander_pest
+    to: R_MEADOW_PEST_03
+    len: 1
+- id: R_MEADOW_PEST_02
+  name: Pest Knot
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - setpiece.q2.pest_knot
+  desc: |
+    A knot of weak pests that teaches pacing, not punishment.
+    Clearing it feels like a contract step, not a grind wall.
+  exits:
+  - dir: west
+    to: R_MEADOW_PEST_01
+    len: 1
+  - dir: north
+    to: R_MEADOW_GRATE_01
+    len: 1
+- id: R_MEADOW_GRATE_01
+  name: Maintenance Grate
+  cluster: CL_MEADOW_SEWER_GRATE
+  tags:
+  - portal.P_MEADOW_SEWERS
+  desc: |
+    A maintenance grate rattles. You can hear deeper flow.
+    A painted arrow points "SEWERS" with a warning mark.
+  exits:
+  - dir: south
+    to: R_MEADOW_PEST_02
+    len: 1
+  - dir: west
+    to: R_MEADOW_POND_01
+    len: 1
+  - dir: down
+    to: P_MEADOW_SEWERS
+    len: 1
+    state: sealed
+    gate: gate.sewers.entry
+  - dir: wander_grate
+    to: R_MEADOW_GRATE_02
+    len: 1
+- id: P_MEADOW_SEWERS
+  name: Sewer Grate Transfer
+  cluster: CL_MEADOW_SEWER_GRATE
+  tags:
+  - portal.P_MEADOW_SEWERS
+  desc: |
+    The grate is built like a door that pretends it is not.
+    The air below is wet and much warmer than it has any right to be.
+  exits:
+  - dir: up
+    to: R_MEADOW_GRATE_01
+    len: 1
+  - dir: down
+    to: P_SEWERS_MEADOW
+    len: 1
+    state: sealed
+    gate: gate.sewers.entry
+- id: R_MEADOW_PEST_03
+  name: Tape-Flag Lane
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.tape_flags
+  desc: |-
+    Bright survey tape flutters from snapped stalks, marking a straight line through the field.
+    It feels like a deliberate pull lane: easy to read, easy to reset.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_01
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_04
+    len: 1
+- id: R_MEADOW_PEST_04
+  name: Collapsed Scarecrow Frame
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.scarecrow_frame
+  desc: |-
+    A scarecrow frame lies half-buried in the grass, wire arms twisted into an accusation.
+    The field opens up here. If you grab too much, back up toward the tape flags.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_03
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_05
+    len: 1
+- id: R_MEADOW_PEST_05
+  name: Irrigation Rut
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.irrigation_rut
+  desc: |-
+    A shallow irrigation rut cuts the grass into two halves.
+    It is not real cover, but it gives you a line to pull along without drifting.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_04
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_06
+    len: 1
+- id: R_MEADOW_PEST_06
+  name: Bale Ring
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.bale_ring
+  desc: |-
+    Rotting bale husks form a loose ring in the grass, like someone tried to make a tiny arena.
+    The ring breaks sightlines just enough to make pacing feel possible.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_05
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_07
+    len: 1
+- id: R_MEADOW_PEST_07
+  name: Churned Furrow
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.furrow_line
+  desc: |-
+    A single furrow is carved deep and ugly through the soil, packed with muddy water.
+    This stretch punishes overpulls: commit to small packs and keep a retreat line.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_06
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_08
+    len: 1
+- id: R_MEADOW_PEST_08
+  name: Fencepost Shadow
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.fencepost_shadow
+  desc: |-
+    A row of broken fenceposts throws thin shadows across the grass.
+    The posts give you a visual boundary: fight on your side of the line, not theirs.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_07
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_09
+    len: 1
+- id: R_MEADOW_PEST_09
+  name: Trampled Turnaround
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.turnaround
+  desc: |-
+    The grass is trampled into a wide circle, as if something ran laps until it got bored.
+    If the field starts to feel messy, this is the turnaround that gets you back on track.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_08
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_10
+    len: 1
+- id: R_MEADOW_PEST_10
+  name: Pest Nest Marker
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - setpiece.q2.pest_nest_marker
+  desc: |-
+    A crude nest marker has been jammed into the soil: a broken stake wrapped in bright tape.
+    The grass around it is flattened in a circle, as if something kept pacing.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_09
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_11
+    len: 1
+- id: R_MEADOW_PEST_11
+  name: Skitter Line
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.skitter_line
+  desc: |-
+    A thin line of disturbed grass runs ahead like a seam.
+    You can tell where pests have been skittering back and forth, testing distance.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_10
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_12
+    len: 1
+- id: R_MEADOW_PEST_12
+  name: Fenceline Spill
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.fieldcut
+  desc: |-
+    The pest line thins near a sagging fence and a strip of trampled grass.
+    Through the gap you can see the cleaner trail markers back toward town.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_11
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_13
+    len: 1
+  - dir: fieldcut
+    to: R_MEADOW_TRAIL_07
+    len: 1
+- id: R_MEADOW_PEST_13
+  name: Flattened Grass
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.meadowline.pest_fields
+  desc: |-
+    The grass is churned and noisy with small movement.
+    Packs spread out: pace your pulls so you can reset cleanly.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_12
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_14
+    len: 1
+- id: R_MEADOW_PEST_14
+  name: Flattened Grass
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.meadowline.pest_fields
+  desc: |-
+    A stretch of open field with little cover.
+    Overpulling is the only real danger here.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_13
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_15
+    len: 1
+- id: R_MEADOW_PEST_15
+  name: Broken Scareline
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.meadowline.pest_fields
+  desc: |-
+    A stretch of open field with little cover.
+    Overpulling is the only real danger here.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_14
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_16
+    len: 1
+- id: R_MEADOW_PEST_16
+  name: Broken Scareline
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.meadowline.pest_fields
+  desc: |-
+    The grass is churned and noisy with small movement.
+    Packs spread out: pace your pulls so you can reset cleanly.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_15
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_17
+    len: 1
+- id: R_MEADOW_PEST_17
+  name: Broken Scareline
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.meadowline.pest_fields
+  desc: |-
+    The grass is churned and noisy with small movement.
+    Packs spread out: pace your pulls so you can reset cleanly.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_16
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_18
+    len: 1
+- id: R_MEADOW_PEST_18
+  name: Broken Scareline
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.meadowline.pest_fields
+  desc: |-
+    A stretch of open field with little cover.
+    Overpulling is the only real danger here.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_17
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_19
+    len: 1
+- id: R_MEADOW_PEST_19
+  name: Churned Furrow
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.meadowline.pest_fields
+  desc: |-
+    A stretch of open field with little cover.
+    Overpulling is the only real danger here.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_18
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_20
+    len: 1
+- id: R_MEADOW_PEST_20
+  name: Flattened Grass
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.meadowline.pest_fields
+  desc: |-
+    A stretch of open field with little cover.
+    Overpulling is the only real danger here.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_19
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_21
+    len: 1
+- id: R_MEADOW_PEST_21
+  name: Pest Run
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.meadowline.pest_fields
+  desc: |-
+    A stretch of open field with little cover.
+    Overpulling is the only real danger here.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_20
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_22
+    len: 1
+- id: R_MEADOW_PEST_22
+  name: Field Edge
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.meadowline.pest_fields
+  desc: |-
+    The grass is churned and noisy with small movement.
+    Packs spread out: pace your pulls so you can reset cleanly.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_21
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_23
+    len: 1
+- id: R_MEADOW_PEST_23
+  name: Field Edge
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.meadowline.pest_fields
+  desc: |-
+    A stretch of open field with little cover.
+    Overpulling is the only real danger here.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_22
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_24
+    len: 1
+- id: R_MEADOW_PEST_24
+  name: Broken Scareline
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.meadowline.pest_fields
+  desc: |-
+    A stretch of open field with little cover.
+    Overpulling is the only real danger here.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_23
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_25
+    len: 1
+- id: R_MEADOW_PEST_25
+  name: Flattened Grass
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.meadowline.pest_fields
+  desc: |-
+    The grass is churned and noisy with small movement.
+    Packs spread out: pace your pulls so you can reset cleanly.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_24
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_26
+    len: 1
+- id: R_MEADOW_PEST_26
+  name: Flattened Grass
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.meadowline.pest_fields
+  desc: |-
+    A stretch of open field with little cover.
+    Overpulling is the only real danger here.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_25
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_27
+    len: 1
+- id: R_MEADOW_PEST_27
+  name: Pest Run
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.meadowline.pest_fields
+  desc: |-
+    The grass is churned and noisy with small movement.
+    Packs spread out: pace your pulls so you can reset cleanly.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_26
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_28
+    len: 1
+- id: R_MEADOW_PEST_28
+  name: Broken Scareline
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.meadowline.pest_fields
+  desc: |-
+    The grass is churned and noisy with small movement.
+    Packs spread out: pace your pulls so you can reset cleanly.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_27
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_29
+    len: 1
+- id: R_MEADOW_PEST_29
+  name: Field Edge
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.meadowline.pest_fields
+  desc: |-
+    The grass is churned and noisy with small movement.
+    Packs spread out: pace your pulls so you can reset cleanly.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_28
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_30
+    len: 1
+- id: R_MEADOW_PEST_30
+  name: Flattened Grass
+  cluster: CL_MEADOW_PEST_FIELDS
+  tags:
+  - landmark.meadowline.pest_fields
+  desc: |-
+    A stretch of open field with little cover.
+    Overpulling is the only real danger here.
+  exits:
+  - dir: back
+    to: R_MEADOW_PEST_29
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_PEST_01
+    len: 1
+- id: R_MEADOW_POND_02
+  name: Duckweed Pool
+  cluster: CL_MEADOW_PONDS
+  tags:
+  - landmark.duckweed_pool
+  desc: |-
+    Duckweed mats the surface and hides the depth. Your steps go quiet in the water.
+    The reeds make ambushes feel closer than they are.
+  exits:
+  - dir: back
+    to: R_MEADOW_POND_01
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_POND_03
+    len: 1
+- id: R_MEADOW_POND_03
+  name: Slick Stone Step
+  cluster: CL_MEADOW_PONDS
+  tags:
+  - landmark.slick_step
+  desc: |-
+    Flat stones poke out of the water like a narrow bridge.
+    The stones are slick. Cross carefully and keep your party together.
+  exits:
+  - dir: back
+    to: R_MEADOW_POND_02
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_POND_04
+    len: 1
+- id: R_MEADOW_POND_04
+  name: Mud Shelf
+  cluster: CL_MEADOW_PONDS
+  tags:
+  - landmark.mud_shelf
+  desc: |-
+    A mud shelf slopes into the pond and steals your footing.
+    If you need out fast, follow the painted trail markers back the way you came.
+  exits:
+  - dir: back
+    to: R_MEADOW_POND_03
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_POND_05
+    len: 1
+- id: R_MEADOW_POND_05
+  name: Reedbridge Crossing
+  cluster: CL_MEADOW_PONDS
+  tags:
+  - landmark.reedbridge
+  desc: |-
+    A bundle of reeds has been lashed into a crude bridge.
+    It holds weight, but it wobbles enough to make you watch your step.
+  exits:
+  - dir: back
+    to: R_MEADOW_POND_04
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_POND_06
+    len: 1
+- id: R_MEADOW_POND_06
+  name: Cold Channel
+  cluster: CL_MEADOW_PONDS
+  tags:
+  - landmark.cold_channel
+  desc: |-
+    The water deepens into a cold channel and the air turns sharp.
+    This is slow footing. Pull small, and plan a retreat path before you commit.
+  exits:
+  - dir: back
+    to: R_MEADOW_POND_05
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_POND_07
+    len: 1
+- id: R_MEADOW_POND_07
+  name: Drain Runoff
+  cluster: CL_MEADOW_PONDS
+  tags:
+  - landmark.meadowline.ponds
+  desc: |-
+    Shallow water and reeds mute your footsteps.
+    Footing feels worse here; keep your pulls small and readable.
+  exits:
+  - dir: back
+    to: R_MEADOW_POND_06
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_POND_08
+    len: 1
+- id: R_MEADOW_POND_08
+  name: Mud Shelf
+  cluster: CL_MEADOW_PONDS
+  tags:
+  - landmark.meadowline.ponds
+  desc: |-
+    Shallow water and reeds mute your footsteps.
+    Footing feels worse here; keep your pulls small and readable.
+  exits:
+  - dir: back
+    to: R_MEADOW_POND_07
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_POND_09
+    len: 1
+- id: R_MEADOW_POND_09
+  name: Reedbank
+  cluster: CL_MEADOW_PONDS
+  tags:
+  - landmark.meadowline.ponds
+  desc: |-
+    Shallow water and reeds mute your footsteps.
+    Footing feels worse here; keep your pulls small and readable.
+  exits:
+  - dir: back
+    to: R_MEADOW_POND_08
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_POND_10
+    len: 1
+- id: R_MEADOW_POND_10
+  name: Reedbank
+  cluster: CL_MEADOW_PONDS
+  tags:
+  - landmark.meadowline.ponds
+  desc: |-
+    A slick edge of pondwater reflects the sky.
+    If you get turned around, follow the painted markers back to the trail.
+  exits:
+  - dir: back
+    to: R_MEADOW_POND_09
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_POND_11
+    len: 1
+- id: R_MEADOW_POND_11
+  name: Cattail Blind
+  cluster: CL_MEADOW_PONDS
+  tags:
+  - secret.shortcut
+  desc: |-
+    A thick stand of cattails hides a dry pocket just big enough to crouch in.
+    Someone has pressed a narrow path through the reeds toward a fenceline gap.
+  exits:
+  - dir: back
+    to: R_MEADOW_POND_10
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_POND_12
+    len: 1
+  - dir: reeds
+    to: R_MEADOW_TRAIL_14
+    len: 1
+- id: R_MEADOW_POND_12
+  name: Shallow Crossing
+  cluster: CL_MEADOW_PONDS
+  tags:
+  - landmark.meadowline.ponds
+  desc: |-
+    Shallow water and reeds mute your footsteps.
+    Footing feels worse here; keep your pulls small and readable.
+  exits:
+  - dir: back
+    to: R_MEADOW_POND_11
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_POND_13
+    len: 1
+- id: R_MEADOW_POND_13
+  name: Mud Shelf
+  cluster: CL_MEADOW_PONDS
+  tags:
+  - landmark.meadowline.ponds
+  desc: |-
+    A slick edge of pondwater reflects the sky.
+    If you get turned around, follow the painted markers back to the trail.
+  exits:
+  - dir: back
+    to: R_MEADOW_POND_12
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_POND_14
+    len: 1
+- id: R_MEADOW_POND_14
+  name: Silt Shelf
+  cluster: CL_MEADOW_PONDS
+  tags:
+  - landmark.silt_shelf
+  desc: |-
+    Silt piles into a shelf that grabs boots and slows turns.
+    If you pull here, plan a retreat path first.
+  exits:
+  - dir: back
+    to: R_MEADOW_POND_13
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_POND_15
+    len: 1
+- id: R_MEADOW_POND_15
+  name: Ripple Crossing
+  cluster: CL_MEADOW_PONDS
+  tags:
+  - landmark.ripple_crossing
+  desc: |-
+    A line of shallow ripples marks the safest crossing point.
+    The water still steals footing. Keep the party tight.
+  exits:
+  - dir: back
+    to: R_MEADOW_POND_14
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_POND_16
+    len: 1
+- id: R_MEADOW_POND_16
+  name: Storm Drain Mouth
+  cluster: CL_MEADOW_PONDS
+  tags:
+  - landmark.drain_mouth
+  desc: |-
+    A concrete drain mouth gurgles into the pond and stains the reeds darker.
+    The runoff makes the stones slick and the air cold.
+  exits:
+  - dir: back
+    to: R_MEADOW_POND_15
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_POND_17
+    len: 1
+- id: R_MEADOW_POND_17
+  name: Duckweed Mirror
+  cluster: CL_MEADOW_PONDS
+  tags:
+  - landmark.duckweed_mirror
+  desc: |-
+    Duckweed mats the surface until it looks like solid ground.
+    It is not. Stay on the markers, not on your confidence.
+  exits:
+  - dir: back
+    to: R_MEADOW_POND_16
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_POND_18
+    len: 1
+- id: R_MEADOW_POND_18
+  name: Pipe Spill
+  cluster: CL_MEADOW_PONDS
+  tags:
+  - landmark.pipe_spill
+  desc: |-
+    A broken pipe spills a thin line of water that cuts the pond edge into two lanes.
+    The spill is loud enough to hide small movement.
+  exits:
+  - dir: back
+    to: R_MEADOW_POND_17
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_POND_19
+    len: 1
+- id: R_MEADOW_POND_19
+  name: Reedwall Bend
+  cluster: CL_MEADOW_PONDS
+  tags:
+  - landmark.reedwall_bend
+  desc: |-
+    Reeds stack into a wall and force the path to bend.
+    If you need out, follow the bend back toward the trail markers.
+  exits:
+  - dir: back
+    to: R_MEADOW_POND_18
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_POND_20
+    len: 1
+- id: R_MEADOW_POND_20
+  name: Quiet Pool Loop
+  cluster: CL_MEADOW_PONDS
+  tags:
+  - landmark.quiet_pool_loop
+  desc: |-
+    The pond goes quiet here, like the world is holding its breath.
+    You can smell the open grass back toward the trail.
+  exits:
+  - dir: back
+    to: R_MEADOW_POND_19
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_POND_01
+    len: 1
+- id: R_MEADOW_GRATE_02
+  name: Culvert Mouth
+  cluster: CL_MEADOW_SEWER_GRATE
+  tags:
+  - landmark.culvert_mouth
+  desc: |-
+    A culvert mouth breathes warm air and fogs the grass at ankle height.
+    Warning paint points toward the main grate and back toward safety.
+  exits:
+  - dir: back
+    to: R_MEADOW_GRATE_01
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_GRATE_03
+    len: 1
+- id: R_MEADOW_GRATE_03
+  name: Hazard Stripe Bend
+  cluster: CL_MEADOW_SEWER_GRATE
+  tags:
+  - landmark.hazard_stripe_bend
+  desc: |-
+    Hazard stripes bend around the cut like a warning trying to be polite.
+    The warm air smells like wet concrete and old metal.
+  exits:
+  - dir: back
+    to: R_MEADOW_GRATE_02
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_GRATE_04
+    len: 1
+- id: R_MEADOW_GRATE_04
+  name: Warm Vent
+  cluster: CL_MEADOW_SEWER_GRATE
+  tags:
+  - landmark.vent
+  desc: |-
+    Warm air spills from a cracked service vent and fogs the grass at your feet.
+    The smell of wet concrete and old metal rides on the heat.
+  exits:
+  - dir: back
+    to: R_MEADOW_GRATE_03
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_GRATE_05
+    len: 1
+- id: R_MEADOW_GRATE_05
+  name: Overflow Ditch
+  cluster: CL_MEADOW_SEWER_GRATE
+  tags:
+  - landmark.overflow_ditch
+  desc: |-
+    An overflow ditch carries a thin sheet of warm water through the grass.
+    It is easy to misjudge depth here in low light.
+  exits:
+  - dir: back
+    to: R_MEADOW_GRATE_04
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_GRATE_06
+    len: 1
+- id: R_MEADOW_GRATE_06
+  name: Runoff Slot
+  cluster: CL_MEADOW_SEWER_GRATE
+  tags:
+  - landmark.runoff_slot
+  desc: |-
+    A narrow runoff slot cuts the ground like a crack that never healed.
+    The heat rising out of it makes the air shimmer.
+  exits:
+  - dir: back
+    to: R_MEADOW_GRATE_05
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_GRATE_07
+    len: 1
+- id: R_MEADOW_GRATE_07
+  name: Secondary Grate Frame
+  cluster: CL_MEADOW_SEWER_GRATE
+  tags:
+  - landmark.secondary_grate
+  desc: |-
+    A secondary service grate rattles in a warped frame.
+    The smell from below is older and more stubborn than the grass above.
+  exits:
+  - dir: back
+    to: R_MEADOW_GRATE_06
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_GRATE_08
+    len: 1
+- id: R_MEADOW_GRATE_08
+  name: Drain Lip
+  cluster: CL_MEADOW_SEWER_GRATE
+  tags:
+  - landmark.meadowline.sewer_grate
+  desc: |-
+    An old service grate rattles in its frame.
+    The smell of wet concrete drifts up from below.
+  exits:
+  - dir: back
+    to: R_MEADOW_GRATE_07
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_GRATE_09
+    len: 1
+- id: R_MEADOW_GRATE_09
+  name: Overflow Ditch
+  cluster: CL_MEADOW_SEWER_GRATE
+  tags:
+  - landmark.meadowline.sewer_grate
+  desc: |-
+    A maintenance cut in the earth breathes warm air.
+    Warning paint points toward the grate and back toward safety.
+  exits:
+  - dir: back
+    to: R_MEADOW_GRATE_08
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_GRATE_01
+    len: 1
+- id: R_MEADOW_TRAIL_03
+  name: Trailside Shelter
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - safe_pocket
+  desc: |-
+    A battered billboard leans over a dry patch of ground and a low windbreak of stones.
+    Someone painted two arrows on the post: TOWN and PESTS.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_01
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_04
+    len: 1
+- id: R_MEADOW_TRAIL_04
+  name: Fence Gap
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    A narrow path with clear sightlines.
+    The signage here is loud on purpose: you can always retreat.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_03
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_05
+    len: 1
+- id: R_MEADOW_TRAIL_05
+  name: Fence Gap
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    A narrow path with clear sightlines.
+    The signage here is loud on purpose: you can always retreat.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_04
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_06
+    len: 1
+- id: R_MEADOW_TRAIL_06
+  name: Cairn
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    A narrow path with clear sightlines.
+    The signage here is loud on purpose: you can always retreat.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_05
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_07
+    len: 1
+- id: R_MEADOW_TRAIL_07
+  name: Fenceline Cut
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.fieldcut
+  desc: |-
+    The trail runs along a sagging fence where the grass is worn down to dirt.
+    A narrow cut heads into the fields, but the town markers stay in sight.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_06
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_08
+    len: 1
+  - dir: fieldcut
+    to: R_MEADOW_PEST_12
+    len: 1
+- id: R_MEADOW_TRAIL_08
+  name: Cairn
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    A narrow path with clear sightlines.
+    The signage here is loud on purpose: you can always retreat.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_07
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_09
+    len: 1
+- id: R_MEADOW_TRAIL_09
+  name: Sunlit Track
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    Tall grass leans into a packed-dirt trail.
+    Painted markers make the way back to town unmissable.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_08
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_10
+    len: 1
+- id: R_MEADOW_TRAIL_10
+  name: Grass Path
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    Tall grass leans into a packed-dirt trail.
+    Painted markers make the way back to town unmissable.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_09
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_11
+    len: 1
+- id: R_MEADOW_TRAIL_11
+  name: Grass Path
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    Tall grass leans into a packed-dirt trail.
+    Painted markers make the way back to town unmissable.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_10
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_12
+    len: 1
+- id: R_MEADOW_TRAIL_12
+  name: Sunlit Track
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    Tall grass leans into a packed-dirt trail.
+    Painted markers make the way back to town unmissable.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_11
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_13
+    len: 1
+- id: R_MEADOW_TRAIL_13
+  name: Marker Post
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    A narrow path with clear sightlines.
+    The signage here is loud on purpose: you can always retreat.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_12
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_14
+    len: 1
+- id: R_MEADOW_TRAIL_14
+  name: Reedline Gap
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - secret.shortcut
+  desc: |-
+    A wet smell and a soft hiss of reeds drift through a gap in the fence.
+    The cut is easy to miss unless you are already looking for it.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_13
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_15
+    len: 1
+  - dir: reeds
+    to: R_MEADOW_POND_11
+    len: 1
+- id: R_MEADOW_TRAIL_15
+  name: Fence Gap
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    A narrow path with clear sightlines.
+    The signage here is loud on purpose: you can always retreat.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_14
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_16
+    len: 1
+- id: R_MEADOW_TRAIL_16
+  name: Sunlit Track
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    Tall grass leans into a packed-dirt trail.
+    Painted markers make the way back to town unmissable.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_15
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_17
+    len: 1
+- id: R_MEADOW_TRAIL_17
+  name: Fence Gap
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    A narrow path with clear sightlines.
+    The signage here is loud on purpose: you can always retreat.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_16
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_18
+    len: 1
+- id: R_MEADOW_TRAIL_18
+  name: Grass Path
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    Tall grass leans into a packed-dirt trail.
+    Painted markers make the way back to town unmissable.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_17
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_19
+    len: 1
+- id: R_MEADOW_TRAIL_19
+  name: Marker Post
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    A narrow path with clear sightlines.
+    The signage here is loud on purpose: you can always retreat.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_18
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_20
+    len: 1
+- id: R_MEADOW_TRAIL_20
+  name: Cairn
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    A narrow path with clear sightlines.
+    The signage here is loud on purpose: you can always retreat.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_19
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_21
+    len: 1
+- id: R_MEADOW_TRAIL_21
+  name: Marker Post
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    A narrow path with clear sightlines.
+    The signage here is loud on purpose: you can always retreat.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_20
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_22
+    len: 1
+- id: R_MEADOW_TRAIL_22
+  name: Fence Gap
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    A narrow path with clear sightlines.
+    The signage here is loud on purpose: you can always retreat.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_21
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_23
+    len: 1
+- id: R_MEADOW_TRAIL_23
+  name: Grass Path
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    Tall grass leans into a packed-dirt trail.
+    Painted markers make the way back to town unmissable.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_22
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_24
+    len: 1
+- id: R_MEADOW_TRAIL_24
+  name: Fence Gap
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    A narrow path with clear sightlines.
+    The signage here is loud on purpose: you can always retreat.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_23
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_25
+    len: 1
+- id: R_MEADOW_TRAIL_25
+  name: Sunlit Track
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    Tall grass leans into a packed-dirt trail.
+    Painted markers make the way back to town unmissable.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_24
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_26
+    len: 1
+- id: R_MEADOW_TRAIL_26
+  name: Marker Post
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    A narrow path with clear sightlines.
+    The signage here is loud on purpose: you can always retreat.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_25
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_27
+    len: 1
+- id: R_MEADOW_TRAIL_27
+  name: Sunlit Track
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    Tall grass leans into a packed-dirt trail.
+    Painted markers make the way back to town unmissable.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_26
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_28
+    len: 1
+- id: R_MEADOW_TRAIL_28
+  name: Sunlit Track
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    Tall grass leans into a packed-dirt trail.
+    Painted markers make the way back to town unmissable.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_27
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_29
+    len: 1
+- id: R_MEADOW_TRAIL_29
+  name: Fence Gap
+  cluster: CL_MEADOW_TRAILS
+  tags:
+  - landmark.meadowline.trails
+  desc: |-
+    A narrow path with clear sightlines.
+    The signage here is loud on purpose: you can always retreat.
+  exits:
+  - dir: back
+    to: R_MEADOW_TRAIL_28
+    len: 1
+  - dir: ahead
+    to: R_MEADOW_TRAIL_01
+    len: 1

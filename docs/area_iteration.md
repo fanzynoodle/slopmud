@@ -35,12 +35,16 @@ Optional context:
 - `proto_ready`: all official clusters have at least one protoadventure touchpoint
 - `stub`: `world/zones/<zone_id>.yaml` exists and validates (clusters + portals + bounds)
 - `shaped`: zone YAML has planning hints (`cluster_edges`, `key_rooms`, `notes`, `hubs`)
-- `integrated`: zone is fully wired into exported summaries and ready to translate into a real area format later
 
 Next stage (room graphs):
 
-- `area_drafted`: `world/areas/<zone_id>.yaml` exists (room graph drafted)
-- `area_validated`: area file passes `just area-files-validate`
+- `area_stub`: `world/areas/<zone_id>.yaml` exists and passes `just area-files-validate` (often under room budgets)
+- `area_budgeted`: area file meets the zone’s cluster room targets (no under-target warnings)
+
+Notes:
+
+- `docs/areas_todo.md` is the shared scoreboard for these statuses.
+- Don’t edit `docs/areas_todo.md` to claim work. Claim work by taking a lock.
 
 ## Fast Checks (No Guessing)
 
@@ -119,3 +123,5 @@ just area-unlock "$zone_id" "$claimed_by"
 - Do not copy Wizards of the Coast text.
 - If you directly use SRD 5.2.1 phrasing or numeric tables, add a row to:
   - `reference/gaming-systems/dnd5e-srd-5.2.1-cc/TABULATION.md`
+
+Tabulation is a ledger table (ID, what you used, where it appears, attribution status). It’s intentionally boring and strict.

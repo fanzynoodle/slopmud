@@ -1,20 +1,42 @@
 use std::cmp::{Ordering, Reverse};
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::net::SocketAddr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::Context;
 use mudproto::session::SessionId;
 use mudproto::shard::{RESP_ERR, RESP_OUTPUT, ShardReq};
+use reqwest::StatusCode;
 use slopio::frame::{FrameReader, FrameWriter};
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{Level, info, warn};
 
+mod groups;
 mod items;
 mod protoadventure;
+mod raftlog;
 mod rooms;
 mod rooms_fb;
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct AuthBlob {
+    #[serde(default)]
+    acct: Option<String>,
+    #[serde(default)]
+    method: Option<String>,
+    #[serde(default)]
+    google_sub: Option<String>,
+    #[serde(default)]
+    google_email: Option<String>,
+    #[serde(default)]
+    oidc_sub: Option<String>,
+    #[serde(default)]
+    oidc_email: Option<String>,
+}
+
+const OPENAI_API_BASE_DEFAULT: &str = "https://api.openai.com/v1";
+const OPENAI_PING_MODEL_DEFAULT: &str = "gpt-4o-mini";
 
 const HUH_HELP: &[u8] = b"huh? (try: help)\r\n";
 const HUH_LOOK: &[u8] = b"huh? (try: look)\r\n";
@@ -24,8 +46,9 @@ const HUH_NO_EXIT: &[u8] = b"huh? (no such exit)\r\n";
 const SEALED_EXIT_MSG: &[u8] =
     b"the way is sealed. you can feel the world beyond, but gaia is not ready yet.\r\n";
 
-const ROOM_TOWN_GATE: &str = "town.gate";
-const ROOM_TAVERN: &str = "town.tavern";
+const ROOM_TOWN_GATE: &str = "R_TOWN_GATE_01";
+const ROOM_TAVERN: &str = "R_TOWN_TAVERN_01";
+const ROOM_TOWN_JOB_BOARD: &str = "R_TOWN_JOB_01";
 const ROOM_SCHOOL_ORIENTATION: &str = "R_NS_ORIENT_01";
 const ROOM_SCHOOL_FIRST_FIGHT: &str = "R_NS_LABS_03";
 const ROOM_CLASS_BARBARIAN: &str = "class_halls.barbarian";
@@ -43,6 +66,7 @@ const ROOM_CLASS_WIZARD: &str = "class_halls.wizard";
 
 const ITEM_STENCHPOUCH: &str = "stenchpouch";
 const ROOM_NEWBIE_HEROES: &str = "R_NS_ORIENT_05";
+const ROOM_SEWERS_JUNCTION: &str = "R_SEW_JUNC_01";
 
 const CLASS_HALL_PREFIX: &str = "class_halls.";
 
@@ -102,6 +126,71 @@ fn is_class_hall_room(room_id: &str) -> bool {
 
 fn is_trainer_room(room_id: &str) -> bool {
     room_id == ROOM_SCHOOL_ORIENTATION || is_class_hall_room(room_id)
+}
+
+async fn openai_ping_models(
+    client: &reqwest::Client,
+    base: &str,
+    api_key: &str,
+) -> anyhow::Result<usize> {
+    let url = format!("{}/models", base.trim_end_matches('/'));
+    let resp = client.get(url).bearer_auth(api_key).send().await?;
+    let status = resp.status();
+    let body = resp.text().await.unwrap_or_default();
+    if status != StatusCode::OK {
+        anyhow::bail!("models http={}", status.as_u16());
+    }
+
+    let n = serde_json::from_str::<serde_json::Value>(&body)
+        .ok()
+        .and_then(|v| v.get("data")?.as_array().map(|a| a.len()))
+        .unwrap_or(0);
+    Ok(n)
+}
+
+async fn openai_ping_chat(
+    client: &reqwest::Client,
+    base: &str,
+    api_key: &str,
+    model: &str,
+    prompt: &str,
+) -> anyhow::Result<String> {
+    let url = format!("{}/chat/completions", base.trim_end_matches('/'));
+    let req = serde_json::json!({
+        "model": model,
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+        "max_tokens": 20,
+        "temperature": 0.0,
+    });
+
+    let resp = client
+        .post(url)
+        .bearer_auth(api_key)
+        .json(&req)
+        .send()
+        .await?;
+    let status = resp.status();
+    let body = resp.text().await.unwrap_or_default();
+    if status != StatusCode::OK {
+        anyhow::bail!("chat http={}", status.as_u16());
+    }
+
+    let content = serde_json::from_str::<serde_json::Value>(&body)
+        .ok()
+        .and_then(|v| {
+            v.get("choices")?
+                .as_array()?
+                .first()?
+                .get("message")?
+                .get("content")?
+                .as_str()
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_else(|| "(no content)".to_string());
+
+    Ok(content.trim().to_string())
 }
 
 struct DrinkItem {
@@ -176,6 +265,164 @@ fn render_tavern_sign() -> String {
         s.push_str(&format!("  {}. {} ({}g)\r\n", d.num, d.name, d.cost_gold));
     }
     s
+}
+
+fn render_job_board_for(p: &Character) -> String {
+    let mut s = String::new();
+    s.push_str("job board:\r\n");
+    s.push_str("\r\n");
+
+    let contracts_done = p
+        .quest
+        .get("q.q2_job_board.contracts_done")
+        .and_then(|v| v.trim().parse::<i64>().ok())
+        .unwrap_or(0)
+        .clamp(0, 3);
+    let a_done = eval_gate_expr(p, "q.q2_job_board.contract_a");
+    let b_done = eval_gate_expr(p, "q.q2_job_board.contract_b");
+    let c_done = eval_gate_expr(p, "q.q2_job_board.contract_c");
+
+    let faction = p
+        .quest
+        .get("q.q2_job_board.faction")
+        .map(|v| v.trim())
+        .filter(|v| !v.is_empty())
+        .unwrap_or("unset");
+
+    s.push_str(&format!("contracts done: {contracts_done}/3\r\n"));
+    s.push_str("\r\n");
+    s.push_str("contracts (starter set):\r\n");
+    s.push_str(&format!(
+        "  A) pest sweep (meadowline) [{}]\r\n",
+        if a_done { "DONE" } else { "PENDING" }
+    ));
+    s.push_str("     route: go north (edge gates), then east (meadowline gate)\r\n");
+    s.push_str(&format!(
+        "  B) drone tag (scrap orchard) [{}]\r\n",
+        if b_done { "DONE" } else { "PENDING" }
+    ));
+    s.push_str("     route: go north (edge gates), then north (scrap orchard gate)\r\n");
+    s.push_str(&format!(
+        "  C) clinic + gate check (town) [{}]\r\n",
+        if c_done { "DONE" } else { "PENDING" }
+    ));
+    s.push_str("     route: go south (quiet lane)\r\n");
+    s.push_str("\r\n");
+
+    if contracts_done >= 3 && faction == "unset" {
+        s.push_str("choose a contact (unlocks access):\r\n");
+        s.push_str("  faction civic\r\n");
+        s.push_str("  faction industrial\r\n");
+        s.push_str("  faction green\r\n");
+        s.push_str("\r\n");
+    } else if faction != "unset" {
+        s.push_str(&format!("contact: {faction}\r\n"));
+        s.push_str("\r\n");
+    }
+
+    s.push_str("notes:\r\n");
+    let sewers = if eval_gate_expr(p, "gate.sewers.entry") {
+        "open"
+    } else {
+        "sealed"
+    };
+    s.push_str(&format!("  - sewers access: {sewers}\r\n"));
+    s.push_str("  - if you get lost, go back to the edge gates.\r\n");
+    s
+}
+
+fn q2_room_enter(p: &mut Character, room_id: &str) -> Option<String> {
+    fn truthy(p: &Character, key: &str) -> bool {
+        // Keep this consistent with movement gates.
+        eval_gate_expr(p, key)
+    }
+
+    fn contracts_done(p: &Character) -> i64 {
+        p.quest
+            .get("q.q2_job_board.contracts_done")
+            .and_then(|v| v.trim().parse::<i64>().ok())
+            .unwrap_or(0)
+            .clamp(0, 3)
+    }
+
+    fn set_contracts_done(p: &mut Character, v: i64) {
+        p.quest.insert(
+            "q.q2_job_board.contracts_done".to_string(),
+            v.clamp(0, 3).to_string(),
+        );
+    }
+
+    fn set_state_for_done(p: &mut Character, done: i64) {
+        let cur = p
+            .quest
+            .get("q.q2_job_board.state")
+            .map(|v| v.trim())
+            .unwrap_or("");
+        // Don't override later states (choice/repeatables/complete).
+        if !cur.is_empty() && !cur.starts_with("contract") && cur != "unstarted" {
+            return;
+        }
+        let st = match done.clamp(0, 3) {
+            0 => "unstarted",
+            1 => "contract_1",
+            2 => "contract_2",
+            _ => "contract_3",
+        };
+        p.quest
+            .insert("q.q2_job_board.state".to_string(), st.to_string());
+    }
+
+    fn complete_contract(p: &mut Character, contract_key: &str) -> Option<i64> {
+        if truthy(p, contract_key) {
+            return None;
+        }
+        p.quest.insert(contract_key.to_string(), "1".to_string());
+        let done = (contracts_done(p) + 1).clamp(0, 3);
+        set_contracts_done(p, done);
+        set_state_for_done(p, done);
+        Some(done)
+    }
+
+    match room_id {
+        "R_MEADOW_PEST_02" => {
+            let done = complete_contract(p, "q.q2_job_board.contract_a")?;
+            let mut msg = format!("contract A complete. (contracts done: {done}/3)\r\n");
+            if done >= 3 && !truthy(p, "q.q2_job_board.repeatables_unlocked") {
+                msg.push_str("return to the job board. (try: look board)\r\n");
+            }
+            Some(msg)
+        }
+        "R_ORCHARD_NEST_01" => {
+            let done = complete_contract(p, "q.q2_job_board.contract_b")?;
+            let mut msg = format!("contract B complete. (contracts done: {done}/3)\r\n");
+            if done >= 3 && !truthy(p, "q.q2_job_board.repeatables_unlocked") {
+                msg.push_str("return to the job board. (try: look board)\r\n");
+            }
+            Some(msg)
+        }
+        "R_TOWN_CLINIC_01" => {
+            if truthy(p, "q.q2_job_board.contract_c_clinic") {
+                return None;
+            }
+            p.quest.insert(
+                "q.q2_job_board.contract_c_clinic".to_string(),
+                "1".to_string(),
+            );
+            Some("clinic: a medic stamps a slip with brisk disinterest.\r\n".to_string())
+        }
+        "R_TOWN_EDGE_01" => {
+            if !truthy(p, "q.q2_job_board.contract_c_clinic") {
+                return None;
+            }
+            let done = complete_contract(p, "q.q2_job_board.contract_c")?;
+            let mut msg = format!("contract C complete. (contracts done: {done}/3)\r\n");
+            if done >= 3 && !truthy(p, "q.q2_job_board.repeatables_unlocked") {
+                msg.push_str("return to the job board. (try: look board)\r\n");
+            }
+            Some(msg)
+        }
+        _ => None,
+    }
 }
 
 fn find_drink(token: &str) -> Option<&'static DrinkItem> {
@@ -515,7 +762,10 @@ fn render_sessions_cmd(world: &World, session: SessionId) -> String {
         fmt_session_id(session),
         session.short()
     ));
-    s.push_str(&format!(" - active character: {} ({})\r\n", active.name, active.id));
+    s.push_str(&format!(
+        " - active character: {} ({})\r\n",
+        active.name, active.id
+    ));
 
     let attached = sessions_attached_to_character(world, active.id);
     s.push_str(" - sessions attached to this character:\r\n");
@@ -573,6 +823,61 @@ fn tavern_object(room_id: &str, target: &str) -> Option<String> {
     }
 }
 
+fn job_board_object(p: &Character, target: &str) -> Option<String> {
+    if p.room_id != ROOM_TOWN_JOB_BOARD {
+        return None;
+    }
+    let t = target.trim().to_ascii_lowercase();
+    match t.as_str() {
+        "board" | "job" | "jobs" | "contract" | "contracts" | "paper" | "papers" | "notices" => {
+            Some(render_job_board_for(p))
+        }
+        _ => None,
+    }
+}
+
+fn sewers_object(p: &Character, target: &str) -> Option<String> {
+    if p.room_id != ROOM_SEWERS_JUNCTION {
+        return None;
+    }
+
+    let t = target.trim().to_ascii_lowercase();
+    match t.as_str() {
+        "chalk" | "marks" | "board" | "sign" | "signs" => Some(render_sewers_junction_chalk(p)),
+        _ => None,
+    }
+}
+
+fn render_sewers_junction_chalk(p: &Character) -> String {
+    let mut s = String::new();
+    let valves_opened = p
+        .quest
+        .get("q.q3_sewer_valves.valves_opened")
+        .and_then(|v| v.trim().parse::<i64>().ok())
+        .unwrap_or(0)
+        .clamp(0, 3);
+    let boss = if valves_opened >= 3 {
+        "unsealed"
+    } else {
+        "sealed"
+    };
+    let quarry = if eval_gate_expr(p, "gate.sewers.shortcut_to_quarry") {
+        "unsealed"
+    } else {
+        "sealed"
+    };
+
+    s.push_str("chalk marks on the wall:\r\n");
+    s.push_str("\r\n");
+    s.push_str(&format!("  valves opened: {valves_opened}/3\r\n"));
+    s.push_str(&format!("  boss slope: {boss}\r\n"));
+    s.push_str(&format!("  quarry bypass: {quarry}\r\n"));
+    s.push_str("\r\n");
+    s.push_str("routes:\r\n");
+    s.push_str("  go valves | go wing | go entry\r\n");
+    s
+}
+
 fn heroes_object(room_id: &str, target: &str) -> Option<String> {
     if room_id != ROOM_NEWBIE_HEROES {
         return None;
@@ -600,7 +905,7 @@ fn render_hall_of_heroes() -> String {
     s.push_str("  lpmud: lars pensjo\r\n");
     s.push_str("  tiny: jim aspnes\r\n");
     s.push_str("  circle: jeremy elson\r\n");
-    s.push_str("  everquest: aradune\r\n");
+    s.push_str("  everquest: Aradune\r\n");
     s
 }
 
@@ -637,7 +942,7 @@ fn usage_and_exit() -> ! {
     eprintln!(
         "shard_01\n\n\
 USAGE:\n  shard_01 [--bind HOST:PORT]\n\n\
-ENV:\n  SHARD_BIND          default 127.0.0.1:5000\n  WORLD_SEED          default 1 (deterministic; replace with raft time/seed later)\n  WORLD_TICK_MS       default 1000\n  BARTENDER_EMOTE_MS  default 30000\n  MOB_WANDER_MS       default 15000\n"
+ENV:\n  SHARD_BIND                  default 127.0.0.1:5000\n  WORLD_SEED                  default 1 (deterministic; replace with raft time/seed later)\n  WORLD_TICK_MS               default 1000\n  BARTENDER_EMOTE_MS          default 30000\n  MOB_WANDER_MS               default 15000\n  SHARD_RAFT_LOG              default var/shard_01_raft.jsonl\n  SHARD_BOOTSTRAP_ADMINS      comma-separated acct names added to admin group (genesis only)\n  SHARD_BOOTSTRAP_ADMIN_SSO   comma-separated principals added to admin group (genesis only)\n                             ex: google_email:rob@caskey.org,google_sub:123,acct:rob\n"
     );
     std::process::exit(2);
 }
@@ -649,6 +954,9 @@ struct Config {
     tick_ms: u64,
     bartender_emote_ms: u64,
     mob_wander_ms: u64,
+    raft_log_path: PathBuf,
+    bootstrap_admins: Vec<String>,
+    bootstrap_admin_sso: Vec<String>,
 }
 
 fn parse_args() -> Config {
@@ -677,6 +985,28 @@ fn parse_args() -> Config {
         .unwrap_or(15000)
         .max(tick_ms);
 
+    let raft_log_path: PathBuf = std::env::var("SHARD_RAFT_LOG")
+        .unwrap_or_else(|_| "var/shard_01_raft.jsonl".to_string())
+        .into();
+    let bootstrap_admins: Vec<String> = std::env::var("SHARD_BOOTSTRAP_ADMINS")
+        .ok()
+        .map(|v| {
+            v.split(',')
+                .map(|x| x.trim().to_string())
+                .filter(|x| !x.is_empty())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let bootstrap_admin_sso: Vec<String> = std::env::var("SHARD_BOOTSTRAP_ADMIN_SSO")
+        .ok()
+        .map(|v| {
+            v.split(',')
+                .map(|x| x.trim().to_string())
+                .filter(|x| !x.is_empty())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {
@@ -695,7 +1025,69 @@ fn parse_args() -> Config {
         tick_ms,
         bartender_emote_ms,
         mob_wander_ms,
+        raft_log_path,
+        bootstrap_admins,
+        bootstrap_admin_sso,
     }
+}
+
+fn principal_from_attach(name: &str, auth: Option<&[u8]>) -> String {
+    // `auth` is asserted by the broker. This shard does not validate it; it is used only for
+    // authorization decisions (capabilities/groups).
+    if let Some(raw) = auth {
+        if let Ok(s) = std::str::from_utf8(raw) {
+            if let Ok(a) = serde_json::from_str::<AuthBlob>(s) {
+                if let Some(sub) = a.google_sub.as_deref() {
+                    let sub = sub.trim();
+                    if !sub.is_empty() {
+                        return format!("google_sub:{sub}");
+                    }
+                }
+                if let Some(sub) = a.oidc_sub.as_deref() {
+                    let sub = sub.trim();
+                    if !sub.is_empty() {
+                        return format!("oidc_sub:{sub}");
+                    }
+                }
+                if let Some(email) = a.google_email.as_deref() {
+                    let email = email.trim().to_ascii_lowercase();
+                    if !email.is_empty() {
+                        return format!("google_email:{email}");
+                    }
+                }
+                if let Some(email) = a.oidc_email.as_deref() {
+                    let email = email.trim().to_ascii_lowercase();
+                    if !email.is_empty() {
+                        return format!("oidc_email:{email}");
+                    }
+                }
+                if let Some(acct) = a.acct.as_deref() {
+                    let acct = acct.trim().to_ascii_lowercase();
+                    if !acct.is_empty() {
+                        return format!("acct:{acct}");
+                    }
+                }
+                if let Some(method) = a.method.as_deref() {
+                    let method = method.trim().to_ascii_lowercase();
+                    if !method.is_empty() {
+                        return format!("method:{method}");
+                    }
+                }
+            }
+        }
+    }
+    format!("acct:{}", name.trim().to_ascii_lowercase())
+}
+
+fn normalize_principal_token(tok: &str) -> String {
+    let t = tok.trim();
+    if t.is_empty() {
+        return "acct:".to_string();
+    }
+    if t.contains(':') {
+        return t.to_ascii_lowercase();
+    }
+    format!("acct:{}", t.to_ascii_lowercase())
 }
 
 type CharacterId = u64;
@@ -732,13 +1124,21 @@ struct Character {
     controller: Option<SessionId>,
     created_by: Option<SessionId>, // session that originally spawned this character (detach permissions)
     name: String,
+    // Stable principal asserted by the broker (e.g. acct:alice, google_sub:..., google_email:...).
+    // Used for permissions (groups/capabilities). Not displayed to players.
+    principal: String,
     is_bot: bool,
+    bot_ever: bool, // sticky flag (silent): has this character ever been in bot mode?
+    bot_ever_since_ms: Option<u64>, // world ms when bot_ever first became true
+    bot_mode_changed_ms: u64, // world ms when is_bot last changed
+    friends: HashSet<String>, // friend character names (case-insensitive comparisons)
     room_id: String,
     autoassist: bool,
     follow_leader: bool,
     drink_level: u32,
     gold: u32,
     inv: HashMap<String, u32>,
+    quest: HashMap<String, String>, // quest/gate keys (dev-only; not persisted yet)
     class: Option<Class>,
     level: u32,
     xp: u32,
@@ -776,10 +1176,16 @@ struct PartyInvite {
     expires_ms: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PendingConfirm {
+    BotOn { cid: CharacterId },
+}
+
 #[derive(Debug, Clone)]
 struct SessionState {
     controlled: Vec<CharacterId>,
     active: CharacterId,
+    pending_confirm: Option<PendingConfirm>,
 }
 
 #[derive(Debug, Clone)]
@@ -1144,7 +1550,6 @@ static ALL_SKILLS: [SkillDef; 24] = [
         description: "A blunt slam meant to rattle your target.",
         flavor: "You drive your shield forward like a battering ram.",
     },
-
     // Wizard
     SkillDef {
         id: "magic_missile",
@@ -1182,7 +1587,6 @@ static ALL_SKILLS: [SkillDef; 24] = [
         description: "A shard of cold that bites into muscle and breath.",
         flavor: "Cold gathers, then lashes out in a tight line.",
     },
-
     // Rogue
     SkillDef {
         id: "backstab",
@@ -1220,7 +1624,6 @@ static ALL_SKILLS: [SkillDef; 24] = [
         description: "Pocket sand, elbows, and opportunism.",
         flavor: "You fight like nobody is watching.",
     },
-
     // Cleric / Druid / Paladin healing baseline
     SkillDef {
         id: "heal",
@@ -1240,7 +1643,6 @@ static ALL_SKILLS: [SkillDef; 24] = [
         description: "A simple restoration for keeping yourself standing.",
         flavor: "Warmth settles into your bones.",
     },
-
     // Cleric
     SkillDef {
         id: "smite",
@@ -1278,7 +1680,6 @@ static ALL_SKILLS: [SkillDef; 24] = [
         description: "A quick prayer that hits like a thrown stone.",
         flavor: "Your words harden into a brief, bright impact.",
     },
-
     // Ranger
     SkillDef {
         id: "aimed_shot",
@@ -1316,7 +1717,6 @@ static ALL_SKILLS: [SkillDef; 24] = [
         description: "A lash of living vine and spite.",
         flavor: "A thorny line snaps out and bites.",
     },
-
     // Paladin
     SkillDef {
         id: "divine_smite",
@@ -1336,7 +1736,6 @@ static ALL_SKILLS: [SkillDef; 24] = [
         description: "Spend faith and force together, all at once.",
         flavor: "Your strike lands with a clean, ringing certainty.",
     },
-
     // Barbarian
     SkillDef {
         id: "rage_strike",
@@ -1356,7 +1755,6 @@ static ALL_SKILLS: [SkillDef; 24] = [
         description: "A brutal hit powered by pure refusal.",
         flavor: "You snarl and swing through the pain.",
     },
-
     // Bard
     SkillDef {
         id: "cutting_words",
@@ -1376,7 +1774,6 @@ static ALL_SKILLS: [SkillDef; 24] = [
         description: "A line so sharp it draws blood anyway.",
         flavor: "Your voice finds the crack in them.",
     },
-
     // Druid
     SkillDef {
         id: "sun_spark",
@@ -1396,7 +1793,6 @@ static ALL_SKILLS: [SkillDef; 24] = [
         description: "A brief flash of daylight that doesn't ask permission.",
         flavor: "Light answers you, sharp and hot.",
     },
-
     // Warlock
     SkillDef {
         id: "eldritch_blast",
@@ -1416,7 +1812,6 @@ static ALL_SKILLS: [SkillDef; 24] = [
         description: "The patron's answer to your anger.",
         flavor: "Something old speaks through your hand.",
     },
-
     // Sorcerer
     SkillDef {
         id: "fire_bolt",
@@ -1436,7 +1831,6 @@ static ALL_SKILLS: [SkillDef; 24] = [
         description: "A small piece of the sun, held badly.",
         flavor: "Heat gathers and snaps forward.",
     },
-
     // Monk
     SkillDef {
         id: "flurry",
@@ -1456,7 +1850,6 @@ static ALL_SKILLS: [SkillDef; 24] = [
         description: "A quick sequence of strikes before they can breathe.",
         flavor: "Your hands move before your thoughts finish forming.",
     },
-
     // Extra "generic" skills to flesh out compendium a bit.
     SkillDef {
         id: "second_wind",
@@ -1615,11 +2008,7 @@ fn render_skill_compendium() -> String {
     let mut s = String::new();
     s.push_str("skills compendium:\r\n");
     for d in defs {
-        let mut classes = d
-            .classes
-            .iter()
-            .map(|c| c.as_str())
-            .collect::<Vec<_>>();
+        let mut classes = d.classes.iter().map(|c| c.as_str()).collect::<Vec<_>>();
         classes.sort_unstable();
         let class_str = classes.join(", ");
         let cost = match (d.cost_mana, d.cost_stamina) {
@@ -1674,7 +2063,11 @@ fn render_skill_detail(d: &SkillDef, rank: u32) -> String {
     ));
     s.push_str(&format!(
         " - trained_rank: {}\r\n",
-        if rank == 0 { "(untrained)".to_string() } else { rank.to_string() }
+        if rank == 0 {
+            "(untrained)".to_string()
+        } else {
+            rank.to_string()
+        }
     ));
     if !d.tags.is_empty() {
         s.push_str(&format!(" - tags: {}\r\n", d.tags.join(", ")));
@@ -1848,15 +2241,34 @@ struct World {
     bartender_emote_idx: u64,
     bartender_emote_ms: u64,
     mob_wander_ms: u64,
+    raft: raftlog::RaftLog<groups::GroupLogEntry>,
+    raft_watch: HashSet<CharacterId>,
+    groups: groups::GroupStore,
 }
 
 impl World {
-    fn new(rooms: rooms::Rooms, seed: u64, bartender_emote_ms: u64, mob_wander_ms: u64) -> Self {
+    fn new(
+        rooms: rooms::Rooms,
+        seed: u64,
+        bartender_emote_ms: u64,
+        mob_wander_ms: u64,
+        raft_log_path: PathBuf,
+        bootstrap_admins: Vec<String>,
+        bootstrap_admin_sso: Vec<String>,
+    ) -> anyhow::Result<Self> {
         let started_unix = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-        Self {
+        let (raft, replay) = raftlog::RaftLog::open(raft_log_path.clone())
+            .with_context(|| format!("open raft log {}", raft_log_path.display()))?;
+
+        let mut groups = groups::GroupStore::default();
+        for env in replay {
+            groups.apply(&env.entry);
+        }
+
+        let mut w = Self {
             rooms,
             sessions: HashMap::new(),
             chars: HashMap::new(),
@@ -1877,7 +2289,13 @@ impl World {
             bartender_emote_idx: 0,
             bartender_emote_ms,
             mob_wander_ms,
-        }
+            raft,
+            raft_watch: HashSet::new(),
+            groups,
+        };
+
+        w.ensure_genesis_groups(&bootstrap_admins, &bootstrap_admin_sso)?;
+        Ok(w)
     }
 
     fn render_uptime(&self) -> String {
@@ -1892,6 +2310,184 @@ impl World {
         s.push_str(&format!(" - shard_started_unix: {}\r\n", self.started_unix));
         s.push_str(&format!(" - shard_uptime_s: {up}\r\n"));
         s.push_str(&format!(" - world_time_ms: {}\r\n", self.now_ms));
+        s
+    }
+
+    fn ensure_genesis_groups(
+        &mut self,
+        bootstrap_admins: &[String],
+        bootstrap_admin_sso: &[String],
+    ) -> anyhow::Result<()> {
+        const GROUP_ID_ADMINS: u64 = 1;
+        const GROUP_ID_CLASS_BASE: u64 = 1000;
+
+        // Ensure "admins" exists.
+        if !self.groups.groups.contains_key(&GROUP_ID_ADMINS) {
+            let e = groups::GroupLogEntry::GroupCreate {
+                group_id: GROUP_ID_ADMINS,
+                kind: groups::GroupKind::Admin,
+                name: "admins".to_string(),
+            };
+            let _ = self.raft_append_group(e)?;
+        }
+
+        // Ensure a class group exists for every class (implied membership by class).
+        for (i, class) in Class::all().iter().enumerate() {
+            let id = GROUP_ID_CLASS_BASE + i as u64;
+            if self.groups.groups.contains_key(&id) {
+                continue;
+            }
+            let class_name = class.as_str().to_string();
+            let e = groups::GroupLogEntry::GroupCreate {
+                group_id: id,
+                kind: groups::GroupKind::Class {
+                    class: class_name.clone(),
+                },
+                name: format!("class:{class_name}"),
+            };
+            let _ = self.raft_append_group(e)?;
+        }
+
+        // Bootstrap admins into the admin group (genesis convenience).
+        for who in bootstrap_admins {
+            let who = who.trim();
+            if who.is_empty() {
+                continue;
+            }
+            // Historical env var: list of account/character names. Store as acct:<name>.
+            let principal = if who.contains(':') {
+                who.to_string()
+            } else {
+                format!("acct:{who}")
+            };
+            let e = groups::GroupLogEntry::GroupMemberSet {
+                group_id: GROUP_ID_ADMINS,
+                member: principal,
+                role: Some(groups::GroupRole::Member),
+            };
+            let _ = self.raft_append_group(e)?;
+        }
+
+        // Bootstrap admins from SSO principals (recommended).
+        for p in bootstrap_admin_sso {
+            let p = p.trim();
+            if p.is_empty() {
+                continue;
+            }
+            let e = groups::GroupLogEntry::GroupMemberSet {
+                group_id: GROUP_ID_ADMINS,
+                member: normalize_principal_token(p),
+                role: Some(groups::GroupRole::Member),
+            };
+            let _ = self.raft_append_group(e)?;
+        }
+
+        Ok(())
+    }
+
+    fn raft_append_group(
+        &mut self,
+        entry: groups::GroupLogEntry,
+    ) -> anyhow::Result<raftlog::RaftEnvelope<groups::GroupLogEntry>> {
+        let env = self.raft.append(self.now_ms(), entry.clone())?;
+        self.groups.apply(&entry);
+        Ok(env)
+    }
+
+    fn effective_caps_for(&self, c: &Character) -> HashSet<groups::Capability> {
+        let class = c.class.map(|class| class.as_str()).unwrap_or("");
+        self.groups
+            .effective_caps_for_principal(&c.principal, class)
+    }
+
+    fn has_cap(&self, c: &Character, cap: groups::Capability) -> bool {
+        let caps = self.effective_caps_for(c);
+        caps.contains(&groups::Capability::AdminAll) || caps.contains(&cap)
+    }
+
+    fn is_admin(&self, c: &Character) -> bool {
+        let caps = self.effective_caps_for(c);
+        caps.contains(&groups::Capability::AdminAll)
+    }
+
+    fn has_group_cap(&self, c: &Character, group_id: u64, cap: groups::Capability) -> bool {
+        if self.is_admin(c) {
+            return true;
+        }
+        let class = c.class.map(|class| class.as_str()).unwrap_or("");
+        let caps = self
+            .groups
+            .caps_for_principal_in_group(group_id, &c.name, class);
+        caps.contains(&cap)
+    }
+
+    fn resolve_group_id(&self, token: &str) -> Option<u64> {
+        let t = token.trim();
+        if t.is_empty() {
+            return None;
+        }
+        if let Ok(id) = t.parse::<u64>() {
+            if self.groups.groups.contains_key(&id) {
+                return Some(id);
+            }
+        }
+        self.groups
+            .group_ids_by_name
+            .get(&t.to_ascii_lowercase())
+            .copied()
+    }
+
+    fn render_group(&self, group_id: u64) -> String {
+        let Some(g) = self.groups.groups.get(&group_id) else {
+            return format!("group: {group_id} (missing)\r\n");
+        };
+        let mut s = String::new();
+        s.push_str(&format!("group: {} ({})\r\n", g.name, g.kind.as_str()));
+        s.push_str(&format!(" - id: {}\r\n", g.id));
+
+        let mut members = g
+            .members
+            .iter()
+            .map(|(k, v)| format!(" - {k}: {}\r\n", v.as_str()))
+            .collect::<Vec<_>>();
+        members.sort_unstable();
+        s.push_str("members:\r\n");
+        if members.is_empty() {
+            s.push_str(" - (none)\r\n");
+        } else {
+            for m in members {
+                s.push_str(&m);
+            }
+        }
+
+        let mut pol = g
+            .policies
+            .iter()
+            .map(|(k, v)| format!(" - {k}={v}\r\n"))
+            .collect::<Vec<_>>();
+        pol.sort_unstable();
+        s.push_str("policies:\r\n");
+        if pol.is_empty() {
+            s.push_str(" - (none)\r\n");
+        } else {
+            for x in pol {
+                s.push_str(&x);
+            }
+        }
+
+        s.push_str("role_caps:\r\n");
+        for r in groups::GroupRole::ALL {
+            let mut caps = g
+                .role_caps
+                .get(r)
+                .cloned()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|c| c.as_str().to_string())
+                .collect::<Vec<_>>();
+            caps.sort_unstable();
+            s.push_str(&format!(" - {}: {}\r\n", r.as_str(), caps.join(" ")));
+        }
         s
     }
 
@@ -1958,6 +2554,7 @@ impl World {
 
         let mut removed = Vec::new();
         for cid in ss.controlled {
+            self.raft_watch.remove(&cid);
             // Remove from parties and clear invites (best-effort).
             self.party_invites.remove(&cid);
             self.party_leave(cid);
@@ -2012,13 +2609,19 @@ impl World {
             controller: None,
             created_by: None,
             name,
+            principal: "mob:".to_string(),
             is_bot: false,
+            bot_ever: false,
+            bot_ever_since_ms: None,
+            bot_mode_changed_ms: self.now_ms,
+            friends: HashSet::new(),
             room_id: room_id.clone(),
             autoassist: false,
             follow_leader: false,
             drink_level: 0,
             gold: 0,
             inv: HashMap::new(),
+            quest: HashMap::new(),
             class: None,
             level: 1,
             xp: 0,
@@ -2139,7 +2742,12 @@ impl World {
                 m.combat.target = Some(attacker_id);
                 m.combat.next_ready_ms = self.now_ms;
             }
-            self.schedule_at_ms(self.now_ms, EventKind::CombatAct { attacker_id: target_id });
+            self.schedule_at_ms(
+                self.now_ms,
+                EventKind::CombatAct {
+                    attacker_id: target_id,
+                },
+            );
         }
 
         // Party auto-assist (best-effort).
@@ -2163,6 +2771,7 @@ impl World {
         &mut self,
         controller: SessionId,
         name: String,
+        principal: String,
         is_bot: bool,
         race: Race,
         class: Class,
@@ -2181,18 +2790,25 @@ impl World {
         let max_stamina = compute_max_stamina(class, &stats, 1).max(0);
         let stamina = max_stamina;
 
+        let now_ms = self.now_ms;
         let c = Character {
             id: cid,
             controller: Some(controller),
             created_by: Some(controller),
             name,
+            principal,
             is_bot,
+            bot_ever: is_bot,
+            bot_ever_since_ms: is_bot.then_some(now_ms),
+            bot_mode_changed_ms: now_ms,
+            friends: HashSet::new(),
             room_id: room_id.clone(),
             autoassist: true,
             follow_leader: false,
             drink_level: 0,
             gold: 0,
             inv: HashMap::new(),
+            quest: HashMap::new(),
             class: Some(class),
             level: 1,
             xp: 0,
@@ -2221,6 +2837,7 @@ impl World {
         let ss = self.sessions.entry(controller).or_insert(SessionState {
             controlled: Vec::new(),
             active: cid,
+            pending_confirm: None,
         });
         ss.controlled.push(cid);
         ss.active = cid;
@@ -2261,6 +2878,29 @@ impl World {
         Ok(())
     }
 
+    async fn broadcast_raft(
+        &self,
+        fw: &mut FrameWriter<tokio::net::tcp::OwnedWriteHalf>,
+        line: &str,
+    ) -> std::io::Result<()> {
+        let mut b = Vec::with_capacity(line.len() + 2);
+        b.extend_from_slice(line.as_bytes());
+        if !line.ends_with("\r\n") {
+            b.extend_from_slice(b"\r\n");
+        }
+
+        let mut seen = HashSet::<SessionId>::new();
+        for cid in self.raft_watch.iter().copied() {
+            for s in sessions_attached_to_character(self, cid) {
+                if !seen.insert(s) {
+                    continue;
+                }
+                write_resp_async(fw, RESP_OUTPUT, s, &b).await?;
+            }
+        }
+        Ok(())
+    }
+
     fn render_room_for(&self, room_id: &str, viewer: SessionId) -> String {
         let mut s = self.rooms.render_room(room_id);
 
@@ -2272,13 +2912,7 @@ impl World {
             if c.controller == Some(viewer) {
                 continue;
             }
-            let tag = if c.controller.is_none() {
-                " (mob)"
-            } else if c.is_bot {
-                " (bot)"
-            } else {
-                ""
-            };
+            let tag = if c.controller.is_none() { " (mob)" } else { "" };
             others.push(format!("{}{}", c.name, tag));
         }
         if others.is_empty() {
@@ -2294,16 +2928,30 @@ impl World {
         let mut names = self
             .chars
             .values()
-            .map(|c| {
-                let tag = if c.controller.is_none() {
-                    " (mob)"
-                } else if c.is_bot {
-                    " (bot)"
-                } else {
-                    ""
-                };
-                format!("{}{}", c.name, tag)
-            })
+            .filter(|c| c.controller.is_some())
+            .map(|c| c.name.clone())
+            .collect::<Vec<_>>();
+        names.sort();
+        names
+    }
+
+    fn online_bot_character_names(&self) -> Vec<String> {
+        let mut names = self
+            .chars
+            .values()
+            .filter(|c| c.controller.is_some() && c.is_bot)
+            .map(|c| c.name.clone())
+            .collect::<Vec<_>>();
+        names.sort();
+        names
+    }
+
+    fn online_human_character_names(&self) -> Vec<String> {
+        let mut names = self
+            .chars
+            .values()
+            .filter(|c| c.controller.is_some() && !c.is_bot)
+            .map(|c| c.name.clone())
             .collect::<Vec<_>>();
         names.sort();
         names
@@ -2632,7 +3280,7 @@ impl World {
 }
 
 fn graveyard_room_id() -> &'static str {
-    "town.graveyard"
+    "R_TOWN_GRAVEYARD_01"
 }
 
 fn is_built(p: &Character) -> bool {
@@ -2819,7 +3467,9 @@ fn compute_max_stamina(class: Class, scores: &AbilityScores, level: u32) -> i32 
     let lvl = level.max(1) as i32;
     let con = scores.mod_for(Ability::Con);
     match class {
-        Class::Fighter | Class::Barbarian | Class::Monk | Class::Rogue => (8 + 2 * lvl + con).max(0),
+        Class::Fighter | Class::Barbarian | Class::Monk | Class::Rogue => {
+            (8 + 2 * lvl + con).max(0)
+        }
         Class::Paladin | Class::Ranger => (6 + 2 * lvl + con).max(0),
         _ => (3 + lvl + con).max(0),
     }
@@ -2944,7 +3594,10 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
         cfg.world_seed,
         cfg.bartender_emote_ms,
         cfg.mob_wander_ms,
-    );
+        cfg.raft_log_path.clone(),
+        cfg.bootstrap_admins.clone(),
+        cfg.bootstrap_admin_sso.clone(),
+    )?;
     world.schedule_at_ms(0, EventKind::EnsureTavernMob);
     world.schedule_at_ms(0, EventKind::EnsureFirstFightWorm);
     world.schedule_at_ms(0, EventKind::EnsureClassHallMobs);
@@ -2976,7 +3629,7 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
             ShardReq::Attach {
                 session,
                 is_bot,
-                auth: _auth,
+                auth,
                 race,
                 class,
                 sex,
@@ -2988,12 +3641,12 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     let _ = write_resp_async(&mut fw, RESP_ERR, session, b"bad name\r\n").await;
                     continue;
                 }
+                let principal = principal_from_attach(&name, auth.as_deref());
 
                 // If the broker ever re-attaches the same session, drop prior characters first.
                 let removed = world.detach_session(session);
                 for c in removed {
-                    let tag = if c.is_bot { " (bot)" } else { "" };
-                    let leave_msg = format!("* {} left{tag}", c.name);
+                    let leave_msg = format!("* {} left", c.name);
                     let _ = world.broadcast_room(&mut fw, &c.room_id, &leave_msg).await;
                 }
 
@@ -3027,19 +3680,27 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     .and_then(PronounKey::parse)
                     .unwrap_or_else(|| PronounKey::default_for_sex(sex));
 
-                let cid = world.spawn_character(session, name.clone(), is_bot, race, class, sex, pronouns);
+                let cid = world.spawn_character(
+                    session,
+                    name.clone(),
+                    principal,
+                    is_bot,
+                    race,
+                    class,
+                    sex,
+                    pronouns,
+                );
                 let c = world
                     .chars
                     .get(&cid)
                     .expect("spawn_character inserts char");
                 let room_id = c.room_id.clone();
 
-                let tag = if is_bot { " (bot)" } else { "" };
-                let join_msg = format!("* {name} joined{tag}");
+                let join_msg = format!("* {name} joined");
                 world.broadcast_room(&mut fw, &room_id, &join_msg).await?;
 
                 let mut hi = format!(
-                    "hi {name}{tag}\r\n(type: help, rules, look, stats, kill <mob>, go <exit>, exit)\r\n"
+                    "hi {name}\r\n(type: help, rules, look, stats, kill <mob>, go <exit>, exit)\r\n"
                 );
                 hi.push_str(&format!(
                     "race: {} | class: {} | sex: {} | pronouns: {}\r\n",
@@ -3055,8 +3716,7 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
             ShardReq::Detach { session } => {
                 let removed = world.detach_session(session);
                 for c in removed {
-                    let tag = if c.is_bot { " (bot)" } else { "" };
-                    let leave_msg = format!("* {} left{tag}", c.name);
+                    let leave_msg = format!("* {} left", c.name);
                     let _ = world.broadcast_room(&mut fw, &c.room_id, &leave_msg).await;
                 }
             }
@@ -3074,8 +3734,70 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     continue;
                 };
 
+                // Session-level interactive confirmations (single-step prompts).
+                if let Some(ss) = world.sessions.get_mut(&session) {
+                    if let Some(pending) = ss.pending_confirm.take() {
+                        match pending {
+                            PendingConfirm::BotOn { cid } => {
+                                match lc.as_str() {
+                                    "yes" | "y" => {
+                                        let now_ms = world.now_ms();
+                                        let mut ok = false;
+                                        if let Some(c) = world.chars.get_mut(&cid) {
+                                            if c.controller == Some(session) {
+                                                if !c.is_bot {
+                                                    c.is_bot = true;
+                                                    c.bot_mode_changed_ms = now_ms;
+                                                }
+                                                if !c.bot_ever {
+                                                    c.bot_ever = true;
+                                                    c.bot_ever_since_ms = Some(now_ms);
+                                                }
+                                                ok = true;
+                                            }
+                                        }
+                                        let msg = if ok {
+                                            b"bot: on\r\n" as &[u8]
+                                        } else {
+                                            b"bot: request expired\r\n"
+                                        };
+                                        write_resp_async(&mut fw, RESP_OUTPUT, session, msg).await?;
+                                        continue;
+                                    }
+                                    "no" | "n" | "cancel" => {
+                                        write_resp_async(
+                                            &mut fw,
+                                            RESP_OUTPUT,
+                                            session,
+                                            b"bot: cancelled\r\n",
+                                        )
+                                        .await?;
+                                        continue;
+                                    }
+                                    _ => {
+                                        ss.pending_confirm = Some(pending);
+                                        write_resp_async(
+                                            &mut fw,
+                                            RESP_OUTPUT,
+                                            session,
+                                            b"bot: type: yes | no\r\n",
+                                        )
+                                        .await?;
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 if lc == "help" {
                     write_resp_async(&mut fw, RESP_OUTPUT, session, help_text().as_bytes()).await?;
+                    continue;
+                }
+                if lc == "areas" {
+                    let s = world.rooms.render_areas();
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
                     continue;
                 }
                 if lc == "rules" || lc == "coc" || lc == "code_of_conduct" {
@@ -3088,9 +3810,775 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
                     continue;
                 }
+                if lc == "aiping" || lc.starts_with("aiping ") || lc == "ai ping" || lc.starts_with("ai ping ")
+                {
+                    if !world.is_admin(&p) {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"nope: admin.all\r\n")
+                            .await?;
+                        continue;
+                    }
+
+                    let suffix = if lc.starts_with("aiping") {
+                        line.get("aiping".len()..).unwrap_or("")
+                    } else {
+                        line.get("ai ping".len()..).unwrap_or("")
+                    };
+                    let prompt = suffix.trim();
+                    let prompt = if prompt.is_empty() {
+                        "hey are you there? reply with exactly: pong"
+                    } else {
+                        prompt
+                    };
+
+                    let api_key = match std::env::var("OPENAI_API_KEY") {
+                        Ok(v) if !v.trim().is_empty() => v,
+                        _ => {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"aiping: missing OPENAI_API_KEY\r\n",
+                            )
+                            .await?;
+                            continue;
+                        }
+                    };
+                    let base = std::env::var("OPENAI_API_BASE")
+                        .ok()
+                        .filter(|s| !s.trim().is_empty())
+                        .unwrap_or_else(|| OPENAI_API_BASE_DEFAULT.to_string());
+                    let model = std::env::var("OPENAI_PING_MODEL")
+                        .ok()
+                        .filter(|s| !s.trim().is_empty())
+                        .unwrap_or_else(|| OPENAI_PING_MODEL_DEFAULT.to_string());
+
+                    let client = reqwest::Client::builder()
+                        .timeout(Duration::from_secs(5))
+                        .build()?;
+
+                    let t0 = std::time::Instant::now();
+                    let models = openai_ping_models(&client, &base, &api_key).await;
+                    let chat = openai_ping_chat(&client, &base, &api_key, &model, prompt).await;
+                    let ms = t0.elapsed().as_millis();
+
+                    let mut s = String::new();
+                    s.push_str("aiping:\r\n");
+                    s.push_str(&format!(" - base: {}\r\n", base.trim_end_matches('/')));
+                    s.push_str(&format!(" - model: {model}\r\n"));
+                    match models {
+                        Ok(n) => s.push_str(&format!(" - models: ok ({n})\r\n")),
+                        Err(e) => s.push_str(&format!(" - models: err ({e})\r\n")),
+                    }
+                    match chat {
+                        Ok(txt) => {
+                            let one = txt.replace('\r', "").replace('\n', "\\n");
+                            let out = if one.chars().count() > 200 {
+                                one.chars().take(200).collect::<String>() + " [truncated]"
+                            } else {
+                                one
+                            };
+                            s.push_str(&format!(" - chat: ok ({out})\r\n"));
+                        }
+                        Err(e) => s.push_str(&format!(" - chat: err ({e})\r\n")),
+                    }
+                    s.push_str(&format!(" - ms: {ms}\r\n"));
+
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
                 if lc == "uptime" {
                     let s = world.render_uptime();
                     write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+                if lc == "caps" || lc == "capabilities" || lc == "caps me" {
+                    let mut caps = world
+                        .effective_caps_for(&p)
+                        .into_iter()
+                        .map(|c| c.as_str().to_string())
+                        .collect::<Vec<_>>();
+                    caps.sort_unstable();
+                    let mut s = String::new();
+                    s.push_str("caps:\r\n");
+                    if caps.is_empty() {
+                        s.push_str(" - (none)\r\n");
+                    } else {
+                        for c in caps {
+                            s.push_str(&format!(" - {c}\r\n"));
+                        }
+                    }
+                    s.push_str("try: caps list\r\n");
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+                if lc == "caps list" {
+                    let mut s = String::new();
+                    s.push_str("capabilities:\r\n");
+                    for c in groups::Capability::ALL {
+                        s.push_str(&format!(" - {}\r\n", c.as_str()));
+                    }
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+                if lc == "groups" {
+                    let me_lc = p.principal.to_ascii_lowercase();
+                    let my_class = p.class.map(|c| c.as_str()).unwrap_or("");
+                    let mut rows = Vec::new();
+                    for g in world.groups.groups.values() {
+                        let mut role = g.members.get(&me_lc).copied();
+                        if role.is_none() {
+                            role = g.implied_role_for_class(my_class);
+                        }
+                        if let Some(r) = role {
+                            rows.push(format!(
+                                " - {}: {} ({})\r\n",
+                                g.id,
+                                g.name,
+                                r.as_str()
+                            ));
+                        }
+                    }
+                    rows.sort_unstable();
+                    let mut s = String::new();
+                    s.push_str("groups:\r\n");
+                    if rows.is_empty() {
+                        s.push_str(" - (none)\r\n");
+                    } else {
+                        for r in rows {
+                            s.push_str(&r);
+                        }
+                    }
+                    s.push_str("try: group list\r\n");
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+                if lc == "group" {
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"huh? (try: group list | group show <id|name> | group create <kind> <name> | group add <group> <player> [role] | group remove <group> <player> | group role <group> <player> <role> | group policy set <group> <key> <value> | group policy del <group> <key> | group rolecaps set <group> <role> <cap...>)\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+                if lc == "group list" {
+                    let mut rows = world
+                        .groups
+                        .groups
+                        .values()
+                        .map(|g| format!(" - {}: {} ({})\r\n", g.id, g.name, g.kind.as_str()))
+                        .collect::<Vec<_>>();
+                    rows.sort_unstable();
+                    let mut s = String::new();
+                    s.push_str("groups:\r\n");
+                    for r in rows {
+                        s.push_str(&r);
+                    }
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+                if let Some(rest) = lc.strip_prefix("group show ") {
+                    let token = rest.trim();
+                    let Some(gid) = world.resolve_group_id(token) else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: group show <id|name>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let s = world.render_group(gid);
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+                if let Some(rest) = line.strip_prefix("group create ") {
+                    if !world.has_cap(&p, groups::Capability::GroupCreate) {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"nope: group.create\r\n")
+                            .await?;
+                        continue;
+                    }
+                    let mut it = rest.trim().split_whitespace();
+                    let Some(kind_tok) = it.next() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: group create <kind> <name>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let Some(name_tok) = it.next() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: group create <kind> <name>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let Some(kind) = groups::GroupKind::parse(kind_tok) else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (kind: admin | guild | custom | class:<class>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+
+                    let name = name_tok.trim().to_string();
+                    if name.is_empty() {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"huh? (bad name)\r\n")
+                            .await?;
+                        continue;
+                    }
+                    if world
+                        .groups
+                        .group_ids_by_name
+                        .contains_key(&name.to_ascii_lowercase())
+                    {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"group: name already exists\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+
+                    // Avoid reserved IDs.
+                    let max_id = world
+                        .groups
+                        .groups
+                        .keys()
+                        .copied()
+                        .max()
+                        .unwrap_or(1999);
+                    let group_id = (max_id + 1).max(2000);
+
+                    let env = world.raft_append_group(groups::GroupLogEntry::GroupCreate {
+                        group_id,
+                        kind: kind.clone(),
+                        name: name.clone(),
+                    })?;
+                    let _ = world
+                        .broadcast_raft(
+                            &mut fw,
+                            &format!("raft[{}] {}", env.index, serde_json::to_string(&env)?),
+                        )
+                        .await;
+
+                    // For non-class groups, default the creator to owner.
+                    if !matches!(kind, groups::GroupKind::Class { .. }) {
+                        let env2 =
+                            world.raft_append_group(groups::GroupLogEntry::GroupMemberSet {
+                                group_id,
+                                member: p.name.clone(),
+                                role: Some(groups::GroupRole::Owner),
+                            })?;
+                        let _ = world
+                            .broadcast_raft(
+                                &mut fw,
+                                &format!(
+                                    "raft[{}] {}",
+                                    env2.index,
+                                    serde_json::to_string(&env2)?
+                                ),
+                            )
+                            .await;
+                    }
+
+                    let msg = format!("group: created {group_id} ({name})\r\n");
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                    continue;
+                }
+                if let Some(rest) = line.strip_prefix("group add ") {
+                    let mut it = rest.trim().split_whitespace();
+                    let Some(group_tok) = it.next() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: group add <group> <player> [role])\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let Some(member_tok) = it.next() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: group add <group> <player> [role])\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let Some(gid) = world.resolve_group_id(group_tok) else {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"huh? (bad group)\r\n")
+                            .await?;
+                        continue;
+                    };
+                    if !world.has_group_cap(&p, gid, groups::Capability::GroupMemberAdd) {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"nope: group.member.add\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    let role = it
+                        .next()
+                        .and_then(groups::GroupRole::parse)
+                        .unwrap_or(groups::GroupRole::Member);
+                    let member = normalize_principal_token(member_tok);
+                    let env = world.raft_append_group(groups::GroupLogEntry::GroupMemberSet {
+                        group_id: gid,
+                        member,
+                        role: Some(role),
+                    })?;
+                    let _ = world
+                        .broadcast_raft(
+                            &mut fw,
+                            &format!("raft[{}] {}", env.index, serde_json::to_string(&env)?),
+                        )
+                        .await;
+                    let msg = format!("group: {gid} add {member_tok} ({})\r\n", role.as_str());
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                    continue;
+                }
+                if let Some(rest) = line.strip_prefix("group remove ") {
+                    let mut it = rest.trim().split_whitespace();
+                    let Some(group_tok) = it.next() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: group remove <group> <player>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let Some(member_tok) = it.next() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: group remove <group> <player>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let Some(gid) = world.resolve_group_id(group_tok) else {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"huh? (bad group)\r\n")
+                            .await?;
+                        continue;
+                    };
+                    if !world.has_group_cap(&p, gid, groups::Capability::GroupMemberRemove) {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"nope: group.member.remove\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    let member = normalize_principal_token(member_tok);
+                    let env = world.raft_append_group(groups::GroupLogEntry::GroupMemberSet {
+                        group_id: gid,
+                        member,
+                        role: None,
+                    })?;
+                    let _ = world
+                        .broadcast_raft(
+                            &mut fw,
+                            &format!("raft[{}] {}", env.index, serde_json::to_string(&env)?),
+                        )
+                        .await;
+                    let msg = format!("group: {gid} remove {member_tok}\r\n");
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                    continue;
+                }
+                if let Some(rest) = line.strip_prefix("group role ") {
+                    let mut it = rest.trim().split_whitespace();
+                    let Some(group_tok) = it.next() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: group role <group> <player> <role>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let Some(member_tok) = it.next() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: group role <group> <player> <role>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let Some(role_tok) = it.next() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: group role <group> <player> <role>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let Some(gid) = world.resolve_group_id(group_tok) else {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"huh? (bad group)\r\n")
+                            .await?;
+                        continue;
+                    };
+                    if !world.has_group_cap(&p, gid, groups::Capability::GroupRoleSet) {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"nope: group.role.set\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    let Some(role) = groups::GroupRole::parse(role_tok) else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (role: owner | officer | member | guest)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let member = normalize_principal_token(member_tok);
+                    let env = world.raft_append_group(groups::GroupLogEntry::GroupMemberSet {
+                        group_id: gid,
+                        member,
+                        role: Some(role),
+                    })?;
+                    let _ = world
+                        .broadcast_raft(
+                            &mut fw,
+                            &format!("raft[{}] {}", env.index, serde_json::to_string(&env)?),
+                        )
+                        .await;
+                    let msg = format!("group: {gid} role {member_tok} {}\r\n", role.as_str());
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                    continue;
+                }
+                if let Some(rest) = line.strip_prefix("group policy set ") {
+                    let mut it = rest.trim().split_whitespace();
+                    let Some(group_tok) = it.next() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: group policy set <group> <key> <value>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let Some(key_tok) = it.next() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: group policy set <group> <key> <value>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let Some(value_tok) = it.next() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: group policy set <group> <key> <value>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let Some(gid) = world.resolve_group_id(group_tok) else {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"huh? (bad group)\r\n")
+                            .await?;
+                        continue;
+                    };
+                    if !world.has_group_cap(&p, gid, groups::Capability::GroupPolicySet) {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"nope: group.policy.set\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    let env = world.raft_append_group(groups::GroupLogEntry::GroupPolicySet {
+                        group_id: gid,
+                        key: key_tok.to_string(),
+                        value: Some(value_tok.to_string()),
+                    })?;
+                    let _ = world
+                        .broadcast_raft(
+                            &mut fw,
+                            &format!("raft[{}] {}", env.index, serde_json::to_string(&env)?),
+                        )
+                        .await;
+                    let msg = format!("group: {gid} policy set {key_tok}={value_tok}\r\n");
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                    continue;
+                }
+                if let Some(rest) = line.strip_prefix("group policy del ") {
+                    let mut it = rest.trim().split_whitespace();
+                    let Some(group_tok) = it.next() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: group policy del <group> <key>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let Some(key_tok) = it.next() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: group policy del <group> <key>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let Some(gid) = world.resolve_group_id(group_tok) else {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"huh? (bad group)\r\n")
+                            .await?;
+                        continue;
+                    };
+                    if !world.has_group_cap(&p, gid, groups::Capability::GroupPolicySet) {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"nope: group.policy.set\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    let env = world.raft_append_group(groups::GroupLogEntry::GroupPolicySet {
+                        group_id: gid,
+                        key: key_tok.to_string(),
+                        value: None,
+                    })?;
+                    let _ = world
+                        .broadcast_raft(
+                            &mut fw,
+                            &format!("raft[{}] {}", env.index, serde_json::to_string(&env)?),
+                        )
+                        .await;
+                    let msg = format!("group: {gid} policy del {key_tok}\r\n");
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                    continue;
+                }
+                if let Some(rest) = line.strip_prefix("group rolecaps set ") {
+                    let mut it = rest.trim().split_whitespace();
+                    let Some(group_tok) = it.next() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: group rolecaps set <group> <role> <cap...>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let Some(role_tok) = it.next() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: group rolecaps set <group> <role> <cap...>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let Some(gid) = world.resolve_group_id(group_tok) else {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"huh? (bad group)\r\n")
+                            .await?;
+                        continue;
+                    };
+                    if !world.has_group_cap(&p, gid, groups::Capability::GroupRoleCapsSet) {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"nope: group.rolecaps.set\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    let Some(role) = groups::GroupRole::parse(role_tok) else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (role: owner | officer | member | guest)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let mut caps = Vec::new();
+                    for tok in it {
+                        let Some(c) = groups::Capability::parse(tok) else {
+                            let msg = format!("huh? (bad capability: {tok})\r\n");
+                            write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                            caps.clear();
+                            break;
+                        };
+                        caps.push(c);
+                    }
+                    if caps.is_empty() {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"huh? (try: caps list)\r\n")
+                            .await?;
+                        continue;
+                    }
+                    let env = world.raft_append_group(groups::GroupLogEntry::GroupRoleCapsSet {
+                        group_id: gid,
+                        role,
+                        caps: caps.clone(),
+                    })?;
+                    let _ = world
+                        .broadcast_raft(
+                            &mut fw,
+                            &format!("raft[{}] {}", env.index, serde_json::to_string(&env)?),
+                        )
+                        .await;
+                    let msg = format!(
+                        "group: {gid} rolecaps set {} {}\r\n",
+                        role.as_str(),
+                        caps.iter().map(|c| c.as_str()).collect::<Vec<_>>().join(" ")
+                    );
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                    continue;
+                }
+                if lc == "raft" {
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"huh? (try: raft tail [n] | raft watch on|off)\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+                if let Some(rest) = lc.strip_prefix("raft tail") {
+                    if !world.has_cap(&p, groups::Capability::RaftTail) {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"nope: raft.tail\r\n")
+                            .await?;
+                        continue;
+                    }
+                    let n = rest
+                        .trim()
+                        .parse::<usize>()
+                        .ok()
+                        .unwrap_or(20)
+                        .clamp(1, 200);
+                    let mut s = String::new();
+                    s.push_str(&format!(
+                        "raft:\r\n - path: {}\r\n - next_index: {}\r\n",
+                        world.raft.path().display(),
+                        world.raft.next_index()
+                    ));
+                    for line in world.raft.recent_lines(n) {
+                        s.push_str(&line);
+                        s.push_str("\r\n");
+                    }
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+                if let Some(rest) = lc.strip_prefix("raft watch ") {
+                    if !world.has_cap(&p, groups::Capability::RaftWatch) {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"nope: raft.watch\r\n")
+                            .await?;
+                        continue;
+                    }
+                    match rest.trim() {
+                        "on" => {
+                            world.raft_watch.insert(p.id);
+                            write_resp_async(&mut fw, RESP_OUTPUT, session, b"raft: watch on\r\n")
+                                .await?;
+                        }
+                        "off" => {
+                            world.raft_watch.remove(&p.id);
+                            write_resp_async(&mut fw, RESP_OUTPUT, session, b"raft: watch off\r\n")
+                                .await?;
+                        }
+                        _ => {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"huh? (try: raft watch on|off)\r\n",
+                            )
+                            .await?;
+                        }
+                    }
+                    continue;
+                }
+                if lc == "where" || lc == "room" {
+                    let s = format!("room: {}\r\n", p.room_id);
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+                if lc == "warp" {
+                    if !world.has_cap(&p, groups::Capability::WorldWarp) {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"nope: world.warp\r\n")
+                            .await?;
+                        continue;
+                    }
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"huh? (try: warp <room_id>)\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+                if lc.starts_with("warp ") {
+                    if !world.has_cap(&p, groups::Capability::WorldWarp) {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"nope: world.warp\r\n")
+                            .await?;
+                        continue;
+                    }
+                    let to = line[5..].trim();
+                    if to.is_empty() {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: warp <room_id>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    teleport_to(&mut world, &mut fw, session, to, "warps").await?;
                     continue;
                 }
                 if lc == "stats" || lc == "score" {
@@ -3110,6 +4598,10 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                 if lc.starts_with("look ") {
                     let target = line[5..].trim();
                     if let Some(desc) = tavern_object(&p.room_id, target) {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, desc.as_bytes()).await?;
+                    } else if let Some(desc) = job_board_object(&p, target) {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, desc.as_bytes()).await?;
+                    } else if let Some(desc) = sewers_object(&p, target) {
                         write_resp_async(&mut fw, RESP_OUTPUT, session, desc.as_bytes()).await?;
                     } else if let Some(desc) = heroes_object(&p.room_id, target) {
                         write_resp_async(&mut fw, RESP_OUTPUT, session, desc.as_bytes()).await?;
@@ -3192,13 +4684,124 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                             .await?;
                         }
                     }
-                    continue;
-                }
+                        continue;
+                    }
 
-                if lc == "race" {
-                    let cur = world
-                        .active_char(session)
-                        .and_then(|c| c.race)
+                    if lc == "faction" {
+                        let cur = p
+                            .quest
+                            .get("q.q2_job_board.faction")
+                            .map(|v| v.trim())
+                            .filter(|v| !v.is_empty())
+                            .unwrap_or("unset");
+                        let msg = format!(
+                            "faction: {cur}\r\ntry: faction civic|industrial|green (at the job board)\r\n"
+                        );
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                        continue;
+                    }
+                    if let Some(rest) = lc.strip_prefix("faction ") {
+                        if p.room_id != ROOM_TOWN_JOB_BOARD {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"huh? (try this at the job board; go to the square and: look board)\r\n",
+                            )
+                            .await?;
+                            continue;
+                        }
+                        let token = rest.trim();
+                        if token.is_empty() {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"huh? (try: faction civic|industrial|green)\r\n",
+                            )
+                            .await?;
+                            continue;
+                        }
+                        let contracts_done = p
+                            .quest
+                            .get("q.q2_job_board.contracts_done")
+                            .and_then(|v| v.trim().parse::<i64>().ok())
+                            .unwrap_or(0)
+                            .clamp(0, 3);
+                        if contracts_done < 3 {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"board clerk: finish the 3 starter contracts first.\r\n(try: look board)\r\n",
+                            )
+                            .await?;
+                            continue;
+                        }
+                        let already = p
+                            .quest
+                            .get("q.q2_job_board.faction")
+                            .map(|v| v.trim())
+                            .is_some_and(|v| !v.is_empty() && v != "unset");
+                        if already {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"board clerk: contact already chosen.\r\n",
+                            )
+                            .await?;
+                            continue;
+                        }
+
+                        let faction = match token {
+                            "civic" | "industrial" | "green" => token,
+                            _ => {
+                                write_resp_async(
+                                    &mut fw,
+                                    RESP_OUTPUT,
+                                    session,
+                                    b"huh? (try: faction civic|industrial|green)\r\n",
+                                )
+                                .await?;
+                                continue;
+                            }
+                        };
+
+                        if let Some(c) = world.active_char_mut(session) {
+                            c.quest
+                                .insert("q.q2_job_board.faction".to_string(), faction.to_string());
+                            c.quest.insert(
+                                "q.q2_job_board.repeatables_unlocked".to_string(),
+                                "1".to_string(),
+                            );
+                            c.quest
+                                .insert("gate.job_board.repeatables".to_string(), "1".to_string());
+                            if faction == "civic" || faction == "industrial" {
+                                c.quest.insert("gate.sewers.entry".to_string(), "1".to_string());
+                            }
+                            if faction == "industrial" || faction == "green" {
+                                c.quest.insert("gate.quarry.entry".to_string(), "1".to_string());
+                            }
+                            c.quest.insert(
+                                "q.q2_job_board.state".to_string(),
+                                "repeatables".to_string(),
+                            );
+                        }
+
+                        let msg = format!(
+                            "board clerk: stamped. contact set to {faction}.\r\n(sewers access may now be unsealed.)\r\n"
+                        );
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                        let room_msg = format!("* {} signs the job board ledger.", p.name);
+                        let _ = world.broadcast_room(&mut fw, &p.room_id, &room_msg).await;
+                        continue;
+                    }
+
+                    if lc == "race" {
+                        let cur = world
+                            .active_char(session)
+                            .and_then(|c| c.race)
                         .map(|r| r.as_str())
                         .unwrap_or("(none)");
                     let msg = format!("race: {cur}\r\ntry: race list | race human\r\n");
@@ -4620,6 +6223,279 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     continue;
                 }
 
+                if lc == "friends" || lc == "friend" || lc == "friends list" || lc == "friend list"
+                {
+                    let mut names = world
+                        .chars
+                        .get(&p.id)
+                        .map(|c| c.friends.iter().cloned().collect::<Vec<_>>())
+                        .unwrap_or_default();
+                    names.sort_by(|a, b| {
+                        a.to_ascii_lowercase()
+                            .cmp(&b.to_ascii_lowercase())
+                            .then_with(|| a.cmp(b))
+                    });
+                    let mut s = String::new();
+                    s.push_str("friends:\r\n");
+                    if names.is_empty() {
+                        s.push_str(" - nobody\r\n");
+                    } else {
+                        for n in names {
+                            s.push_str(" - ");
+                            s.push_str(&n);
+                            s.push_str("\r\n");
+                        }
+                    }
+                    s.push_str("usage: friends add <player> | friends del <player>\r\n");
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+                if lc == "friends add" || lc == "friend add" {
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"usage: friends add <player>\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+                if lc.starts_with("friends add ") || lc.starts_with("friend add ") {
+                    let rest = if lc.starts_with("friends add ") {
+                        line[12..].trim()
+                    } else {
+                        line[11..].trim()
+                    };
+                    if rest.is_empty() {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"usage: friends add <player>\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+
+                    let Some(tgt_id) = world.find_player_by_prefix(rest) else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"friends: no such player (or ambiguous)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    if tgt_id == p.id {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"friends: can't add yourself\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    let tgt_name = world
+                        .chars
+                        .get(&tgt_id)
+                        .map(|c| c.name.clone())
+                        .unwrap_or_else(|| rest.to_string());
+
+                    let already = world
+                        .chars
+                        .get(&p.id)
+                        .is_some_and(|c| c.friends.iter().any(|f| f.eq_ignore_ascii_case(&tgt_name)));
+                    if already {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"friends: already added\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    if let Some(c) = world.chars.get_mut(&p.id) {
+                        c.friends.insert(tgt_name.clone());
+                    }
+                    let msg = format!("friends: added {}\r\n", tgt_name);
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                    continue;
+                }
+
+                if lc == "friends del"
+                    || lc == "friends remove"
+                    || lc == "friends rm"
+                    || lc == "friend del"
+                    || lc == "friend remove"
+                    || lc == "friend rm"
+                {
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"usage: friends del <player>\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+                if lc.starts_with("friends del ")
+                    || lc.starts_with("friends remove ")
+                    || lc.starts_with("friends rm ")
+                    || lc.starts_with("friend del ")
+                    || lc.starts_with("friend remove ")
+                    || lc.starts_with("friend rm ")
+                {
+                    let rest = if lc.starts_with("friends del ") {
+                        line[12..].trim()
+                    } else if lc.starts_with("friends rm ") {
+                        line[11..].trim()
+                    } else if lc.starts_with("friends remove ") {
+                        line[15..].trim()
+                    } else if lc.starts_with("friend del ") {
+                        line[11..].trim()
+                    } else if lc.starts_with("friend rm ") {
+                        line[10..].trim()
+                    } else {
+                        line[14..].trim() // friend remove
+                    };
+
+                    if rest.is_empty() {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"usage: friends del <player>\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+
+                    let Some(c) = world.chars.get(&p.id) else {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"huh?\r\n").await?;
+                        continue;
+                    };
+
+                    // Prefer exact match, then prefix match, case-insensitive.
+                    let mut matches = c
+                        .friends
+                        .iter()
+                        .filter(|f| f.eq_ignore_ascii_case(rest))
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    if matches.is_empty() {
+                        let rest_lc = rest.trim().to_ascii_lowercase();
+                        matches = c
+                            .friends
+                            .iter()
+                            .filter(|f| f.to_ascii_lowercase().starts_with(&rest_lc))
+                            .cloned()
+                            .collect::<Vec<_>>();
+                    }
+
+                    if matches.is_empty() {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"friends: not found\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    if matches.len() > 1 {
+                        matches.sort_by(|a, b| {
+                            a.to_ascii_lowercase()
+                                .cmp(&b.to_ascii_lowercase())
+                                .then_with(|| a.cmp(b))
+                        });
+                        let msg = format!(
+                            "friends: ambiguous; try one of: {}\r\n",
+                            matches.join(", ")
+                        );
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                        continue;
+                    }
+
+                    let target = matches.pop().unwrap();
+                    if let Some(c) = world.chars.get_mut(&p.id) {
+                        c.friends.retain(|f| !f.eq_ignore_ascii_case(&target));
+                    }
+                    let msg = format!("friends: removed {}\r\n", target);
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                    continue;
+                }
+
+                if lc == "bot" {
+                    let on = world.chars.get(&p.id).is_some_and(|c| c.is_bot);
+                    let msg = if on {
+                        b"bot: on\r\nusage: bot on|off\r\n" as &[u8]
+                    } else {
+                        b"bot: off\r\nusage: bot on|off\r\n"
+                    };
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, msg).await?;
+                    continue;
+                }
+                if lc == "bot off" {
+                    let now_ms = world.now_ms();
+                    if let Some(c) = world.chars.get_mut(&p.id) {
+                        if c.is_bot {
+                            c.is_bot = false;
+                            c.bot_mode_changed_ms = now_ms;
+                            write_resp_async(&mut fw, RESP_OUTPUT, session, b"bot: off\r\n").await?;
+                        } else {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"bot: already off\r\n",
+                            )
+                            .await?;
+                        }
+                    }
+                    continue;
+                }
+                if lc == "bot on" {
+                    let now_ms = world.now_ms();
+                    let Some(c) = world.chars.get(&p.id) else {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"huh?\r\n").await?;
+                        continue;
+                    };
+                    if c.is_bot {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"bot: already on\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    if !c.bot_ever {
+                        if let Some(ss) = world.sessions.get_mut(&session) {
+                            ss.pending_confirm = Some(PendingConfirm::BotOn { cid: p.id });
+                        }
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"bot: are you sure?\r\ntype: yes | no\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+
+                    if let Some(c) = world.chars.get_mut(&p.id) {
+                        c.is_bot = true;
+                        c.bot_mode_changed_ms = now_ms;
+                        // bot_ever is already true; keep the original timestamp.
+                    }
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, b"bot: on\r\n").await?;
+                    continue;
+                }
+
                 if lc == "assist" {
                     write_resp_async(
                         &mut fw,
@@ -5284,7 +7160,44 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                 if lc == "who" {
                     let names = world.online_character_names();
                     let mut s = String::new();
-                    s.push_str("online (characters):\r\n");
+                    s.push_str("online (players):\r\n");
+                    for n in names {
+                        s.push_str(" - ");
+                        s.push_str(&n);
+                        s.push_str("\r\n");
+                    }
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+
+                if lc == "botsense" {
+                    let bots = world.online_bot_character_names();
+                    if bots.is_empty() {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"botsense: all clear\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+
+                    let mut s = String::new();
+                    s.push_str("botsense (bot-mode players):\r\n");
+                    for n in bots {
+                        s.push_str(" - ");
+                        s.push_str(&n);
+                        s.push_str("\r\n");
+                    }
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+
+                if lc == "humans" || lc == "whomans" {
+                    let names = world.online_human_character_names();
+                    let mut s = String::new();
+                    s.push_str("online (humans):\r\n");
                     for n in names {
                         s.push_str(" - ");
                         s.push_str(&n);
@@ -5388,6 +7301,16 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                 }
 
                 if lc == "proto" {
+                    if !world.has_cap(&p, groups::Capability::WorldProtoLoad) {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"nope: world.proto.load\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
                     write_resp_async(
                         &mut fw,
                         RESP_OUTPUT,
@@ -5398,6 +7321,16 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     continue;
                 }
                 if lc == "proto list" {
+                    if !world.has_cap(&p, groups::Capability::WorldProtoLoad) {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"nope: world.proto.load\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
                     let ids = list_protoadventures().unwrap_or_default();
                     let mut s = String::new();
                     s.push_str("protoadventures:\r\n");
@@ -5411,6 +7344,16 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     continue;
                 }
                 if lc == "proto exit" {
+                    if !world.has_cap(&p, groups::Capability::WorldProtoLoad) {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"nope: world.proto.load\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
                     if world.rooms.has_room(ROOM_TOWN_GATE) {
                         teleport_to(&mut world, &mut fw, session, ROOM_TOWN_GATE, "returns").await?;
                     } else {
@@ -5425,6 +7368,16 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     continue;
                 }
                 if let Some(rest) = line.strip_prefix("proto ") {
+                    if !world.has_cap(&p, groups::Capability::WorldProtoLoad) {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"nope: world.proto.load\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
                     let mut id = rest.trim().to_ascii_lowercase();
                     if id.is_empty() {
                         write_resp_async(
@@ -5463,6 +7416,460 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     teleport_to(&mut world, &mut fw, session, &start, "enters").await?;
                     continue;
                 }
+
+                if lc == "quest" {
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"huh? (try: quest list | quest get <key> | quest set <key> <value> | quest del <key>)\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+                if lc == "quest list" {
+                    if p.quest.is_empty() {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"quest: (none)\r\n")
+                            .await?;
+                        continue;
+                    }
+                    let mut xs = p
+                        .quest
+                        .iter()
+                        .map(|(k, v)| format!(" - {k}={v}\r\n"))
+                        .collect::<Vec<_>>();
+                    xs.sort_unstable();
+                    let mut s = String::new();
+                    s.push_str("quest:\r\n");
+                    for x in xs {
+                        s.push_str(&x);
+                    }
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+                if let Some(rest) = line.strip_prefix("quest get ") {
+                    let key = rest.trim();
+                    if key.is_empty() {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: quest get <key>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    if let Some(v) = p.quest.get(key) {
+                        let s = format!("quest: {key}={v}\r\n");
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    } else {
+                        let s = format!("quest: {key}=(unset)\r\n");
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    }
+                    continue;
+                }
+                if let Some(rest) = line.strip_prefix("quest set ") {
+                    let mut it = rest.trim().split_whitespace();
+                    let Some(key) = it.next() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: quest set <key> <value>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let Some(value) = it.next() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: quest set <key> <value>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    if let Some(c) = world.active_char_mut(session) {
+                        c.quest.insert(key.to_string(), value.to_string());
+                    }
+                    let s = format!("quest: set {key}={value}\r\n");
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+                if let Some(rest) = line.strip_prefix("quest del ") {
+                    let key = rest.trim();
+                    if key.is_empty() {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: quest del <key>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    let removed = world
+                        .active_char_mut(session)
+                        .and_then(|c| c.quest.remove(key))
+                        .is_some();
+                    let s = if removed {
+                        format!("quest: del {key}\r\n")
+                    } else {
+                        format!("quest: del {key} (missing)\r\n")
+                    };
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+
+                if lc == "turn" {
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, b"huh? (try: turn valve)\r\n")
+                        .await?;
+                    continue;
+                }
+                if let Some(rest) = lc.strip_prefix("turn ") {
+                    let target = rest.trim();
+                    if target.is_empty() {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"huh? (try: turn valve)\r\n")
+                            .await?;
+                        continue;
+                    }
+
+                    let valve_ix = match p.room_id.as_str() {
+                        "R_SEW_VALVE1_02" => Some(1),
+                        "R_SEW_VALVE2_02" => Some(2),
+                        "R_SEW_VALVE3_02" => Some(3),
+                        _ => None,
+                    };
+
+                    if valve_ix.is_none() {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (nothing to turn here)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+
+                    if target != "valve" && target != "wheel" && target != "valve wheel" {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"huh? (try: turn valve)\r\n")
+                            .await?;
+                        continue;
+                    }
+
+                    let key_done = format!("q.q3_sewer_valves.valve_{}", valve_ix.unwrap());
+                    let (opened, already) = {
+                        let Some(c) = world.active_char_mut(session) else {
+                            write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n").await?;
+                            continue;
+                        };
+
+                        let already = c
+                            .quest
+                            .get(&key_done)
+                            .map(|v| v.trim())
+                            .is_some_and(|v| !v.is_empty() && v != "0" && v != "false");
+                        if already {
+                            let opened = c
+                                .quest
+                                .get("q.q3_sewer_valves.valves_opened")
+                                .and_then(|v| v.trim().parse::<i64>().ok())
+                                .unwrap_or(0)
+                                .clamp(0, 3);
+                            (opened, true)
+                        } else {
+                            c.quest.insert(key_done, "1".to_string());
+                            let mut opened = c
+                                .quest
+                                .get("q.q3_sewer_valves.valves_opened")
+                                .and_then(|v| v.trim().parse::<i64>().ok())
+                                .unwrap_or(0)
+                                .clamp(0, 3);
+                            opened = (opened + 1).clamp(0, 3);
+                            c.quest
+                                .insert("q.q3_sewer_valves.valves_opened".to_string(), opened.to_string());
+                            (opened, false)
+                        }
+                    };
+
+                    if already {
+                        let msg = format!("the valve is already open. (valves opened: {opened}/3)\r\n");
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                    } else {
+                        let msg = format!("you turn the valve wheel. (valves opened: {opened}/3)\r\n");
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                        let room_msg = format!("* {} turns the valve wheel.", p.name);
+                        let _ = world.broadcast_room(&mut fw, &p.room_id, &room_msg).await;
+	                    }
+	                    continue;
+	                }
+
+	                if lc == "light" {
+	                    write_resp_async(&mut fw, RESP_OUTPUT, session, b"huh? (try: light pylon)\r\n")
+	                        .await?;
+	                    continue;
+	                }
+	                if let Some(rest) = lc.strip_prefix("light ") {
+	                    let target = rest.trim();
+	                    if target.is_empty() {
+	                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"huh? (try: light pylon)\r\n")
+	                            .await?;
+	                        continue;
+	                    }
+
+	                    let pylon_ix = match p.room_id.as_str() {
+	                        "R_HILL_PYLON_01" => Some(1),
+	                        "R_HILL_PYLON_02" => Some(2),
+	                        "R_HILL_PYLON_03" => Some(3),
+	                        _ => None,
+	                    };
+	                    if pylon_ix.is_none() {
+	                        write_resp_async(
+	                            &mut fw,
+	                            RESP_OUTPUT,
+	                            session,
+	                            b"huh? (nothing to light here)\r\n",
+	                        )
+	                        .await?;
+	                        continue;
+	                    }
+
+	                    if target != "pylon" && target != "ward" && target != "tower" && target != "beacon" {
+	                        write_resp_async(
+	                            &mut fw,
+	                            RESP_OUTPUT,
+	                            session,
+	                            b"huh? (try: light pylon)\r\n",
+	                        )
+	                        .await?;
+	                        continue;
+	                    }
+
+	                    let key_done = format!("q.q6_hillfort_signal.pylon_{}", pylon_ix.unwrap());
+	                    let (lit, already) = {
+	                        let Some(c) = world.active_char_mut(session) else {
+	                            write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n").await?;
+	                            continue;
+	                        };
+	                        let already = c
+	                            .quest
+	                            .get(&key_done)
+	                            .map(|v| v.trim())
+	                            .is_some_and(|v| !v.is_empty() && v != "0" && v != "false");
+
+	                        if already {
+	                            let lit = c
+	                                .quest
+	                                .get("q.q6_hillfort_signal.pylons_lit")
+	                                .and_then(|v| v.trim().parse::<i64>().ok())
+	                                .unwrap_or(0)
+	                                .clamp(0, 3);
+	                            (lit, true)
+	                        } else {
+	                            c.quest.insert(key_done, "1".to_string());
+	                            let mut lit = c
+	                                .quest
+	                                .get("q.q6_hillfort_signal.pylons_lit")
+	                                .and_then(|v| v.trim().parse::<i64>().ok())
+	                                .unwrap_or(0)
+	                                .clamp(0, 3);
+	                            lit = (lit + 1).clamp(0, 3);
+	                            c.quest.insert(
+	                                "q.q6_hillfort_signal.pylons_lit".to_string(),
+	                                lit.to_string(),
+	                            );
+	                            (lit, false)
+	                        }
+	                    };
+
+	                    if already {
+	                        let msg = format!("the pylon is already lit. (pylons lit: {lit}/3)\r\n");
+	                        write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+	                    } else {
+	                        let mut msg = format!("you relight the ward pylon. (pylons lit: {lit}/3)\r\n");
+	                        if lit >= 3 {
+	                            msg.push_str("somewhere deeper in the fort, a gate finally agrees.\r\n");
+	                        }
+	                        write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+	                        let room_msg = format!("* {} relights the ward pylon.", p.name);
+	                        let _ = world.broadcast_room(&mut fw, &p.room_id, &room_msg).await;
+	                    }
+	                    continue;
+	                }
+
+	                if lc == "pull" {
+	                    write_resp_async(
+	                        &mut fw,
+	                        RESP_OUTPUT,
+                        session,
+                        b"huh? (try: pull lever)\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+	                if let Some(rest) = lc.strip_prefix("pull ") {
+	                    let target = rest.trim();
+	                    if target.is_empty() {
+	                        write_resp_async(
+	                            &mut fw,
+	                            RESP_OUTPUT,
+	                            session,
+	                            b"huh? (try: pull lever)\r\n",
+	                        )
+	                        .await?;
+	                        continue;
+	                    }
+
+	                    if target != "lever" && target != "bypass" && target != "switch" && target != "quarry" {
+	                        write_resp_async(
+	                            &mut fw,
+	                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: pull lever)\r\n",
+                        )
+	                        .await?;
+	                        continue;
+	                    }
+
+	                    enum PullLeverKind {
+	                        SewersBypass,
+	                        RailSwitch1,
+	                        RailSwitch2,
+	                    }
+	                    let kind = match p.room_id.as_str() {
+	                        "R_SEW_REWARD_01" => Some(PullLeverKind::SewersBypass),
+	                        "R_RAIL_YARD_04" => Some(PullLeverKind::RailSwitch1),
+	                        "R_RAIL_YARD_08" => Some(PullLeverKind::RailSwitch2),
+	                        _ => None,
+	                    };
+	                    let Some(kind) = kind else {
+	                        write_resp_async(
+	                            &mut fw,
+	                            RESP_OUTPUT,
+	                            session,
+	                            b"huh? (nothing to pull here)\r\n",
+	                        )
+	                        .await?;
+	                        continue;
+	                    };
+
+	                    match kind {
+	                        PullLeverKind::SewersBypass => {
+	                            let (valves_opened, already) = {
+	                                let Some(c) = world.active_char_mut(session) else {
+	                                    write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n")
+	                                        .await?;
+	                                    continue;
+	                                };
+	                                let valves_opened = c
+	                                    .quest
+	                                    .get("q.q3_sewer_valves.valves_opened")
+	                                    .and_then(|v| v.trim().parse::<i64>().ok())
+	                                    .unwrap_or(0)
+	                                    .clamp(0, 3);
+
+	                                let already = eval_gate_expr(c, "gate.sewers.shortcut_to_quarry");
+
+	                                if !already && valves_opened >= 3 {
+	                                    c.quest.insert(
+	                                        "gate.sewers.shortcut_to_quarry".to_string(),
+	                                        "1".to_string(),
+	                                    );
+	                                }
+
+	                                (valves_opened, already)
+	                            };
+
+	                            if valves_opened < 3 {
+	                                write_resp_async(
+	                                    &mut fw,
+	                                    RESP_OUTPUT,
+	                                    session,
+	                                    b"the lever doesn't budge. something upstream still has pressure.\r\n",
+	                                )
+	                                .await?;
+	                                continue;
+	                            }
+	                            if already {
+	                                write_resp_async(
+	                                    &mut fw,
+	                                    RESP_OUTPUT,
+	                                    session,
+	                                    b"the lever is already down. the quarry bypass is unsealed.\r\n",
+	                                )
+	                                .await?;
+	                                continue;
+	                            }
+
+	                            write_resp_async(
+	                                &mut fw,
+	                                RESP_OUTPUT,
+	                                session,
+	                                b"you pull the bypass lever. somewhere deep in the tunnels, metal shifts.\r\n",
+	                            )
+	                            .await?;
+	                            let room_msg =
+	                                format!("* {} pulls the bypass lever. something heavy shifts.", p.name);
+	                            let _ = world.broadcast_room(&mut fw, &p.room_id, &room_msg).await;
+	                            continue;
+	                        }
+	                        PullLeverKind::RailSwitch1 | PullLeverKind::RailSwitch2 => {
+	                            let (pulled, already, unlocked_now) = {
+	                                let Some(c) = world.active_char_mut(session) else {
+	                                    write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n")
+	                                        .await?;
+	                                    continue;
+	                                };
+	                                let (key, label) = match kind {
+	                                    PullLeverKind::RailSwitch1 => ("e.e17.lever_1", "1"),
+	                                    PullLeverKind::RailSwitch2 => ("e.e17.lever_2", "2"),
+	                                    _ => unreachable!(),
+	                                };
+	                                let already = eval_gate_expr(c, key);
+	                                if !already {
+	                                    c.quest.insert(key.to_string(), "1".to_string());
+	                                }
+
+	                                let l1 = eval_gate_expr(c, "e.e17.lever_1") as i64;
+	                                let l2 = eval_gate_expr(c, "e.e17.lever_2") as i64;
+	                                let pulled = (l1 + l2).clamp(0, 2);
+	                                let has_pass = eval_gate_expr(c, "gate.rail_spur.pass");
+	                                let unlocked_now = !has_pass && pulled >= 2;
+	                                if unlocked_now {
+	                                    c.quest.insert("gate.rail_spur.pass".to_string(), "1".to_string());
+	                                }
+	                                // Keep a short state key so `quest list` is readable in dev.
+	                                c.quest.insert(
+	                                    "e.e17.last_lever".to_string(),
+	                                    label.to_string(),
+	                                );
+	                                (pulled, already, unlocked_now)
+	                            };
+
+	                            if already {
+	                                let msg = format!(
+	                                    "the switch is already thrown. (rail levers: {pulled}/2)\r\n"
+	                                );
+	                                write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+	                                continue;
+	                            }
+
+	                            let mut msg =
+	                                format!("you throw the switch lever. (rail levers: {pulled}/2)\r\n");
+	                            if unlocked_now {
+	                                msg.push_str(
+	                                    "somewhere in the terminal, a lock tag snaps loose.\r\n",
+	                                );
+	                            }
+	                            write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+	                            let room_msg = format!("* {} throws the switch lever.", p.name);
+	                            let _ = world.broadcast_room(&mut fw, &p.room_id, &room_msg).await;
+	                            continue;
+	                        }
+	                    }
+	                }
 
                 let mut moved = false;
 
@@ -5654,7 +8061,10 @@ async fn handle_event(
                 return Ok(());
             };
             if world.now_ms() < att.combat.next_ready_ms {
-                world.schedule_at_ms(att.combat.next_ready_ms, EventKind::CombatAct { attacker_id });
+                world.schedule_at_ms(
+                    att.combat.next_ready_ms,
+                    EventKind::CombatAct { attacker_id },
+                );
                 return Ok(());
             }
 
@@ -5907,7 +8317,6 @@ async fn apply_damage_to_mob(
     Ok(true)
 }
 
-
 async fn apply_damage_to_player(
     world: &mut World,
     fw: &mut FrameWriter<tokio::net::tcp::OwnedWriteHalf>,
@@ -5994,6 +8403,73 @@ async fn send_to_graveyard(
     Ok(())
 }
 
+fn eval_gate_expr(p: &Character, expr: &str) -> bool {
+    let expr = expr.trim();
+    if expr.is_empty() {
+        return true;
+    }
+
+    let lookup = |key: &str| -> Option<&str> { p.quest.get(key).map(String::as_str) };
+
+    let truthy = |v: Option<&str>| -> bool {
+        let Some(v) = v else {
+            return false;
+        };
+        let v = v.trim();
+        if v.is_empty() {
+            return false;
+        }
+        if let Ok(n) = v.parse::<i64>() {
+            return n != 0;
+        }
+        matches!(v.to_ascii_lowercase().as_str(), "true" | "yes" | "on")
+    };
+
+    // Operator precedence: match multi-char ops before single-char.
+    let ops: [(&str, &str); 7] = [
+        (">=", "ge"),
+        ("<=", "le"),
+        ("!=", "ne"),
+        ("==", "eq"),
+        (">", "gt"),
+        ("<", "lt"),
+        ("=", "eq"),
+    ];
+    for (tok, op) in ops {
+        let Some(i) = expr.find(tok) else {
+            continue;
+        };
+        let key = expr[..i].trim();
+        let rhs = expr[i + tok.len()..].trim();
+        if key.is_empty() || rhs.is_empty() {
+            return false;
+        }
+
+        let lhs_raw = lookup(key).unwrap_or("0").trim();
+        let lhs_num = lhs_raw.parse::<i64>().ok();
+        let rhs_num = rhs.parse::<i64>().ok();
+
+        match op {
+            "eq" => match (lhs_num, rhs_num) {
+                (Some(a), Some(b)) => return a == b,
+                _ => return lhs_raw == rhs,
+            },
+            "ne" => match (lhs_num, rhs_num) {
+                (Some(a), Some(b)) => return a != b,
+                _ => return lhs_raw != rhs,
+            },
+            "ge" => return lhs_num.is_some_and(|a| rhs_num.is_some_and(|b| a >= b)),
+            "le" => return lhs_num.is_some_and(|a| rhs_num.is_some_and(|b| a <= b)),
+            "gt" => return lhs_num.is_some_and(|a| rhs_num.is_some_and(|b| a > b)),
+            "lt" => return lhs_num.is_some_and(|a| rhs_num.is_some_and(|b| a < b)),
+            _ => return false,
+        }
+    }
+
+    // No operator: treat as a boolean gate key.
+    truthy(lookup(expr))
+}
+
 async fn try_move(
     world: &mut World,
     fw: &mut FrameWriter<tokio::net::tcp::OwnedWriteHalf>,
@@ -6014,13 +8490,42 @@ async fn try_move(
 
     if !is_built(&p) {
         if p.room_id == ROOM_SCHOOL_ORIENTATION {
-            write_resp_async(fw, RESP_OUTPUT, session, b"trainer: finish setup first (race/class)\r\n").await?;
+            write_resp_async(
+                fw,
+                RESP_OUTPUT,
+                session,
+                b"trainer: finish setup first (race/class)\r\n",
+            )
+            .await?;
             return Ok(true);
         }
         if next != ROOM_SCHOOL_ORIENTATION {
-            write_resp_async(fw, RESP_OUTPUT, session, b"finish setup first: return to orientation (race/class)\r\n").await?;
+            write_resp_async(
+                fw,
+                RESP_OUTPUT,
+                session,
+                b"finish setup first: return to orientation (race/class)\r\n",
+            )
+            .await?;
             return Ok(true);
         }
+    }
+
+    let gate_ok = ex.gate.as_deref().map_or(true, |g| eval_gate_expr(&p, g));
+    if !gate_ok {
+        if let Some(g) = ex.gate.as_deref() {
+            let msg = format!("the way is sealed. (gate: {g})\r\n");
+            write_resp_async(fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+        } else {
+            write_resp_async(fw, RESP_OUTPUT, session, SEALED_EXIT_MSG).await?;
+        }
+        return Ok(true);
+    }
+
+    // A sealed exit can be conditionally opened by a gate expression.
+    if ex.sealed && ex.gate.is_none() {
+        write_resp_async(fw, RESP_OUTPUT, session, SEALED_EXIT_MSG).await?;
+        return Ok(true);
     }
 
     if !world.rooms.has_room(next) {
@@ -6052,8 +8557,16 @@ async fn try_move(
         .broadcast_room(fw, &to, &format!("* {} arrives", p.name))
         .await?;
 
+    let q2_msg = world
+        .chars
+        .get_mut(&cid)
+        .and_then(|pp| q2_room_enter(pp, &to));
+
     let s = world.render_room_for(&to, session);
     write_resp_async(fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+    if let Some(msg) = q2_msg {
+        write_resp_async(fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+    }
 
     // Party follow: if the mover is the party leader, bring along members in the same room
     // who have follow enabled.
@@ -6140,15 +8653,36 @@ async fn try_move(
 fn help_text() -> String {
     let s = "\
 help\r\n\
+report\r\n\
+report last [n]\r\n\
+report search <text>\r\n\
+report submit <line_id> <reason> [note...]\r\n\
+report locate <line_id>\r\n\
+report reasons\r\n\
 rules\r\n\
 buildinfo\r\n\
+aiping\r\n\
 uptime\r\n\
 stats\r\n\
 look\r\n\
 look <thing>\r\n\
+look board\r\n\
+look chalk\r\n\
+faction\r\n\
+faction <civic|industrial|green>\r\n\
+turn valve\r\n\
+pull lever\r\n\
+light pylon\r\n\
+areas\r\n\
 proto list\r\n\
 proto <adventure_id>\r\n\
 proto exit\r\n\
+quest list\r\n\
+quest get <key>\r\n\
+quest set <key> <value>\r\n\
+quest del <key>\r\n\
+where (room)\r\n\
+warp <room_id>\r\n\
 party\r\n\
 party create\r\n\
 party disband\r\n\
@@ -6161,6 +8695,9 @@ party say <msg>\r\n\
 party run <adventure_id>\r\n\
 assist on|off\r\n\
 follow on|off\r\n\
+bot\r\n\
+bot on|off\r\n\
+botsense\r\n\
 race list\r\n\
 race <name>\r\n\
 sessions\r\n\
@@ -6188,7 +8725,12 @@ sell <item> <qty>\r\n\
 i\r\n\
 kill <mob>\r\n\
 tell <player> <msg>\r\n\
+friends\r\n\
+friends add <player>\r\n\
+friends del <player>\r\n\
 who\r\n\
+humans\r\n\
+whomans\r\n\
 go <exit>\r\n\
 (or just type an exit name / alias)\r\n\
 say <msg>\r\n\

@@ -1,0 +1,441 @@
+version: 1
+zone_id: old_road_checkpoint
+zone_name: Old Road Checkpoint
+area_id: A01
+level_band:
+- 4
+- 6
+start_room: P_CHECKPOINT_QUARRY
+rooms:
+- id: P_CHECKPOINT_QUARRY
+  name: Quarry Road Ramp
+  cluster: CL_CHECKPOINT_ROAD
+  tags:
+  - portal.P_CHECKPOINT_QUARRY
+  desc: |
+    A concrete ramp slopes down toward the quarry.
+    The wind carries grit and the sound of work.
+  exits:
+  - dir: west
+    to: P_QUARRY_CHECKPOINT
+    len: 1
+  - dir: east
+    to: R_CHECK_ROAD_01
+    len: 1
+- id: P_CHECKPOINT_HILLFORT
+  name: Hillfort Spur Road
+  cluster: CL_CHECKPOINT_ROAD
+  tags:
+  - portal.P_CHECKPOINT_HILLFORT
+  desc: |
+    A spur road climbs toward broken stone and old banners.
+    The path looks survivable, but not forgiving.
+  exits:
+  - dir: east
+    to: P_HILLFORT_CHECKPOINT
+    len: 1
+  - dir: west
+    to: R_CHECK_ROAD_01
+    len: 1
+- id: P_CHECKPOINT_RAIL
+  name: Rail Spur Road
+  cluster: CL_CHECKPOINT_ROAD
+  tags:
+  - portal.P_CHECKPOINT_RAIL
+  desc: |
+    The road bends toward a rail terminal and a low industrial haze.
+    Distance markers feel more honest out here.
+  exits:
+  - dir: east
+    to: P_RAIL_CHECKPOINT
+    len: 2
+    state: sealed
+    gate: gate.checkpoint.access
+  - dir: west
+    to: R_CHECK_ROAD_01
+    len: 1
+- id: P_CHECKPOINT_RUSTWOOD
+  name: Rustwood Road
+  cluster: CL_CHECKPOINT_ROAD
+  tags:
+  - portal.P_CHECKPOINT_RUSTWOOD
+  desc: |
+    The road points toward darker trees and quieter sounds.
+    The air smells like damp bark and old metal.
+  exits:
+  - dir: north
+    to: P_RUSTWOOD_CHECKPOINT
+    len: 2
+    state: sealed
+    gate: gate.checkpoint.access
+  - dir: south
+    to: R_CHECK_ROAD_01
+    len: 1
+- id: R_CHECK_ROAD_01
+  name: Old Road Checkpoint
+  cluster: CL_CHECKPOINT_ROAD
+  tags:
+  - portal.P_CHECKPOINT_QUARRY
+  - portal.P_CHECKPOINT_HILLFORT
+  - portal.P_CHECKPOINT_RAIL
+  - portal.P_CHECKPOINT_RUSTWOOD
+  desc: |
+    Cracked lane lines, distance markers, and a toll sign that now reads: PASS REQUIRED.
+    Directions are loud on purpose: QUARRY, HILLFORT, RAIL, RUSTWOOD.
+  exits:
+  - dir: gatehouse
+    to: R_CHECK_GATE_01
+    len: 1
+  - dir: quarry
+    to: P_CHECKPOINT_QUARRY
+    len: 1
+  - dir: hillfort
+    to: P_CHECKPOINT_HILLFORT
+    len: 1
+  - dir: rail
+    to: P_CHECKPOINT_RAIL
+    len: 1
+  - dir: rustwood
+    to: P_CHECKPOINT_RUSTWOOD
+    len: 1
+  - dir: ambush
+    to: R_CHECK_AMBUSH_01
+    len: 1
+  - dir: wander_road
+    to: R_CHECK_ROAD_02
+    len: 1
+- id: R_CHECK_GATE_01
+  name: Gatehouse Interior
+  cluster: CL_CHECKPOINT_GATEHOUSE
+  tags:
+  - HUB_CHECKPOINT_GATEHOUSE
+  desc: |
+    A gatehouse of stamped paper, metal shutters, and tired authority.
+    A clerk watches you like you might be real.
+  exits:
+  - dir: road
+    to: R_CHECK_ROAD_01
+    len: 1
+  - dir: north
+    to: R_CHECK_ROAD_TEE_01
+    len: 1
+    state: sealed
+    opens_area: A02
+  - dir: wander_gatehouse
+    to: R_CHECK_GATEHOUSE_01
+    len: 1
+- id: R_CHECK_ROAD_TEE_01
+  name: Midgame Road Teaser
+  cluster: CL_CHECKPOINT_GATEHOUSE
+  desc: |
+    The road continues north, but the checkpoint shutters are down and bolted.
+    Beyond the bars, you can feel distance and trouble.
+  exits:
+  - dir: south
+    to: R_CHECK_GATE_01
+    len: 1
+- id: R_CHECK_AMBUSH_01
+  name: Overturned Signage Spur
+  cluster: CL_CHECKPOINT_AMBUSH_SPUR
+  tags:
+  - travel_spike
+  desc: |
+    A short spur with overturned signage and a bad place to stand still.
+    It exists to teach: reset into the gatehouse if you get sloppy.
+  exits:
+  - dir: south
+    to: R_CHECK_ROAD_01
+    len: 1
+  - dir: wander_spur
+    to: R_CHECK_SPUR_01
+    len: 1
+- id: R_CHECK_SPUR_01
+  name: Wrecked Toll Kiosk
+  cluster: CL_CHECKPOINT_AMBUSH_SPUR
+  desc: |-
+    A shattered toll kiosk lies on its side, windows spidered and smeared with dust.
+    The concrete around it is scarred by dragged metal and frantic bootprints.
+  exits:
+  - dir: back
+    to: R_CHECK_AMBUSH_01
+    len: 1
+  - dir: ahead
+    to: R_CHECK_SPUR_02
+    len: 1
+- id: R_CHECK_SPUR_02
+  name: Kill Lane
+  cluster: CL_CHECKPOINT_AMBUSH_SPUR
+  desc: |-
+    Two rows of concrete teeth funnel the road into an ugly straight line.
+    Every angle points back at you. If things go bad, reset toward the gatehouse.
+  exits:
+  - dir: back
+    to: R_CHECK_SPUR_01
+    len: 1
+  - dir: ahead
+    to: R_CHECK_SPUR_03
+    len: 1
+- id: R_CHECK_SPUR_03
+  name: Ditch Cut
+  cluster: CL_CHECKPOINT_AMBUSH_SPUR
+  desc: |-
+    A shallow ditch cuts across the spur and forces you to step down and climb out.
+    The embankment is the only cover worth trusting.
+  exits:
+  - dir: back
+    to: R_CHECK_SPUR_02
+    len: 1
+  - dir: ahead
+    to: R_CHECK_SPUR_04
+    len: 1
+- id: R_CHECK_SPUR_04
+  name: Barricade Backstop
+  cluster: CL_CHECKPOINT_AMBUSH_SPUR
+  tags:
+  - setpiece.checkpoint.ambush_lane
+  desc: |-
+    A stacked barricade of broken signage and sandbags blocks the spur dead.
+    Someone has scratched a warning into the metal: "DON'T GET PINNED."
+  exits:
+  - dir: back
+    to: R_CHECK_SPUR_03
+    len: 1
+  - dir: ahead
+    to: R_CHECK_AMBUSH_01
+    len: 1
+- id: R_CHECK_GATEHOUSE_01
+  name: Sandbag Vestibule
+  cluster: CL_CHECKPOINT_GATEHOUSE
+  desc: |-
+    Sandbags and plastic sheeting turn the gatehouse into a maze of short sightlines.
+    A hand-lettered placard reads: "PASS CHECKS THIS WAY."
+  exits:
+  - dir: back
+    to: R_CHECK_GATE_01
+    len: 1
+  - dir: ahead
+    to: R_CHECK_GATEHOUSE_02
+    len: 1
+- id: R_CHECK_GATEHOUSE_02
+  name: Inspection Desk
+  cluster: CL_CHECKPOINT_GATEHOUSE
+  desc: |-
+    A dented metal desk holds a stamp pad, a broken scanner cradle, and a stack of blank slips.
+    The paperwork smell is stronger than the oil.
+  exits:
+  - dir: back
+    to: R_CHECK_GATEHOUSE_01
+    len: 1
+  - dir: ahead
+    to: R_CHECK_GATEHOUSE_03
+    len: 1
+- id: R_CHECK_GATEHOUSE_03
+  name: File Cage
+  cluster: CL_CHECKPOINT_GATEHOUSE
+  desc: |-
+    Wire shelving forms a crude cage of folders and stamped ledger books.
+    Most are water-warped. A few are new and carefully protected.
+  exits:
+  - dir: back
+    to: R_CHECK_GATEHOUSE_02
+    len: 1
+  - dir: ahead
+    to: R_CHECK_GATEHOUSE_04
+    len: 1
+- id: R_CHECK_GATEHOUSE_04
+  name: Break Nook
+  cluster: CL_CHECKPOINT_GATEHOUSE
+  tags:
+  - safe_pocket
+  desc: |-
+    A narrow corner with a chair that survived and a thermos that did not.
+    This pocket is sheltered from the road and feels like a safe place to breathe.
+  exits:
+  - dir: back
+    to: R_CHECK_GATEHOUSE_03
+    len: 1
+  - dir: ahead
+    to: R_CHECK_GATEHOUSE_05
+    len: 1
+- id: R_CHECK_GATEHOUSE_05
+  name: Shutter Controls
+  cluster: CL_CHECKPOINT_GATEHOUSE
+  desc: |-
+    A wall of levers sits under a strip of labels: QUARRY, HILLFORT, RAIL, RUSTWOOD.
+    Two of the levers are tied off with wire and a note: "PASS REQUIRED."
+  exits:
+  - dir: back
+    to: R_CHECK_GATEHOUSE_04
+    len: 1
+  - dir: ahead
+    to: R_CHECK_GATEHOUSE_06
+    len: 1
+- id: R_CHECK_GATEHOUSE_06
+  name: Stamp Table
+  cluster: CL_CHECKPOINT_GATEHOUSE
+  desc: |-
+    A folding table is littered with inked stamps and half-used rolls of tape.
+    The only stamp still clean reads: APPROVED.
+  exits:
+  - dir: back
+    to: R_CHECK_GATEHOUSE_05
+    len: 1
+  - dir: ahead
+    to: R_CHECK_GATEHOUSE_07
+    len: 1
+- id: R_CHECK_GATEHOUSE_07
+  name: Toll Ledger
+  cluster: CL_CHECKPOINT_GATEHOUSE
+  desc: |-
+    An open book lists names, dates, and routes in cramped handwriting.
+    Whole pages are crossed out with a single line: "NO PASS."
+  exits:
+  - dir: back
+    to: R_CHECK_GATEHOUSE_06
+    len: 1
+  - dir: ahead
+    to: R_CHECK_GATEHOUSE_08
+    len: 1
+- id: R_CHECK_GATEHOUSE_08
+  name: Barricade Corridor
+  cluster: CL_CHECKPOINT_GATEHOUSE
+  desc: |-
+    Sandbags and plywood make the corridor feel like a bunker built in a hurry.
+    Someone painted arrows on the floor anyway, stubborn about clarity.
+  exits:
+  - dir: back
+    to: R_CHECK_GATEHOUSE_07
+    len: 1
+  - dir: ahead
+    to: R_CHECK_GATEHOUSE_09
+    len: 1
+- id: R_CHECK_GATEHOUSE_09
+  name: Watch Window
+  cluster: CL_CHECKPOINT_GATEHOUSE
+  desc: |-
+    A narrow slit window looks out over the road.
+    From here the ambush spur is obvious: a bad straight line with no exits.
+  exits:
+  - dir: back
+    to: R_CHECK_GATEHOUSE_08
+    len: 1
+  - dir: ahead
+    to: R_CHECK_GATEHOUSE_10
+    len: 1
+- id: R_CHECK_GATEHOUSE_10
+  name: Radio Nook
+  cluster: CL_CHECKPOINT_GATEHOUSE
+  desc: |-
+    A dead radio sits under a coil of cable and a sticker that says: KEEP IT SHORT.
+    The emergency channel list is still taped to the wall, curled at the edges.
+  exits:
+  - dir: back
+    to: R_CHECK_GATEHOUSE_09
+    len: 1
+  - dir: ahead
+    to: R_CHECK_GATEHOUSE_11
+    len: 1
+- id: R_CHECK_GATEHOUSE_11
+  name: Requisition Shelf
+  cluster: CL_CHECKPOINT_GATEHOUSE
+  desc: |-
+    A shelf of boxed parts and wrapped bandages suggests the checkpoint expects trouble.
+    A label reads: "IF IT BLEEDS OR LEAKS, LOG IT."
+  exits:
+  - dir: back
+    to: R_CHECK_GATEHOUSE_10
+    len: 1
+  - dir: ahead
+    to: R_CHECK_GATEHOUSE_12
+    len: 1
+- id: R_CHECK_GATEHOUSE_12
+  name: Locker Row
+  cluster: CL_CHECKPOINT_GATEHOUSE
+  desc: |-
+    A row of dented lockers, most of them forced open and emptied.
+    One door is still padlocked, stubbornly intact.
+  exits:
+  - dir: back
+    to: R_CHECK_GATEHOUSE_11
+    len: 1
+  - dir: ahead
+    to: R_CHECK_GATEHOUSE_13
+    len: 1
+- id: R_CHECK_GATEHOUSE_13
+  name: Back Office Door
+  cluster: CL_CHECKPOINT_GATEHOUSE
+  desc: |-
+    A back office door hangs half-open on bent hinges.
+    A laminated notice says: "KEEP ROADS READABLE. NO HEROICS."
+  exits:
+  - dir: back
+    to: R_CHECK_GATEHOUSE_12
+    len: 1
+  - dir: ahead
+    to: R_CHECK_GATE_01
+    len: 1
+- id: R_CHECK_ROAD_02
+  name: Cracked Mile Marker
+  cluster: CL_CHECKPOINT_ROAD
+  desc: |-
+    A concrete marker post leans and sheds paint flakes in the wind.
+    Someone has written directions over it anyway: "GATEHOUSE ->".
+  exits:
+  - dir: back
+    to: R_CHECK_ROAD_01
+    len: 1
+  - dir: ahead
+    to: R_CHECK_ROAD_03
+    len: 1
+- id: R_CHECK_ROAD_03
+  name: Windbreak Wall
+  cluster: CL_CHECKPOINT_ROAD
+  desc: |-
+    A short wall of stacked barriers cuts the wind but not the view.
+    You can see every road choice from here if you stop and look.
+  exits:
+  - dir: back
+    to: R_CHECK_ROAD_02
+    len: 1
+  - dir: ahead
+    to: R_CHECK_ROAD_04
+    len: 1
+- id: R_CHECK_ROAD_04
+  name: Distance Sign Cluster
+  cluster: CL_CHECKPOINT_ROAD
+  desc: |-
+    Old distance signs have been bolted together into one ugly cluster.
+    QUARRY and HILLFORT are readable. RAIL and RUSTWOOD are marked "PASS."
+  exits:
+  - dir: back
+    to: R_CHECK_ROAD_03
+    len: 1
+  - dir: ahead
+    to: R_CHECK_ROAD_05
+    len: 1
+- id: R_CHECK_ROAD_05
+  name: Scuffed Turnout
+  cluster: CL_CHECKPOINT_ROAD
+  desc: |-
+    A small turnout has been scraped clean of loose gravel, like a staging spot.
+    Fresh tire tracks come and go, but never commit.
+  exits:
+  - dir: back
+    to: R_CHECK_ROAD_04
+    len: 1
+  - dir: ahead
+    to: R_CHECK_ROAD_06
+    len: 1
+- id: R_CHECK_ROAD_06
+  name: Roadside Map Board
+  cluster: CL_CHECKPOINT_ROAD
+  desc: |-
+    A warped board holds a simple map of the roads, updated in thick marker.
+    Someone added a final note: "IF YOU CAN'T OPEN IT, DON'T FORCE IT."
+  exits:
+  - dir: back
+    to: R_CHECK_ROAD_05
+    len: 1
+  - dir: ahead
+    to: R_CHECK_ROAD_01
+    len: 1

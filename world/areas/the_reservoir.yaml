@@ -1,0 +1,1685 @@
+version: 1
+zone_id: the_reservoir
+zone_name: The Reservoir
+area_id: A01
+level_band:
+- 8
+- 11
+start_room: P_RESERVOIR_LIBRARY
+rooms:
+- id: P_RESERVOIR_FACTORY
+  name: Factory District (Outskirts) Transfer
+  cluster: CL_RES_SHORES
+  tags:
+  - portal.P_RESERVOIR_FACTORY
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies Factory District (Outskirts).
+  exits:
+  - dir: out
+    to: P_FACTORY_RESERVOIR
+    len: 1
+    state: sealed
+    gate: gate.factory.shortcut_to_reservoir
+  - dir: in
+    to: R_RES_PUMP_01
+    len: 1
+- id: P_RESERVOIR_LIBRARY
+  name: Sunken Library Transfer
+  cluster: CL_RES_SHORES
+  tags:
+  - portal.P_RESERVOIR_LIBRARY
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies Sunken Library.
+  exits:
+  - dir: out
+    to: P_LIB_RESERVOIR
+    len: 2
+    state: sealed
+    gate: gate.reservoir.entry
+  - dir: in
+    to: R_RES_PUMP_01
+    len: 1
+- id: P_RESERVOIR_UNDERRAIL
+  name: The Underrail Transfer
+  cluster: CL_RES_TUNNELS
+  tags:
+  - portal.P_RESERVOIR_UNDERRAIL
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies The Underrail.
+  exits:
+  - dir: out
+    to: P_UNDERRAIL_RESERVOIR
+    len: 2
+    state: sealed
+    gate: gate.underrail.entry
+  - dir: in
+    to: R_RES_PUMP_01
+    len: 1
+- id: R_RES_PUMP_01
+  name: The Reservoir Anchor
+  cluster: CL_RES_PUMP_STATION
+  tags:
+  - HUB_RES_PUMP_STATION
+  - safe_pocket
+  desc: |-
+    A damp deck with warning lights that never fully go dark.
+    This is a safe pocket: regroup here and make choices before you commit deeper.
+  exits:
+  - dir: to_P_RESERVOIR_FACTORY
+    to: P_RESERVOIR_FACTORY
+    len: 1
+  - dir: to_P_RESERVOIR_LIBRARY
+    to: P_RESERVOIR_LIBRARY
+    len: 1
+  - dir: to_P_RESERVOIR_UNDERRAIL
+    to: P_RESERVOIR_UNDERRAIL
+    len: 1
+  - dir: to_R_RES_SHORE_01
+    to: R_RES_SHORE_01
+    len: 1
+  - dir: to_R_RES_TUNNEL_01
+    to: R_RES_TUNNEL_01
+    len: 1
+  - dir: to_R_RES_NODE1_01
+    to: R_RES_NODE1_01
+    len: 1
+  - dir: to_R_RES_REG_CHAMBER_01
+    to: R_RES_REG_CHAMBER_01
+    len: 1
+  - dir: wander_station
+    to: R_RES_STATION_01
+    len: 1
+- id: R_RES_SHORE_01
+  name: Concrete Steps
+  cluster: CL_RES_SHORES
+  tags:
+  - portal.P_RESERVOIR_LIBRARY
+  - portal.P_RESERVOIR_FACTORY
+  desc: |-
+    A shoreline of concrete and weeds.
+    The surface looks calm; the infrastructure does not.
+  exits:
+  - dir: hub
+    to: R_RES_PUMP_01
+    len: 1
+  - dir: wander_shore
+    to: R_RES_SHORE_02
+    len: 1
+- id: R_RES_TUNNEL_01
+  name: Pressure Gate
+  cluster: CL_RES_TUNNELS
+  tags:
+  - portal.P_RESERVOIR_UNDERRAIL
+  desc: |-
+    A tunnel that carries water, power, and bad ideas.
+    Ambushes are easier here than honesty.
+  exits:
+  - dir: hub
+    to: R_RES_PUMP_01
+    len: 1
+  - dir: wander_tunnel
+    to: R_RES_TUNNEL_02
+    len: 1
+- id: R_RES_NODE1_01
+  name: Regulator Panel
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - setpiece.q8.control_node_1
+  desc: |-
+    A pocket of machinery that wants a deliberate hand.
+    If you rush, you will flip the wrong thing.
+  exits:
+  - dir: hub
+    to: R_RES_PUMP_01
+    len: 1
+  - dir: wander_node
+    to: R_RES_NODE_01
+    len: 1
+- id: R_RES_REG_CHAMBER_01
+  name: Pressure Chamber
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - setpiece.q8.flow_regulator_chamber
+  desc: |-
+    A chamber built to tame force.
+    It has the vibe of a boss room you haven't earned yet.
+  exits:
+  - dir: hub
+    to: R_RES_PUMP_01
+    len: 1
+  - dir: wander_regulator
+    to: R_RES_REGULATOR_01
+    len: 1
+- id: R_RES_NODE_01
+  name: Sensor Pod
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - landmark.reservoir.control_nodes
+  desc: |-
+    A control node buried in pipework.
+    The interface looks simple and lies about it.
+  exits:
+  - dir: back
+    to: R_RES_NODE1_01
+    len: 1
+  - dir: ahead
+    to: R_RES_NODE_02
+    len: 1
+- id: R_RES_NODE_02
+  name: Valve Cluster
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - landmark.reservoir.control_nodes
+  desc: |-
+    A pocket of machinery that wants a deliberate hand.
+    If you rush, you will flip the wrong thing.
+  exits:
+  - dir: back
+    to: R_RES_NODE_01
+    len: 1
+  - dir: ahead
+    to: R_RES_NODE_03
+    len: 1
+- id: R_RES_NODE_03
+  name: Sensor Pod
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - landmark.reservoir.control_nodes
+  desc: |-
+    A control node buried in pipework.
+    The interface looks simple and lies about it.
+  exits:
+  - dir: back
+    to: R_RES_NODE_02
+    len: 1
+  - dir: ahead
+    to: R_RES_NODE_04
+    len: 1
+- id: R_RES_NODE_04
+  name: Control Node
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - landmark.reservoir.control_nodes
+  desc: |-
+    A control node buried in pipework.
+    The interface looks simple and lies about it.
+  exits:
+  - dir: back
+    to: R_RES_NODE_03
+    len: 1
+  - dir: ahead
+    to: R_RES_NODE_05
+    len: 1
+- id: R_RES_NODE_05
+  name: Valve Cluster
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - landmark.reservoir.control_nodes
+  desc: |-
+    A pocket of machinery that wants a deliberate hand.
+    If you rush, you will flip the wrong thing.
+  exits:
+  - dir: back
+    to: R_RES_NODE_04
+    len: 1
+  - dir: ahead
+    to: R_RES_NODE_06
+    len: 1
+- id: R_RES_NODE_06
+  name: Regulator Panel
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - landmark.reservoir.control_nodes
+  desc: |-
+    A pocket of machinery that wants a deliberate hand.
+    If you rush, you will flip the wrong thing.
+  exits:
+  - dir: back
+    to: R_RES_NODE_05
+    len: 1
+  - dir: ahead
+    to: R_RES_NODE_07
+    len: 1
+- id: R_RES_NODE_07
+  name: Valve Cluster
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - landmark.reservoir.control_nodes
+  desc: |-
+    A pocket of machinery that wants a deliberate hand.
+    If you rush, you will flip the wrong thing.
+  exits:
+  - dir: back
+    to: R_RES_NODE_06
+    len: 1
+  - dir: ahead
+    to: R_RES_NODE_08
+    len: 1
+- id: R_RES_NODE_08
+  name: Valve Cluster
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - landmark.reservoir.control_nodes
+  desc: |-
+    A pocket of machinery that wants a deliberate hand.
+    If you rush, you will flip the wrong thing.
+  exits:
+  - dir: back
+    to: R_RES_NODE_07
+    len: 1
+  - dir: ahead
+    to: R_RES_NODE_09
+    len: 1
+- id: R_RES_NODE_09
+  name: Valve Cluster
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - landmark.reservoir.control_nodes
+  desc: |-
+    A pocket of machinery that wants a deliberate hand.
+    If you rush, you will flip the wrong thing.
+  exits:
+  - dir: back
+    to: R_RES_NODE_08
+    len: 1
+  - dir: ahead
+    to: R_RES_NODE_10
+    len: 1
+- id: R_RES_NODE_10
+  name: Valve Cluster
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - landmark.reservoir.control_nodes
+  desc: |-
+    A pocket of machinery that wants a deliberate hand.
+    If you rush, you will flip the wrong thing.
+  exits:
+  - dir: back
+    to: R_RES_NODE_09
+    len: 1
+  - dir: ahead
+    to: R_RES_NODE_11
+    len: 1
+- id: R_RES_NODE_11
+  name: Regulator Panel
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - landmark.reservoir.control_nodes
+  desc: |-
+    A pocket of machinery that wants a deliberate hand.
+    If you rush, you will flip the wrong thing.
+  exits:
+  - dir: back
+    to: R_RES_NODE_10
+    len: 1
+  - dir: ahead
+    to: R_RES_NODE_12
+    len: 1
+- id: R_RES_NODE_12
+  name: Regulator Panel
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - landmark.reservoir.control_nodes
+  desc: |-
+    A pocket of machinery that wants a deliberate hand.
+    If you rush, you will flip the wrong thing.
+  exits:
+  - dir: back
+    to: R_RES_NODE_11
+    len: 1
+  - dir: ahead
+    to: R_RES_NODE_13
+    len: 1
+- id: R_RES_NODE_13
+  name: Regulator Panel
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - landmark.reservoir.control_nodes
+  desc: |-
+    A pocket of machinery that wants a deliberate hand.
+    If you rush, you will flip the wrong thing.
+  exits:
+  - dir: back
+    to: R_RES_NODE_12
+    len: 1
+  - dir: ahead
+    to: R_RES_NODE_14
+    len: 1
+- id: R_RES_NODE_14
+  name: Valve Cluster
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - landmark.reservoir.control_nodes
+  desc: |-
+    A pocket of machinery that wants a deliberate hand.
+    If you rush, you will flip the wrong thing.
+  exits:
+  - dir: back
+    to: R_RES_NODE_13
+    len: 1
+  - dir: ahead
+    to: R_RES_NODE_15
+    len: 1
+- id: R_RES_NODE_15
+  name: Sensor Pod
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - landmark.reservoir.control_nodes
+  desc: |-
+    A control node buried in pipework.
+    The interface looks simple and lies about it.
+  exits:
+  - dir: back
+    to: R_RES_NODE_14
+    len: 1
+  - dir: ahead
+    to: R_RES_NODE_16
+    len: 1
+- id: R_RES_NODE_16
+  name: Valve Cluster
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - landmark.reservoir.control_nodes
+  desc: |-
+    A pocket of machinery that wants a deliberate hand.
+    If you rush, you will flip the wrong thing.
+  exits:
+  - dir: back
+    to: R_RES_NODE_15
+    len: 1
+  - dir: ahead
+    to: R_RES_NODE_17
+    len: 1
+- id: R_RES_NODE_17
+  name: Sensor Pod
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - landmark.reservoir.control_nodes
+  desc: |-
+    A control node buried in pipework.
+    The interface looks simple and lies about it.
+  exits:
+  - dir: back
+    to: R_RES_NODE_16
+    len: 1
+  - dir: ahead
+    to: R_RES_NODE_18
+    len: 1
+- id: R_RES_NODE_18
+  name: Valve Cluster
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - landmark.reservoir.control_nodes
+  desc: |-
+    A pocket of machinery that wants a deliberate hand.
+    If you rush, you will flip the wrong thing.
+  exits:
+  - dir: back
+    to: R_RES_NODE_17
+    len: 1
+  - dir: ahead
+    to: R_RES_NODE_19
+    len: 1
+- id: R_RES_NODE_19
+  name: Control Node
+  cluster: CL_RES_CONTROL_NODES
+  tags:
+  - landmark.reservoir.control_nodes
+  desc: |-
+    A control node buried in pipework.
+    The interface looks simple and lies about it.
+  exits:
+  - dir: back
+    to: R_RES_NODE_18
+    len: 1
+  - dir: ahead
+    to: R_RES_NODE1_01
+    len: 1
+- id: R_RES_REGULATOR_01
+  name: Surge Hall
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - landmark.reservoir.flow_regulator
+  desc: |-
+    A chamber built to tame force.
+    It has the vibe of a boss room you haven't earned yet.
+  exits:
+  - dir: back
+    to: R_RES_REG_CHAMBER_01
+    len: 1
+  - dir: ahead
+    to: R_RES_REGULATOR_02
+    len: 1
+- id: R_RES_REGULATOR_02
+  name: Gate Deck
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - landmark.reservoir.flow_regulator
+  desc: |-
+    The pipes here feel too large to trust.
+    This route leads toward a fight with phases.
+  exits:
+  - dir: back
+    to: R_RES_REGULATOR_01
+    len: 1
+  - dir: ahead
+    to: R_RES_REGULATOR_03
+    len: 1
+- id: R_RES_REGULATOR_03
+  name: Pressure Chamber
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - landmark.reservoir.flow_regulator
+  desc: |-
+    A chamber built to tame force.
+    It has the vibe of a boss room you haven't earned yet.
+  exits:
+  - dir: back
+    to: R_RES_REGULATOR_02
+    len: 1
+  - dir: ahead
+    to: R_RES_REGULATOR_04
+    len: 1
+- id: R_RES_REGULATOR_04
+  name: Gate Deck
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - landmark.reservoir.flow_regulator
+  desc: |-
+    The pipes here feel too large to trust.
+    This route leads toward a fight with phases.
+  exits:
+  - dir: back
+    to: R_RES_REGULATOR_03
+    len: 1
+  - dir: ahead
+    to: R_RES_REGULATOR_05
+    len: 1
+- id: R_RES_REGULATOR_05
+  name: Surge Hall
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - landmark.reservoir.flow_regulator
+  desc: |-
+    A chamber built to tame force.
+    It has the vibe of a boss room you haven't earned yet.
+  exits:
+  - dir: back
+    to: R_RES_REGULATOR_04
+    len: 1
+  - dir: ahead
+    to: R_RES_REGULATOR_06
+    len: 1
+- id: R_RES_REGULATOR_06
+  name: Gate Deck
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - landmark.reservoir.flow_regulator
+  desc: |-
+    The pipes here feel too large to trust.
+    This route leads toward a fight with phases.
+  exits:
+  - dir: back
+    to: R_RES_REGULATOR_05
+    len: 1
+  - dir: ahead
+    to: R_RES_REGULATOR_07
+    len: 1
+- id: R_RES_REGULATOR_07
+  name: Flow Regulator Way
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - landmark.reservoir.flow_regulator
+  desc: |-
+    The pipes here feel too large to trust.
+    This route leads toward a fight with phases.
+  exits:
+  - dir: back
+    to: R_RES_REGULATOR_06
+    len: 1
+  - dir: ahead
+    to: R_RES_REGULATOR_08
+    len: 1
+- id: R_RES_REGULATOR_08
+  name: Surge Hall
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - landmark.reservoir.flow_regulator
+  desc: |-
+    A chamber built to tame force.
+    It has the vibe of a boss room you haven't earned yet.
+  exits:
+  - dir: back
+    to: R_RES_REGULATOR_07
+    len: 1
+  - dir: ahead
+    to: R_RES_REGULATOR_09
+    len: 1
+- id: R_RES_REGULATOR_09
+  name: Pressure Chamber
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - landmark.reservoir.flow_regulator
+  desc: |-
+    A chamber built to tame force.
+    It has the vibe of a boss room you haven't earned yet.
+  exits:
+  - dir: back
+    to: R_RES_REGULATOR_08
+    len: 1
+  - dir: ahead
+    to: R_RES_REGULATOR_10
+    len: 1
+- id: R_RES_REGULATOR_10
+  name: Flow Regulator Way
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - landmark.reservoir.flow_regulator
+  desc: |-
+    The pipes here feel too large to trust.
+    This route leads toward a fight with phases.
+  exits:
+  - dir: back
+    to: R_RES_REGULATOR_09
+    len: 1
+  - dir: ahead
+    to: R_RES_REGULATOR_11
+    len: 1
+- id: R_RES_REGULATOR_11
+  name: Flow Regulator Way
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - landmark.reservoir.flow_regulator
+  desc: |-
+    The pipes here feel too large to trust.
+    This route leads toward a fight with phases.
+  exits:
+  - dir: back
+    to: R_RES_REGULATOR_10
+    len: 1
+  - dir: ahead
+    to: R_RES_REGULATOR_12
+    len: 1
+- id: R_RES_REGULATOR_12
+  name: Flow Regulator Way
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - landmark.reservoir.flow_regulator
+  desc: |-
+    The pipes here feel too large to trust.
+    This route leads toward a fight with phases.
+  exits:
+  - dir: back
+    to: R_RES_REGULATOR_11
+    len: 1
+  - dir: ahead
+    to: R_RES_REGULATOR_13
+    len: 1
+- id: R_RES_REGULATOR_13
+  name: Flow Regulator Way
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - landmark.reservoir.flow_regulator
+  desc: |-
+    The pipes here feel too large to trust.
+    This route leads toward a fight with phases.
+  exits:
+  - dir: back
+    to: R_RES_REGULATOR_12
+    len: 1
+  - dir: ahead
+    to: R_RES_REGULATOR_14
+    len: 1
+- id: R_RES_REGULATOR_14
+  name: Pressure Chamber
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - landmark.reservoir.flow_regulator
+  desc: |-
+    A chamber built to tame force.
+    It has the vibe of a boss room you haven't earned yet.
+  exits:
+  - dir: back
+    to: R_RES_REGULATOR_13
+    len: 1
+  - dir: ahead
+    to: R_RES_REGULATOR_15
+    len: 1
+- id: R_RES_REGULATOR_15
+  name: Flow Regulator Way
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - landmark.reservoir.flow_regulator
+  desc: |-
+    The pipes here feel too large to trust.
+    This route leads toward a fight with phases.
+  exits:
+  - dir: back
+    to: R_RES_REGULATOR_14
+    len: 1
+  - dir: ahead
+    to: R_RES_REGULATOR_16
+    len: 1
+- id: R_RES_REGULATOR_16
+  name: Flow Regulator Way
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - landmark.reservoir.flow_regulator
+  desc: |-
+    The pipes here feel too large to trust.
+    This route leads toward a fight with phases.
+  exits:
+  - dir: back
+    to: R_RES_REGULATOR_15
+    len: 1
+  - dir: ahead
+    to: R_RES_REGULATOR_17
+    len: 1
+- id: R_RES_REGULATOR_17
+  name: Flow Regulator Way
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - landmark.reservoir.flow_regulator
+  desc: |-
+    The pipes here feel too large to trust.
+    This route leads toward a fight with phases.
+  exits:
+  - dir: back
+    to: R_RES_REGULATOR_16
+    len: 1
+  - dir: ahead
+    to: R_RES_REGULATOR_18
+    len: 1
+- id: R_RES_REGULATOR_18
+  name: Flow Regulator Way
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - landmark.reservoir.flow_regulator
+  desc: |-
+    The pipes here feel too large to trust.
+    This route leads toward a fight with phases.
+  exits:
+  - dir: back
+    to: R_RES_REGULATOR_17
+    len: 1
+  - dir: ahead
+    to: R_RES_REGULATOR_19
+    len: 1
+- id: R_RES_REGULATOR_19
+  name: Gate Deck
+  cluster: CL_RES_FLOW_REGULATOR
+  tags:
+  - landmark.reservoir.flow_regulator
+  desc: |-
+    The pipes here feel too large to trust.
+    This route leads toward a fight with phases.
+  exits:
+  - dir: back
+    to: R_RES_REGULATOR_18
+    len: 1
+  - dir: ahead
+    to: R_RES_REG_CHAMBER_01
+    len: 1
+- id: R_RES_STATION_01
+  name: Pump Station
+  cluster: CL_RES_PUMP_STATION
+  tags:
+  - landmark.reservoir.pump_station
+  desc: |-
+    A station of pipes, pressure gauges, and constant vibration.
+    Water and power share the same nerves here.
+  exits:
+  - dir: back
+    to: R_RES_PUMP_01
+    len: 1
+  - dir: ahead
+    to: R_RES_STATION_02
+    len: 1
+- id: R_RES_STATION_02
+  name: Intake Walk
+  cluster: CL_RES_PUMP_STATION
+  tags:
+  - landmark.reservoir.pump_station
+  desc: |-
+    A station of pipes, pressure gauges, and constant vibration.
+    Water and power share the same nerves here.
+  exits:
+  - dir: back
+    to: R_RES_STATION_01
+    len: 1
+  - dir: ahead
+    to: R_RES_STATION_03
+    len: 1
+- id: R_RES_STATION_03
+  name: Pump Station
+  cluster: CL_RES_PUMP_STATION
+  tags:
+  - landmark.reservoir.pump_station
+  desc: |-
+    A station of pipes, pressure gauges, and constant vibration.
+    Water and power share the same nerves here.
+  exits:
+  - dir: back
+    to: R_RES_STATION_02
+    len: 1
+  - dir: ahead
+    to: R_RES_STATION_04
+    len: 1
+- id: R_RES_STATION_04
+  name: Intake Walk
+  cluster: CL_RES_PUMP_STATION
+  tags:
+  - landmark.reservoir.pump_station
+  desc: |-
+    A station of pipes, pressure gauges, and constant vibration.
+    Water and power share the same nerves here.
+  exits:
+  - dir: back
+    to: R_RES_STATION_03
+    len: 1
+  - dir: ahead
+    to: R_RES_STATION_05
+    len: 1
+- id: R_RES_STATION_05
+  name: Pump Station
+  cluster: CL_RES_PUMP_STATION
+  tags:
+  - landmark.reservoir.pump_station
+  desc: |-
+    A station of pipes, pressure gauges, and constant vibration.
+    Water and power share the same nerves here.
+  exits:
+  - dir: back
+    to: R_RES_STATION_04
+    len: 1
+  - dir: ahead
+    to: R_RES_STATION_06
+    len: 1
+- id: R_RES_STATION_06
+  name: Pump Station
+  cluster: CL_RES_PUMP_STATION
+  tags:
+  - landmark.reservoir.pump_station
+  desc: |-
+    A station of pipes, pressure gauges, and constant vibration.
+    Water and power share the same nerves here.
+  exits:
+  - dir: back
+    to: R_RES_STATION_05
+    len: 1
+  - dir: ahead
+    to: R_RES_STATION_07
+    len: 1
+- id: R_RES_STATION_07
+  name: Pump Station
+  cluster: CL_RES_PUMP_STATION
+  tags:
+  - landmark.reservoir.pump_station
+  desc: |-
+    A station of pipes, pressure gauges, and constant vibration.
+    Water and power share the same nerves here.
+  exits:
+  - dir: back
+    to: R_RES_STATION_06
+    len: 1
+  - dir: ahead
+    to: R_RES_STATION_08
+    len: 1
+- id: R_RES_STATION_08
+  name: Pump Station
+  cluster: CL_RES_PUMP_STATION
+  tags:
+  - landmark.reservoir.pump_station
+  desc: |-
+    A station of pipes, pressure gauges, and constant vibration.
+    Water and power share the same nerves here.
+  exits:
+  - dir: back
+    to: R_RES_STATION_07
+    len: 1
+  - dir: ahead
+    to: R_RES_STATION_09
+    len: 1
+- id: R_RES_STATION_09
+  name: Intake Walk
+  cluster: CL_RES_PUMP_STATION
+  tags:
+  - landmark.reservoir.pump_station
+  desc: |-
+    A station of pipes, pressure gauges, and constant vibration.
+    Water and power share the same nerves here.
+  exits:
+  - dir: back
+    to: R_RES_STATION_08
+    len: 1
+  - dir: ahead
+    to: R_RES_PUMP_01
+    len: 1
+- id: R_RES_SHORE_02
+  name: Concrete Steps
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    A shoreline of concrete and weeds.
+    The surface looks calm; the infrastructure does not.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_01
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_03
+    len: 1
+- id: R_RES_SHORE_03
+  name: Wet Dock
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    A shoreline of concrete and weeds.
+    The surface looks calm; the infrastructure does not.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_02
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_04
+    len: 1
+- id: R_RES_SHORE_04
+  name: Concrete Steps
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    A shoreline of concrete and weeds.
+    The surface looks calm; the infrastructure does not.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_03
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_05
+    len: 1
+- id: R_RES_SHORE_05
+  name: Reedline
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    Wide water and exposed sightlines.
+    Ranged threats feel bigger when there is nowhere to duck.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_04
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_06
+    len: 1
+- id: R_RES_SHORE_06
+  name: Wet Dock
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    A shoreline of concrete and weeds.
+    The surface looks calm; the infrastructure does not.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_05
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_07
+    len: 1
+- id: R_RES_SHORE_07
+  name: Reedline
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    Wide water and exposed sightlines.
+    Ranged threats feel bigger when there is nowhere to duck.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_06
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_08
+    len: 1
+- id: R_RES_SHORE_08
+  name: Wet Dock
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    A shoreline of concrete and weeds.
+    The surface looks calm; the infrastructure does not.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_07
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_09
+    len: 1
+- id: R_RES_SHORE_09
+  name: Concrete Steps
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    A shoreline of concrete and weeds.
+    The surface looks calm; the infrastructure does not.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_08
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_10
+    len: 1
+- id: R_RES_SHORE_10
+  name: Reedline
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    Wide water and exposed sightlines.
+    Ranged threats feel bigger when there is nowhere to duck.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_09
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_11
+    len: 1
+- id: R_RES_SHORE_11
+  name: Reservoir Shore
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    Wide water and exposed sightlines.
+    Ranged threats feel bigger when there is nowhere to duck.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_10
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_12
+    len: 1
+- id: R_RES_SHORE_12
+  name: Concrete Steps
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    A shoreline of concrete and weeds.
+    The surface looks calm; the infrastructure does not.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_11
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_13
+    len: 1
+- id: R_RES_SHORE_13
+  name: Reedline
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    Wide water and exposed sightlines.
+    Ranged threats feel bigger when there is nowhere to duck.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_12
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_14
+    len: 1
+- id: R_RES_SHORE_14
+  name: Wet Dock
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    A shoreline of concrete and weeds.
+    The surface looks calm; the infrastructure does not.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_13
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_15
+    len: 1
+- id: R_RES_SHORE_15
+  name: Concrete Steps
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    A shoreline of concrete and weeds.
+    The surface looks calm; the infrastructure does not.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_14
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_16
+    len: 1
+- id: R_RES_SHORE_16
+  name: Concrete Steps
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    A shoreline of concrete and weeds.
+    The surface looks calm; the infrastructure does not.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_15
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_17
+    len: 1
+- id: R_RES_SHORE_17
+  name: Reservoir Shore
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    Wide water and exposed sightlines.
+    Ranged threats feel bigger when there is nowhere to duck.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_16
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_18
+    len: 1
+- id: R_RES_SHORE_18
+  name: Concrete Steps
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    A shoreline of concrete and weeds.
+    The surface looks calm; the infrastructure does not.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_17
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_19
+    len: 1
+- id: R_RES_SHORE_19
+  name: Concrete Steps
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    A shoreline of concrete and weeds.
+    The surface looks calm; the infrastructure does not.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_18
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_20
+    len: 1
+- id: R_RES_SHORE_20
+  name: Reservoir Shore
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    Wide water and exposed sightlines.
+    Ranged threats feel bigger when there is nowhere to duck.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_19
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_21
+    len: 1
+- id: R_RES_SHORE_21
+  name: Reedline
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    Wide water and exposed sightlines.
+    Ranged threats feel bigger when there is nowhere to duck.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_20
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_22
+    len: 1
+- id: R_RES_SHORE_22
+  name: Reedline
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    Wide water and exposed sightlines.
+    Ranged threats feel bigger when there is nowhere to duck.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_21
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_23
+    len: 1
+- id: R_RES_SHORE_23
+  name: Reservoir Shore
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    Wide water and exposed sightlines.
+    Ranged threats feel bigger when there is nowhere to duck.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_22
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_24
+    len: 1
+- id: R_RES_SHORE_24
+  name: Wet Dock
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    A shoreline of concrete and weeds.
+    The surface looks calm; the infrastructure does not.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_23
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_25
+    len: 1
+- id: R_RES_SHORE_25
+  name: Wet Dock
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    A shoreline of concrete and weeds.
+    The surface looks calm; the infrastructure does not.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_24
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_26
+    len: 1
+- id: R_RES_SHORE_26
+  name: Reedline
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    Wide water and exposed sightlines.
+    Ranged threats feel bigger when there is nowhere to duck.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_25
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_27
+    len: 1
+- id: R_RES_SHORE_27
+  name: Concrete Steps
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    A shoreline of concrete and weeds.
+    The surface looks calm; the infrastructure does not.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_26
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_28
+    len: 1
+- id: R_RES_SHORE_28
+  name: Wet Dock
+  cluster: CL_RES_SHORES
+  tags:
+  - landmark.reservoir.shores
+  desc: |-
+    A shoreline of concrete and weeds.
+    The surface looks calm; the infrastructure does not.
+  exits:
+  - dir: back
+    to: R_RES_SHORE_27
+    len: 1
+  - dir: ahead
+    to: R_RES_SHORE_01
+    len: 1
+- id: R_RES_TUNNEL_02
+  name: Wet Passage
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A narrow run of dripping stone and pipe.
+    Every sound comes back wrong.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_01
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_03
+    len: 1
+- id: R_RES_TUNNEL_03
+  name: Service Tunnel
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A tunnel that carries water, power, and bad ideas.
+    Ambushes are easier here than honesty.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_02
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_04
+    len: 1
+- id: R_RES_TUNNEL_04
+  name: Echo Run
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A narrow run of dripping stone and pipe.
+    Every sound comes back wrong.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_03
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_05
+    len: 1
+- id: R_RES_TUNNEL_05
+  name: Service Tunnel
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A tunnel that carries water, power, and bad ideas.
+    Ambushes are easier here than honesty.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_04
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_06
+    len: 1
+- id: R_RES_TUNNEL_06
+  name: Wet Passage
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A narrow run of dripping stone and pipe.
+    Every sound comes back wrong.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_05
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_07
+    len: 1
+- id: R_RES_TUNNEL_07
+  name: Service Tunnel
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A tunnel that carries water, power, and bad ideas.
+    Ambushes are easier here than honesty.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_06
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_08
+    len: 1
+- id: R_RES_TUNNEL_08
+  name: Pressure Gate
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A tunnel that carries water, power, and bad ideas.
+    Ambushes are easier here than honesty.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_07
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_09
+    len: 1
+- id: R_RES_TUNNEL_09
+  name: Service Tunnel
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A tunnel that carries water, power, and bad ideas.
+    Ambushes are easier here than honesty.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_08
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_10
+    len: 1
+- id: R_RES_TUNNEL_10
+  name: Echo Run
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A narrow run of dripping stone and pipe.
+    Every sound comes back wrong.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_09
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_11
+    len: 1
+- id: R_RES_TUNNEL_11
+  name: Wet Passage
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A narrow run of dripping stone and pipe.
+    Every sound comes back wrong.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_10
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_12
+    len: 1
+- id: R_RES_TUNNEL_12
+  name: Echo Run
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A narrow run of dripping stone and pipe.
+    Every sound comes back wrong.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_11
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_13
+    len: 1
+- id: R_RES_TUNNEL_13
+  name: Echo Run
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A narrow run of dripping stone and pipe.
+    Every sound comes back wrong.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_12
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_14
+    len: 1
+- id: R_RES_TUNNEL_14
+  name: Pressure Gate
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A tunnel that carries water, power, and bad ideas.
+    Ambushes are easier here than honesty.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_13
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_15
+    len: 1
+- id: R_RES_TUNNEL_15
+  name: Pressure Gate
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A tunnel that carries water, power, and bad ideas.
+    Ambushes are easier here than honesty.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_14
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_16
+    len: 1
+- id: R_RES_TUNNEL_16
+  name: Echo Run
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A narrow run of dripping stone and pipe.
+    Every sound comes back wrong.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_15
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_17
+    len: 1
+- id: R_RES_TUNNEL_17
+  name: Echo Run
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A narrow run of dripping stone and pipe.
+    Every sound comes back wrong.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_16
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_18
+    len: 1
+- id: R_RES_TUNNEL_18
+  name: Echo Run
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A narrow run of dripping stone and pipe.
+    Every sound comes back wrong.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_17
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_19
+    len: 1
+- id: R_RES_TUNNEL_19
+  name: Pressure Gate
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A tunnel that carries water, power, and bad ideas.
+    Ambushes are easier here than honesty.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_18
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_20
+    len: 1
+- id: R_RES_TUNNEL_20
+  name: Echo Run
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A narrow run of dripping stone and pipe.
+    Every sound comes back wrong.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_19
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_21
+    len: 1
+- id: R_RES_TUNNEL_21
+  name: Service Tunnel
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A tunnel that carries water, power, and bad ideas.
+    Ambushes are easier here than honesty.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_20
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_22
+    len: 1
+- id: R_RES_TUNNEL_22
+  name: Service Tunnel
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A tunnel that carries water, power, and bad ideas.
+    Ambushes are easier here than honesty.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_21
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_23
+    len: 1
+- id: R_RES_TUNNEL_23
+  name: Echo Run
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A narrow run of dripping stone and pipe.
+    Every sound comes back wrong.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_22
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_24
+    len: 1
+- id: R_RES_TUNNEL_24
+  name: Wet Passage
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A narrow run of dripping stone and pipe.
+    Every sound comes back wrong.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_23
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_25
+    len: 1
+- id: R_RES_TUNNEL_25
+  name: Service Tunnel
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A tunnel that carries water, power, and bad ideas.
+    Ambushes are easier here than honesty.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_24
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_26
+    len: 1
+- id: R_RES_TUNNEL_26
+  name: Echo Run
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A narrow run of dripping stone and pipe.
+    Every sound comes back wrong.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_25
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_27
+    len: 1
+- id: R_RES_TUNNEL_27
+  name: Service Tunnel
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A tunnel that carries water, power, and bad ideas.
+    Ambushes are easier here than honesty.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_26
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_28
+    len: 1
+- id: R_RES_TUNNEL_28
+  name: Echo Run
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A narrow run of dripping stone and pipe.
+    Every sound comes back wrong.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_27
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_29
+    len: 1
+- id: R_RES_TUNNEL_29
+  name: Wet Passage
+  cluster: CL_RES_TUNNELS
+  tags:
+  - landmark.reservoir.tunnels
+  desc: |-
+    A narrow run of dripping stone and pipe.
+    Every sound comes back wrong.
+  exits:
+  - dir: back
+    to: R_RES_TUNNEL_28
+    len: 1
+  - dir: ahead
+    to: R_RES_TUNNEL_01
+    len: 1

@@ -5,6 +5,7 @@ import socket
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 
 class Client:
@@ -71,13 +72,22 @@ def connect_and_create(name, is_bot=False, host="127.0.0.1", port=54100):
     c = Client(s)
     c.read_until("name:")
     send_line(s, name)
-    # Broker requires an account password (create or login) before automation disclosure.
+    # Broker requires choosing an auth method, then an account password (create or login),
+    # before automation disclosure. Avoid matching the "- password" bullet in the auth menu.
     pw = f"pw-{name}-1234"
-    while True:
-        out = c.read_until(["type: human | bot", "set password", "password"], timeout_s=12.0)
-        if b"type: human | bot" in out:
-            break
+    out = c.read_until(
+        ["type: password", "set password", "password (never logged/echoed)"],
+        timeout_s=12.0,
+    )
+    if b"type: password" in out:
+        send_line(s, "password")
+        out = c.read_until(
+            ["set password", "password (never logged/echoed)"],
+            timeout_s=12.0,
+        )
+    if b"set password" in out or b"password (never logged/echoed)" in out:
         send_line(s, pw)
+    c.read_until("type: human | bot", timeout_s=12.0)
     send_line(s, "bot" if is_bot else "human")
     c.read_until("type: agree")
     send_line(s, "agree")
@@ -98,6 +108,27 @@ def connect_and_create(name, is_bot=False, host="127.0.0.1", port=54100):
     return c
 
 
+def print_tail(path: Path, lines: int = 120):
+    try:
+        data = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        tail = data[-lines:]
+        print(f"--- tail {path} ---", file=sys.stderr)
+        print("\n".join(tail), file=sys.stderr)
+    except Exception as e:
+        print(f"--- tail {path} failed: {e} ---", file=sys.stderr)
+
+
+def cargo_build_quiet(env, build_log: Path, pkg: str):
+    cmd = ["cargo", "build", "-q", "-p", pkg]
+    with open(build_log, "ab") as f:
+        f.write(f"$ {' '.join(cmd)}\n".encode("utf-8"))
+        p = subprocess.run(cmd, env=env, stdout=f, stderr=f)
+    if p.returncode != 0:
+        print(f"build failed; log: {build_log}", file=sys.stderr)
+        print_tail(build_log)
+        raise subprocess.CalledProcessError(p.returncode, cmd)
+
+
 def main():
     shard_bind = "127.0.0.1:55021"
     broker_bind = "127.0.0.1:54100"
@@ -109,31 +140,42 @@ def main():
     env["SLOPMUD_BIND"] = broker_bind
     env["SHARD_ADDR"] = shard_bind
     env["WORLD_TICK_MS"] = "200"
+    env["RUST_BACKTRACE"] = env.get("RUST_BACKTRACE", "1")
     # Keep accounts isolated per run so we always exercise the "set password" path.
     env["SLOPMUD_ACCOUNTS_PATH"] = f"/tmp/slopmud_accounts_e2e_party_{run_id}.json"
 
+    build_log = Path(f"/tmp/slopmud_e2e_party_build_{run_id}.log")
+    shard_log = Path(f"/tmp/slopmud_e2e_party_shard_{run_id}.log")
+    broker_log = Path(f"/tmp/slopmud_e2e_party_broker_{run_id}.log")
+    shard_f = open(shard_log, "wb")
+    broker_f = open(broker_log, "wb")
+
+    cargo_build_quiet(env, build_log, "shard_01")
+    cargo_build_quiet(env, build_log, "slopmud")
+
     shard = subprocess.Popen(
-        ["cargo", "run", "-q", "-p", "shard_01"],
+        ["target/debug/shard_01"],
         env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=shard_f,
+        stderr=shard_f,
         start_new_session=True,
     )
     try:
-        time.sleep(1.2)
+        time.sleep(0.8)
         broker = subprocess.Popen(
-            ["cargo", "run", "-q", "-p", "slopmud"],
+            ["target/debug/slopmud"],
             env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=broker_f,
+            stderr=broker_f,
             start_new_session=True,
         )
     except Exception:
         os.killpg(shard.pid, signal.SIGTERM)
         raise
 
+    ok = False
     try:
-        time.sleep(1.2)
+        time.sleep(0.8)
         a = connect_and_create("Alice", is_bot=False, port=54100)
         b = connect_and_create("Bob", is_bot=True, port=54100)
 
@@ -181,8 +223,17 @@ def main():
         send_line(b.sock, "exit")
         a.sock.close()
         b.sock.close()
+        ok = True
         print("party e2e ok")
         return 0
+    except Exception:
+        print(
+            f"party e2e failed; logs: {broker_log} {shard_log} {build_log}",
+            file=sys.stderr,
+        )
+        for path in [broker_log, shard_log]:
+            print_tail(path)
+        raise
     finally:
         for p in [locals().get("broker"), shard]:
             if p is None:
@@ -196,6 +247,27 @@ def main():
                 continue
             try:
                 p.wait(timeout=3)
+            except Exception:
+                pass
+        try:
+            shard_f.close()
+        except Exception:
+            pass
+        try:
+            broker_f.close()
+        except Exception:
+            pass
+        if ok:
+            try:
+                broker_log.unlink()
+            except Exception:
+                pass
+            try:
+                shard_log.unlink()
+            except Exception:
+                pass
+            try:
+                build_log.unlink()
             except Exception:
                 pass
 

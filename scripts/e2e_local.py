@@ -57,18 +57,37 @@ def send_line(sock, s):
 
 
 def connect_and_create(name, is_bot=False, host="127.0.0.1", port=54010):
-    s = socket.create_connection((host, port), timeout=3.0)
+    # Broker startup can be a little slow (especially under cargo); retry connect.
+    deadline = time.time() + 12.0
+    last_err = None
+    while time.time() < deadline:
+        try:
+            s = socket.create_connection((host, port), timeout=3.0)
+            break
+        except OSError as e:
+            last_err = e
+            time.sleep(0.1)
+    else:
+        raise last_err
     c = Client(s)
     c.read_until("name:")
     send_line(s, name)
-    # Broker now requires an account password (create or login) before disclosure.
+    # Broker requires choosing an auth method, then an account password (create or login),
+    # before automation disclosure. Avoid matching the "- password" bullet in the auth menu.
     pw = f"pw-{name}-1234"
-    while True:
-        out = c.read_until(["type: human | bot", "set password", "password"], timeout_s=12.0)
-        if b"type: human | bot" in out:
-            break
-        # Either first-time password creation ("set password") or login ("password").
+    out = c.read_until(
+        ["type: password", "set password", "password (never logged/echoed)"],
+        timeout_s=12.0,
+    )
+    if b"type: password" in out:
+        send_line(s, "password")
+        out = c.read_until(
+            ["set password", "password (never logged/echoed)"],
+            timeout_s=12.0,
+        )
+    if b"set password" in out or b"password (never logged/echoed)" in out:
         send_line(s, pw)
+    c.read_until("type: human | bot", timeout_s=12.0)
     send_line(s, "bot" if is_bot else "human")
     c.read_until("type: agree")
     send_line(s, "agree")
@@ -281,6 +300,7 @@ def main():
 
         # Train a skill in the orientation wing (trainer room).
         walk(a, path_back_to_orient)
+        send_line(a.sock, "look")
         a.read_until("Orientation Wing", timeout_s=3.0)
         send_line(a.sock, "train power_strike")
         a.read_until("trainer: trained power_strike (rank 1).", timeout_s=3.0)

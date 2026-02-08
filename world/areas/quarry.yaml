@@ -1,213 +1,980 @@
 version: 1
 zone_id: quarry
-zone_name: "Quarry"
+zone_name: Quarry
 area_id: A01
-level_band: [4, 6]
-
-# Not a player spawn zone, but set for reachability warnings in validation.
+level_band:
+- 4
+- 6
 start_room: P_QUARRY_SEWERS
-
 rooms:
-  # ---------------- CL_QUARRY_FOOTHILLS (15 rooms) ----------------
-  - id: P_QUARRY_SEWERS
-    name: "Sewer Bypass Mouth"
-    cluster: CL_QUARRY_FOOTHILLS
-    tags: [portal.P_QUARRY_SEWERS]
-    desc: |
-      Cold air carries grit and distant hammering.
-      A rough tunnel slopes back toward the sewers.
-    exits:
-      - { dir: west, to: P_SEWERS_QUARRY, len: 1 }
-      - { dir: east, to: R_QUARRY_FOOTHILLS_01, len: 1 }
-
-  - id: P_QUARRY_CHECKPOINT
-    name: "Old Road Transfer"
-    cluster: CL_QUARRY_FOOTHILLS
-    tags: [portal.P_QUARRY_CHECKPOINT]
-    desc: |
-      A concrete ramp leads toward a gatehouse silhouette and the cracked old road beyond.
-      The wind up there feels like a different game.
-    exits:
-      - { dir: east, to: P_CHECKPOINT_QUARRY, len: 1 }
-      - { dir: west, to: R_QUARRY_FOOTHILLS_01, len: 1 }
-
-  - id: P_QUARRY_HILLFORT
-    name: "Hillfort Spur"
-    cluster: CL_QUARRY_FOOTHILLS
-    tags: [portal.P_QUARRY_HILLFORT]
-    desc: |
-      A narrow spur climbs toward broken stone and old banners.
-      The path looks survivable, but not forgiving.
-    exits:
-      - { dir: north, to: P_HILLFORT_QUARRY, len: 1 }
-      - { dir: south, to: R_QUARRY_FOOTHILLS_01, len: 1 }
-
-  - id: R_QUARRY_FOOTHILLS_01
-    name: "Quarry Foothills"
-    cluster: CL_QUARRY_FOOTHILLS
-    desc: |
-      Rocky foothills with warning flags and painted arrows:
-      "WORKS" one way, "SEWERS" the other. Dust hangs in the air like a habit.
-    exits:
-      - { dir: works, to: R_QUARRY_WORKS_01, len: 1 }
-      - { dir: sewers, to: P_QUARRY_SEWERS, len: 1 }
-      - { dir: checkpoint, to: P_QUARRY_CHECKPOINT, len: 1, state: sealed, gate: gate.checkpoint.access }
-      - { dir: hillfort, to: P_QUARRY_HILLFORT, len: 1 }
-
-  # ---------------- CL_QUARRY_WORKS (15 rooms) ----------------
-  - id: R_QUARRY_WORKS_01
-    name: "Foreman Works"
-    cluster: CL_QUARRY_WORKS
-    tags: [HUB_QUARRY_FOREMAN]
-    desc: |
-      A foreman shack, clipboard tyranny, and a vending crate of ore masks.
-      A board lists hazards in blunt terms: WORMS. NETS. SLAMS.
-    exits:
-      - { dir: foothills, to: R_QUARRY_FOOTHILLS_01, len: 1 }
-      - { dir: pits, to: R_QUARRY_PITS_01, len: 1 }
-      - { dir: night, to: R_QUARRY_NIGHT_01, len: 1 }
-
-  # ---------------- CL_QUARRY_PITS (20 rooms) ----------------
-  - id: R_QUARRY_PITS_01
-    name: "Open Pits"
-    cluster: CL_QUARRY_PITS
-    desc: |
-      Open cuts in the earth with sparse cover.
-      Heavy hits land here. Pull carefully or pay.
-    exits:
-      - { dir: west, to: R_QUARRY_WORKS_01, len: 1 }
-      - { dir: east, to: R_QUARRY_PITS_02, len: 1 }
-
-  - id: R_QUARRY_PITS_02
-    name: "Worm Tell Shelf"
-    cluster: CL_QUARRY_PITS
-    desc: |
-      The ground here has a pattern of cracks that do not feel natural.
-      A few stones tremble like something is practicing.
-    exits:
-      - { dir: west, to: R_QUARRY_PITS_01, len: 1 }
-      - { dir: east, to: R_QUARRY_DIG_01, len: 1 }
-
-  # ---------------- CL_QUARRY_ILLEGAL_DIG (20 rooms) ----------------
-  - id: R_QUARRY_DIG_01
-    name: "Illegal Dig Site"
-    cluster: CL_QUARRY_ILLEGAL_DIG
-    tags: [setpiece.q4.illegal_dig_site]
-    desc: |
-      An illegal dig with makeshift scaffolds and three nervous crews.
-      Net-throwers circle the edges like they own the air.
-    exits:
-      - { dir: west, to: R_QUARRY_PITS_02, len: 1 }
-      - { dir: north, to: R_QUARRY_CHOICE_01, len: 1 }
-
-  - id: R_QUARRY_CHOICE_01
-    name: "Union Or Foreman"
-    cluster: CL_QUARRY_ILLEGAL_DIG
-    desc: |
-      The union rep and the foreman arrive at the same time and start talking past each other.
-      The choice needs to be explicit, summarized, and confirmed.
-    exits:
-      - { dir: south, to: R_QUARRY_DIG_01, len: 1 }
-      - { dir: east, to: R_QUARRY_ELITE_01, len: 1 }
-
-  - id: R_QUARRY_ELITE_01
-    name: "Breaker-7 Approach"
-    cluster: CL_QUARRY_ILLEGAL_DIG
-    desc: |
-      The tunnel narrows. A rhythmic impact repeats like a metronome.
-      Dust falls in time.
-    exits:
-      - { dir: west, to: R_QUARRY_CHOICE_01, len: 1 }
-      - { dir: east, to: R_QUARRY_ELITE_02, len: 1 }
-
-  - id: R_QUARRY_ELITE_02
-    name: "Breaker-7 Arena"
-    cluster: CL_QUARRY_ILLEGAL_DIG
-    tags: [setpiece.q4.breaker7_arena]
-    desc: |
-      A wide arena where displacement matters and edges are dangerous on purpose.
-      The slam is slow and huge. The shove is faster and cruel.
-    exits:
-      - { dir: west, to: R_QUARRY_ELITE_01, len: 1 }
-      - { dir: works, to: R_QUARRY_WORKS_01, len: 1 }
-      - { dir: checkpoint, to: R_QUARRY_FOOTHILLS_01, len: 1, gate: gate.checkpoint.access }
-
-  # ---------------- Quarry Night Shift (Event stubs) ----------------
-  - id: R_QUARRY_NIGHT_01
-    name: "Night Shift Start"
-    cluster: CL_QUARRY_WORKS
-    tags: [setpiece.e19.shift_start]
-    desc: |
-      A bell rings and the quarry becomes a different place.
-      Visibility drops, the objective panel should be loud, and patrols start to matter.
-    exits:
-      - { dir: works, to: R_QUARRY_WORKS_01, len: 1 }
-      - { dir: workers, to: R_QUARRY_WORKER_01, len: 1 }
-      - { dir: cache, to: R_QUARRY_CACHE_01, len: 1 }
-      - { dir: catwalk, to: R_QUARRY_CATWALK_01, len: 1 }
-      - { dir: shortcut, to: R_QUARRY_SHORTCUT_01, len: 1 }
-
-  - id: R_QUARRY_WORKER_01
-    name: "Worker Evac Lane"
-    cluster: CL_QUARRY_PITS
-    tags: [setpiece.e19.worker_evac]
-    desc: |
-      Workers move to lamplit shelters while patrols pressure them.
-      Safe lane markers should read even in low light.
-    exits:
-      - { dir: back, to: R_QUARRY_NIGHT_01, len: 1 }
-      - { dir: shelter, to: R_QUARRY_SHELTER_01, len: 1 }
-
-  - id: R_QUARRY_CACHE_01
-    name: "Rare Cache Window"
-    cluster: CL_QUARRY_ILLEGAL_DIG
-    tags: [setpiece.e19.rare_cache]
-    desc: |
-      A cache opens for a short window.
-      The risk and the reward should both be explicit.
-    exits:
-      - { dir: back, to: R_QUARRY_NIGHT_01, len: 1 }
-      - { dir: deeper, to: R_QUARRY_NIGHT_ELITE_01, len: 1 }
-
-  - id: R_QUARRY_SHORTCUT_01
-    name: "Collapsed Tunnel Shortcut"
-    cluster: CL_QUARRY_PITS
-    desc: |
-      A collapsed tunnel connects objectives.
-      Opening it is loud and fast: time saved, patrol heat gained.
-    exits:
-      - { dir: back, to: R_QUARRY_NIGHT_01, len: 1 }
-      - { dir: workers, to: R_QUARRY_WORKER_01, len: 1 }
-      - { dir: cache, to: R_QUARRY_CACHE_01, len: 1 }
-      - { dir: elite, to: R_QUARRY_NIGHT_ELITE_01, len: 1 }
-
-  - id: R_QUARRY_CATWALK_01
-    name: "Maintenance Catwalk"
-    cluster: CL_QUARRY_WORKS
-    desc: |
-      A ladder chain and catwalk that bypasses one patrol choke.
-      This route rewards movement mastery, not brute force.
-    exits:
-      - { dir: back, to: R_QUARRY_NIGHT_01, len: 1 }
-      - { dir: workers, to: R_QUARRY_WORKER_01, len: 1 }
-      - { dir: cache, to: R_QUARRY_CACHE_01, len: 1 }
-
-  - id: R_QUARRY_NIGHT_ELITE_01
-    name: "Night Elite"
-    cluster: CL_QUARRY_PITS
-    tags: [setpiece.e19.night_elite]
-    desc: |
-      An event elite prowls for ore and tries to escape with it.
-      The flee tell needs to be loud: audio plus a clear marker lane.
-    exits:
-      - { dir: back, to: R_QUARRY_NIGHT_01, len: 1 }
-      - { dir: shelter, to: R_QUARRY_SHELTER_01, len: 1 }
-
-  - id: R_QUARRY_SHELTER_01
-    name: "Lamplit Shelter"
-    cluster: CL_QUARRY_WORKS
-    desc: |
-      A lamplit shelter where waiting is explicitly safe.
-      For small and under-leveled parties, this is the permission to breathe.
-    exits:
-      - { dir: back, to: R_QUARRY_NIGHT_01, len: 1 }
+- id: P_QUARRY_SEWERS
+  name: Sewer Bypass Mouth
+  cluster: CL_QUARRY_FOOTHILLS
+  tags:
+  - portal.P_QUARRY_SEWERS
+  desc: |
+    Cold air carries grit and distant hammering.
+    A rough tunnel slopes back toward the sewers.
+  exits:
+  - dir: west
+    to: P_SEWERS_QUARRY
+    len: 1
+    state: sealed
+    gate: gate.sewers.shortcut_to_quarry
+  - dir: east
+    to: R_QUARRY_FOOTHILLS_01
+    len: 1
+- id: P_QUARRY_CHECKPOINT
+  name: Old Road Transfer
+  cluster: CL_QUARRY_FOOTHILLS
+  tags:
+  - portal.P_QUARRY_CHECKPOINT
+  desc: |
+    A concrete ramp leads toward a gatehouse silhouette and the cracked old road beyond.
+    The wind up there feels like a different game.
+  exits:
+  - dir: east
+    to: P_CHECKPOINT_QUARRY
+    len: 1
+  - dir: west
+    to: R_QUARRY_FOOTHILLS_01
+    len: 1
+- id: P_QUARRY_HILLFORT
+  name: Hillfort Spur
+  cluster: CL_QUARRY_FOOTHILLS
+  tags:
+  - portal.P_QUARRY_HILLFORT
+  desc: |
+    A narrow spur climbs toward broken stone and old banners.
+    The path looks survivable, but not forgiving.
+  exits:
+  - dir: north
+    to: P_HILLFORT_QUARRY
+    len: 1
+  - dir: south
+    to: R_QUARRY_FOOTHILLS_01
+    len: 1
+- id: R_QUARRY_FOOTHILLS_01
+  name: Quarry Foothills
+  cluster: CL_QUARRY_FOOTHILLS
+  desc: |
+    Rocky foothills with warning flags and painted arrows:
+    "WORKS" one way, "SEWERS" the other. Dust hangs in the air like a habit.
+  exits:
+  - dir: works
+    to: R_QUARRY_WORKS_01
+    len: 1
+  - dir: sewers
+    to: P_QUARRY_SEWERS
+    len: 1
+  - dir: checkpoint
+    to: P_QUARRY_CHECKPOINT
+    len: 1
+  - dir: hillfort
+    to: P_QUARRY_HILLFORT
+    len: 1
+  - dir: wander_foothill
+    to: R_QUARRY_FOOTHILL_01
+    len: 1
+- id: R_QUARRY_WORKS_01
+  name: Foreman Works
+  cluster: CL_QUARRY_WORKS
+  tags:
+  - HUB_QUARRY_FOREMAN
+  desc: |
+    A foreman shack, clipboard tyranny, and a vending crate of ore masks.
+    A board lists hazards in blunt terms: WORMS. NETS. SLAMS.
+  exits:
+  - dir: foothills
+    to: R_QUARRY_FOOTHILLS_01
+    len: 1
+  - dir: pits
+    to: R_QUARRY_PITS_01
+    len: 1
+  - dir: night
+    to: R_QUARRY_NIGHT_01
+    len: 1
+  - dir: wander_work
+    to: R_QUARRY_WORK_01
+    len: 1
+- id: R_QUARRY_PITS_01
+  name: Open Pits
+  cluster: CL_QUARRY_PITS
+  desc: |
+    Open cuts in the earth with sparse cover.
+    Heavy hits land here. Pull carefully or pay.
+  exits:
+  - dir: west
+    to: R_QUARRY_WORKS_01
+    len: 1
+  - dir: east
+    to: R_QUARRY_PITS_02
+    len: 1
+  - dir: wander_pits
+    to: R_QUARRY_PITS_03
+    len: 1
+- id: R_QUARRY_PITS_02
+  name: Worm Tell Shelf
+  cluster: CL_QUARRY_PITS
+  desc: |
+    The ground here has a pattern of cracks that do not feel natural.
+    A few stones tremble like something is practicing.
+  exits:
+  - dir: west
+    to: R_QUARRY_PITS_01
+    len: 1
+  - dir: east
+    to: R_QUARRY_DIG_01
+    len: 1
+- id: R_QUARRY_DIG_01
+  name: Illegal Dig Site
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  tags:
+  - setpiece.q4.illegal_dig_site
+  desc: |
+    An illegal dig with makeshift scaffolds and three nervous crews.
+    Net-throwers circle the edges like they own the air.
+  exits:
+  - dir: west
+    to: R_QUARRY_PITS_02
+    len: 1
+  - dir: north
+    to: R_QUARRY_CHOICE_01
+    len: 1
+  - dir: wander_elite
+    to: R_QUARRY_ELITE_03
+    len: 1
+- id: R_QUARRY_CHOICE_01
+  name: Union Or Foreman
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  desc: |
+    The union rep and the foreman arrive at the same time and start talking past each other.
+    The choice needs to be explicit, summarized, and confirmed.
+  exits:
+  - dir: south
+    to: R_QUARRY_DIG_01
+    len: 1
+  - dir: east
+    to: R_QUARRY_ELITE_01
+    len: 1
+- id: R_QUARRY_ELITE_01
+  name: Breaker-7 Approach
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  desc: |
+    The tunnel narrows. A rhythmic impact repeats like a metronome.
+    Dust falls in time.
+  exits:
+  - dir: west
+    to: R_QUARRY_CHOICE_01
+    len: 1
+  - dir: east
+    to: R_QUARRY_ELITE_02
+    len: 1
+- id: R_QUARRY_ELITE_02
+  name: Breaker-7 Arena
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  tags:
+  - setpiece.q4.breaker7_arena
+  desc: |
+    A wide arena where displacement matters and edges are dangerous on purpose.
+    The slam is slow and huge. The shove is faster and cruel.
+  exits:
+  - dir: west
+    to: R_QUARRY_ELITE_01
+    len: 1
+  - dir: works
+    to: R_QUARRY_WORKS_01
+    len: 1
+  - dir: checkpoint
+    to: P_QUARRY_CHECKPOINT
+    len: 1
+- id: R_QUARRY_NIGHT_01
+  name: Night Shift Start
+  cluster: CL_QUARRY_WORKS
+  tags:
+  - setpiece.e19.shift_start
+  desc: |
+    A bell rings and the quarry becomes a different place.
+    Visibility drops. Patrol lights sweep the works, and the whole place feels hunted.
+  exits:
+  - dir: works
+    to: R_QUARRY_WORKS_01
+    len: 1
+  - dir: workers
+    to: R_QUARRY_WORKER_01
+    len: 1
+  - dir: cache
+    to: R_QUARRY_CACHE_01
+    len: 1
+  - dir: catwalk
+    to: R_QUARRY_CATWALK_01
+    len: 1
+  - dir: shortcut
+    to: R_QUARRY_SHORTCUT_01
+    len: 1
+- id: R_QUARRY_WORKER_01
+  name: Worker Evac Lane
+  cluster: CL_QUARRY_PITS
+  tags:
+  - setpiece.e19.worker_evac
+  desc: |
+    Workers move to lamplit shelters while patrols pressure them.
+    Painted lane markers still cut through the low light.
+  exits:
+  - dir: back
+    to: R_QUARRY_NIGHT_01
+    len: 1
+  - dir: shelter
+    to: R_QUARRY_SHELTER_01
+    len: 1
+- id: R_QUARRY_CACHE_01
+  name: Rare Cache Window
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  tags:
+  - setpiece.e19.rare_cache
+  desc: |
+    A cache opens for a short window.
+    The risk is obvious, and so is the payoff.
+  exits:
+  - dir: back
+    to: R_QUARRY_NIGHT_01
+    len: 1
+  - dir: deeper
+    to: R_QUARRY_NIGHT_ELITE_01
+    len: 1
+- id: R_QUARRY_SHORTCUT_01
+  name: Collapsed Tunnel Shortcut
+  cluster: CL_QUARRY_PITS
+  desc: |
+    A collapsed tunnel connects objectives.
+    Opening it is loud and fast: time saved, patrol heat gained.
+  exits:
+  - dir: back
+    to: R_QUARRY_NIGHT_01
+    len: 1
+  - dir: workers
+    to: R_QUARRY_WORKER_01
+    len: 1
+  - dir: cache
+    to: R_QUARRY_CACHE_01
+    len: 1
+  - dir: elite
+    to: R_QUARRY_NIGHT_ELITE_01
+    len: 1
+- id: R_QUARRY_CATWALK_01
+  name: Maintenance Catwalk
+  cluster: CL_QUARRY_WORKS
+  desc: |
+    A ladder chain and catwalk that bypasses one patrol choke.
+    This route rewards movement mastery, not brute force.
+  exits:
+  - dir: back
+    to: R_QUARRY_NIGHT_01
+    len: 1
+  - dir: workers
+    to: R_QUARRY_WORKER_01
+    len: 1
+  - dir: cache
+    to: R_QUARRY_CACHE_01
+    len: 1
+- id: R_QUARRY_NIGHT_ELITE_01
+  name: Night Elite
+  cluster: CL_QUARRY_PITS
+  tags:
+  - setpiece.e19.night_elite
+  desc: |
+    An event elite prowls for ore and tries to escape with it.
+    The flee tell needs to be loud: audio plus a clear marker lane.
+  exits:
+  - dir: back
+    to: R_QUARRY_NIGHT_01
+    len: 1
+  - dir: shelter
+    to: R_QUARRY_SHELTER_01
+    len: 1
+- id: R_QUARRY_SHELTER_01
+  name: Lamplit Shelter
+  cluster: CL_QUARRY_WORKS
+  desc: |
+    A lamplit shelter where waiting is explicitly safe.
+    For small and under-leveled parties, this is the permission to breathe.
+  exits:
+  - dir: back
+    to: R_QUARRY_NIGHT_01
+    len: 1
+- id: R_QUARRY_FOOTHILL_01
+  name: Flagged Rope Line
+  cluster: CL_QUARRY_FOOTHILLS
+  desc: |-
+    A rope line holds a row of warning flags that snap in the wind.
+    The stone here is loose enough to roll under your boots.
+  exits:
+  - dir: back
+    to: R_QUARRY_FOOTHILLS_01
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_FOOTHILL_02
+    len: 1
+- id: R_QUARRY_FOOTHILL_02
+  name: Survey Stakes
+  cluster: CL_QUARRY_FOOTHILLS
+  desc: |-
+    Survey stakes poke from the gravel, each tagged with a faded number.
+    Someone has kicked half of them over.
+  exits:
+  - dir: back
+    to: R_QUARRY_FOOTHILL_01
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_FOOTHILL_03
+    len: 1
+- id: R_QUARRY_FOOTHILL_03
+  name: Dusty Switchback
+  cluster: CL_QUARRY_FOOTHILLS
+  desc: |-
+    A switchback climbs along the rim, carved into brittle rock.
+    Dust coats everything, including the arrow pointing back to WORKS.
+  exits:
+  - dir: back
+    to: R_QUARRY_FOOTHILL_02
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_FOOTHILL_04
+    len: 1
+- id: R_QUARRY_FOOTHILL_04
+  name: Empty Tool Crate
+  cluster: CL_QUARRY_FOOTHILLS
+  desc: |-
+    An empty tool crate sits under a tarp, torn open and searched.
+    The only thing left is a cracked ore mask.
+  exits:
+  - dir: back
+    to: R_QUARRY_FOOTHILL_03
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_FOOTHILL_05
+    len: 1
+- id: R_QUARRY_FOOTHILL_05
+  name: Windbreak Wall
+  cluster: CL_QUARRY_FOOTHILLS
+  desc: |-
+    A low stone wall breaks the wind and blocks sightlines into the pits.
+    You can hear the works, but you cannot see them.
+  exits:
+  - dir: back
+    to: R_QUARRY_FOOTHILL_04
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_FOOTHILL_06
+    len: 1
+- id: R_QUARRY_FOOTHILL_06
+  name: Spoil Heap Ridge
+  cluster: CL_QUARRY_FOOTHILLS
+  desc: |-
+    A spoil heap rises like a dune of sharp gravel.
+    Tiny slides of stone reveal just how unstable the rim is.
+  exits:
+  - dir: back
+    to: R_QUARRY_FOOTHILL_05
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_FOOTHILL_07
+    len: 1
+- id: R_QUARRY_FOOTHILL_07
+  name: Grit Track
+  cluster: CL_QUARRY_FOOTHILLS
+  desc: |-
+    A grit track runs beside a drainage ditch stained orange.
+    Footprints overlap like everyone takes this route when they flee.
+  exits:
+  - dir: back
+    to: R_QUARRY_FOOTHILL_06
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_FOOTHILL_08
+    len: 1
+- id: R_QUARRY_FOOTHILL_08
+  name: Hearing Distance
+  cluster: CL_QUARRY_FOOTHILLS
+  desc: |-
+    You can hear hammering and shouted counts, carried on the air.
+    The sound makes the quarry feel closer than it is.
+  exits:
+  - dir: back
+    to: R_QUARRY_FOOTHILL_07
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_FOOTHILL_09
+    len: 1
+- id: R_QUARRY_FOOTHILL_09
+  name: Broken Chute
+  cluster: CL_QUARRY_FOOTHILLS
+  desc: |-
+    A broken ore chute points toward the pits like a warning finger.
+    Jagged metal edges catch on clothing if you brush past.
+  exits:
+  - dir: back
+    to: R_QUARRY_FOOTHILL_08
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_FOOTHILL_10
+    len: 1
+- id: R_QUARRY_FOOTHILL_10
+  name: Stenciled Caution
+  cluster: CL_QUARRY_FOOTHILLS
+  desc: |-
+    Stencils on the rock read: KEEP CLEAR OF EDGE.
+    Someone added in charcoal: IT DOES NOT CARE.
+  exits:
+  - dir: back
+    to: R_QUARRY_FOOTHILL_09
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_FOOTHILL_11
+    len: 1
+- id: R_QUARRY_FOOTHILL_11
+  name: Rim Return
+  cluster: CL_QUARRY_FOOTHILLS
+  desc: |-
+    The rim path bends back toward the main foothills marker.
+    Painted arrows reappear, blunt and reliable.
+  exits:
+  - dir: back
+    to: R_QUARRY_FOOTHILL_10
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_FOOTHILLS_01
+    len: 1
+- id: R_QUARRY_ELITE_03
+  name: Tarped Approach
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  desc: |-
+    Tarps hang in layers, damping sound and light.
+    A faint boot path leads where crews pretended nothing exists.
+  exits:
+  - dir: back
+    to: R_QUARRY_DIG_01
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_ELITE_04
+    len: 1
+- id: R_QUARRY_ELITE_04
+  name: Brace Line
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  desc: |-
+    Makeshift braces hold the ceiling with wishful thinking.
+    Fresh splinters show something recently shifted.
+  exits:
+  - dir: back
+    to: R_QUARRY_ELITE_03
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_ELITE_05
+    len: 1
+- id: R_QUARRY_ELITE_05
+  name: Hand-Print Crawl
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  desc: |-
+    The passage forces hands to the wall; dust records every touch.
+    The hush here feels practiced.
+  exits:
+  - dir: back
+    to: R_QUARRY_ELITE_04
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_ELITE_06
+    len: 1
+- id: R_QUARRY_ELITE_06
+  name: Nail Lantern
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  desc: |-
+    A lantern is nailed into a crack, shaded to hide its glow.
+    Someone swaps the fuel regularly.
+  exits:
+  - dir: back
+    to: R_QUARRY_ELITE_05
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_ELITE_07
+    len: 1
+- id: R_QUARRY_ELITE_07
+  name: Hidden Shaft Mouth
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  desc: |-
+    A narrow shaft drops into darkness with a rope ladder stub.
+    The stone around it is scraped smooth by repeated climbs.
+  exits:
+  - dir: back
+    to: R_QUARRY_ELITE_06
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_ELITE_08
+    len: 1
+- id: R_QUARRY_ELITE_08
+  name: Tarp Knot
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  desc: |-
+    Tarp knots hang at eye level, easy to grab and easy to cut.
+    A scrap of cloth is marked with a simple X.
+  exits:
+  - dir: back
+    to: R_QUARRY_ELITE_07
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_ELITE_09
+    len: 1
+- id: R_QUARRY_ELITE_09
+  name: Contraband Crate
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  desc: |-
+    A crate has been dragged here and broken open.
+    It still smells of oil and cheap metal.
+  exits:
+  - dir: back
+    to: R_QUARRY_ELITE_08
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_ELITE_10
+    len: 1
+- id: R_QUARRY_ELITE_10
+  name: Quiet Cut
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  desc: |-
+    A cut in the rock hides behind a curtain of dust and tarp.
+    Even your breathing feels too loud.
+  exits:
+  - dir: back
+    to: R_QUARRY_ELITE_09
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_ELITE_11
+    len: 1
+- id: R_QUARRY_ELITE_11
+  name: Hammer Echo
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  desc: |-
+    A distant hammer sound repeats at an unnatural interval.
+    Someone is working, or wants you to think they are.
+  exits:
+  - dir: back
+    to: R_QUARRY_ELITE_10
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_ELITE_12
+    len: 1
+- id: R_QUARRY_ELITE_12
+  name: Shoring Gap
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  desc: |-
+    A gap in the shoring reveals a black void beyond.
+    Pebbles tumble in and never sound like they land.
+  exits:
+  - dir: back
+    to: R_QUARRY_ELITE_11
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_ELITE_13
+    len: 1
+- id: R_QUARRY_ELITE_13
+  name: Evidence Dust
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  desc: |-
+    Fine dust coats the floor like flour, ready to betray footsteps.
+    A boot print has been carefully brushed away and redone.
+  exits:
+  - dir: back
+    to: R_QUARRY_ELITE_12
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_ELITE_14
+    len: 1
+- id: R_QUARRY_ELITE_14
+  name: Side Pocket
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  desc: |-
+    A small pocket in the wall holds nothing, but smells of fresh sweat.
+    It is a hiding spot for someone who expected trouble.
+  exits:
+  - dir: back
+    to: R_QUARRY_ELITE_13
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_ELITE_15
+    len: 1
+- id: R_QUARRY_ELITE_15
+  name: Rope Burn
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  desc: |-
+    Rope burn marks the rock at shoulder height.
+    Whatever got hauled through here was heavy and fast.
+  exits:
+  - dir: back
+    to: R_QUARRY_ELITE_14
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_ELITE_16
+    len: 1
+- id: R_QUARRY_ELITE_16
+  name: Blind Drift
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  desc: |-
+    The air is still; dust hangs without settling.
+    The stone underfoot is warm, as if something ran recently.
+  exits:
+  - dir: back
+    to: R_QUARRY_ELITE_15
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_ELITE_17
+    len: 1
+- id: R_QUARRY_ELITE_17
+  name: Back to Dig
+  cluster: CL_QUARRY_ILLEGAL_DIG
+  desc: |-
+    The tarps thin and the illegal site's noise leaks back in.
+    Ahead, the scaffolds and crews wait like a lie you can see.
+  exits:
+  - dir: back
+    to: R_QUARRY_ELITE_16
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_DIG_01
+    len: 1
+- id: R_QUARRY_PITS_03
+  name: Chisel Marks
+  cluster: CL_QUARRY_PITS
+  desc: |-
+    Fresh chisel marks score the wall in parallel lines.
+    The pattern looks like a route, or a warning.
+  exits:
+  - dir: back
+    to: R_QUARRY_PITS_01
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_PITS_04
+    len: 1
+- id: R_QUARRY_PITS_04
+  name: Blast Scars
+  cluster: CL_QUARRY_PITS
+  desc: |-
+    Blast scars pock the stone, sharp enough to snag cloth.
+    Loose dust falls whenever you step too hard.
+  exits:
+  - dir: back
+    to: R_QUARRY_PITS_03
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_PITS_05
+    len: 1
+- id: R_QUARRY_PITS_05
+  name: Sparse Cover
+  cluster: CL_QUARRY_PITS
+  desc: |-
+    A wide cut with only a few boulders to hide behind.
+    Out here, pulling too much feels immediate.
+  exits:
+  - dir: back
+    to: R_QUARRY_PITS_04
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_PITS_06
+    len: 1
+- id: R_QUARRY_PITS_06
+  name: Edge Drop
+  cluster: CL_QUARRY_PITS
+  desc: |-
+    The ledge ends in a sudden drop into shadow.
+    A broken signpost leans away from the edge.
+  exits:
+  - dir: back
+    to: R_QUARRY_PITS_05
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_PITS_07
+    len: 1
+- id: R_QUARRY_PITS_07
+  name: Fractured Plates
+  cluster: CL_QUARRY_PITS
+  desc: |-
+    The ledge is broken into uneven plates that shift when you step.
+    A slide of stones trails every mistake.
+  exits:
+  - dir: back
+    to: R_QUARRY_PITS_06
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_PITS_08
+    len: 1
+- id: R_QUARRY_PITS_08
+  name: Ore Vein
+  cluster: CL_QUARRY_PITS
+  desc: |-
+    A thin ore vein glints through the dust like a line of teeth.
+    Someone chipped at it, then stopped mid-swing.
+  exits:
+  - dir: back
+    to: R_QUARRY_PITS_07
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_PITS_09
+    len: 1
+- id: R_QUARRY_PITS_09
+  name: Wind Cut
+  cluster: CL_QUARRY_PITS
+  desc: |-
+    Wind cuts across the opening and steals sound from your words.
+    Down below, movement is hard to track.
+  exits:
+  - dir: back
+    to: R_QUARRY_PITS_08
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_PITS_10
+    len: 1
+- id: R_QUARRY_PITS_10
+  name: Loose Scree
+  cluster: CL_QUARRY_PITS
+  desc: |-
+    Loose scree shifts underfoot, sliding a few inches with every step.
+    A slide here could drag you into a bad angle.
+  exits:
+  - dir: back
+    to: R_QUARRY_PITS_09
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_PITS_11
+    len: 1
+- id: R_QUARRY_PITS_11
+  name: Net Posts
+  cluster: CL_QUARRY_PITS
+  desc: |-
+    Rusty net posts stand in a line, their nets long gone.
+    Whatever they caught, they do not bother now.
+  exits:
+  - dir: back
+    to: R_QUARRY_PITS_10
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_PITS_12
+    len: 1
+- id: R_QUARRY_PITS_12
+  name: Long Sightline
+  cluster: CL_QUARRY_PITS
+  desc: |-
+    A long sightline runs across the pit, clean and exposed.
+    It feels like a place ranged threats would love.
+  exits:
+  - dir: back
+    to: R_QUARRY_PITS_11
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_PITS_13
+    len: 1
+- id: R_QUARRY_PITS_13
+  name: Crackling Ground
+  cluster: CL_QUARRY_PITS
+  desc: |-
+    The ground is webbed with hairline cracks that crunch when you step.
+    It is a subtle tell that something below is restless.
+  exits:
+  - dir: back
+    to: R_QUARRY_PITS_12
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_PITS_14
+    len: 1
+- id: R_QUARRY_PITS_14
+  name: Dust Slide
+  cluster: CL_QUARRY_PITS
+  desc: |-
+    A dust slide spills from above, forming a soft-looking slope.
+    It is not soft at all; stones hide under the dust.
+  exits:
+  - dir: back
+    to: R_QUARRY_PITS_13
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_PITS_15
+    len: 1
+- id: R_QUARRY_PITS_15
+  name: Hammering Echo
+  cluster: CL_QUARRY_PITS
+  desc: |-
+    Somewhere in the pits, hammering echoes like a heartbeat.
+    The sound makes it hard to judge distance.
+  exits:
+  - dir: back
+    to: R_QUARRY_PITS_14
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_PITS_16
+    len: 1
+- id: R_QUARRY_PITS_16
+  name: No Easy Run
+  cluster: CL_QUARRY_PITS
+  desc: |-
+    The walls here are too steep to climb without gear.
+    If you commit to a fight here, you own it.
+  exits:
+  - dir: back
+    to: R_QUARRY_PITS_15
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_PITS_17
+    len: 1
+- id: R_QUARRY_PITS_17
+  name: Pit Loopback
+  cluster: CL_QUARRY_PITS
+  desc: |-
+    The rim path bends toward the main pit marker again.
+    Familiar boulders reappear, like a checkpoint.
+  exits:
+  - dir: back
+    to: R_QUARRY_PITS_16
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_PITS_01
+    len: 1
+- id: R_QUARRY_WORK_01
+  name: Breaker Pad Line
+  cluster: CL_QUARRY_WORKS
+  desc: |-
+    Concrete pads are stamped with numbers and impact marks.
+    A warning stencil reads: CLEAR THE ARC.
+  exits:
+  - dir: back
+    to: R_QUARRY_WORKS_01
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_WORK_02
+    len: 1
+- id: R_QUARRY_WORK_02
+  name: Cracked Impact Slab
+  cluster: CL_QUARRY_WORKS
+  desc: |-
+    A slab is cracked down the middle, patched with metal staples.
+    It holds, but it looks like it wants to fail.
+  exits:
+  - dir: back
+    to: R_QUARRY_WORK_01
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_WORK_03
+    len: 1
+- id: R_QUARRY_WORK_03
+  name: Generator Skid
+  cluster: CL_QUARRY_WORKS
+  desc: |-
+    A generator skid sits silent, its cables coiled neatly.
+    Someone shut it down with care, not panic.
+  exits:
+  - dir: back
+    to: R_QUARRY_WORK_02
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_WORK_04
+    len: 1
+- id: R_QUARRY_WORK_04
+  name: Forklift Lane
+  cluster: CL_QUARRY_WORKS
+  desc: |-
+    Faded lane paint marks a forklift route between piles of stone.
+    The lines are scuffed where loads dragged over them.
+  exits:
+  - dir: back
+    to: R_QUARRY_WORK_03
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_WORK_05
+    len: 1
+- id: R_QUARRY_WORK_05
+  name: Derail Spur
+  cluster: CL_QUARRY_WORKS
+  desc: |-
+    An ore cart spur ends at a bent stop block.
+    The metal is scraped as if a cart hit it hard.
+  exits:
+  - dir: back
+    to: R_QUARRY_WORK_04
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_WORK_06
+    len: 1
+- id: R_QUARRY_WORK_06
+  name: Loading Ramp
+  cluster: CL_QUARRY_WORKS
+  desc: |-
+    A loading ramp drops into a pit chute, guarded by a chain.
+    The chain is snapped and re-tied in a sloppy knot.
+  exits:
+  - dir: back
+    to: R_QUARRY_WORK_05
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_WORK_07
+    len: 1
+- id: R_QUARRY_WORK_07
+  name: Safety Board
+  cluster: CL_QUARRY_WORKS
+  desc: |-
+    A safety board lists rules in blunt letters: HELMET. MASK. SPOTTER.
+    Half the checkboxes are ticked, half are mocked.
+  exits:
+  - dir: back
+    to: R_QUARRY_WORK_06
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_WORK_08
+    len: 1
+- id: R_QUARRY_WORK_08
+  name: Crane Hook
+  cluster: CL_QUARRY_WORKS
+  desc: |-
+    A crane hook hangs still, casting a hard shadow across the ground.
+    Standing under it feels like tempting fate.
+  exits:
+  - dir: back
+    to: R_QUARRY_WORK_07
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_WORK_09
+    len: 1
+- id: R_QUARRY_WORK_09
+  name: Oil Spill
+  cluster: CL_QUARRY_WORKS
+  desc: |-
+    A dark oil spill stains the dirt, ringed by scattered absorbent.
+    Bootprints cut through anyway.
+  exits:
+  - dir: back
+    to: R_QUARRY_WORK_08
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_WORK_10
+    len: 1
+- id: R_QUARRY_WORK_10
+  name: Locker Row
+  cluster: CL_QUARRY_WORKS
+  desc: |-
+    A row of lockers sits against a wall of corrugated steel.
+    Most are open and empty, but one door is padlocked.
+  exits:
+  - dir: back
+    to: R_QUARRY_WORK_09
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_WORK_11
+    len: 1
+- id: R_QUARRY_WORK_11
+  name: Works Loopback
+  cluster: CL_QUARRY_WORKS
+  desc: |-
+    The yard opens back toward the foreman shack and hazard board.
+    The noise of the works returns, steady and familiar.
+  exits:
+  - dir: back
+    to: R_QUARRY_WORK_10
+    len: 1
+  - dir: ahead
+    to: R_QUARRY_WORKS_01
+    len: 1

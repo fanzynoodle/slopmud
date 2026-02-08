@@ -41,3 +41,7 @@ output "assets_bucket_name" {
 output "assets_bucket_arn" {
   value = try(aws_s3_bucket.assets[0].arn, null)
 }
+
+output "sbc_enable_dns_fqdn" {
+  value = var.sbc_enable_dns_record_name != "" ? "${var.sbc_enable_dns_record_name}.${trim(var.zone_name, ".")}" : null
+}

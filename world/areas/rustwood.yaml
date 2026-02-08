@@ -1,0 +1,1857 @@
+version: 1
+zone_id: rustwood
+zone_name: Rustwood
+area_id: A01
+level_band:
+- 5
+- 8
+start_room: P_RUSTWOOD_CHECKPOINT
+rooms:
+- id: P_RUSTWOOD_CHECKPOINT
+  name: Old Road Checkpoint Transfer
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - portal.P_RUSTWOOD_CHECKPOINT
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies Old Road Checkpoint.
+  exits:
+  - dir: out
+    to: P_CHECKPOINT_RUSTWOOD
+    len: 2
+  - dir: in
+    to: R_RUST_CAMP_01
+    len: 1
+- id: P_RUSTWOOD_LIBRARY
+  name: Sunken Library Transfer
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - portal.P_RUSTWOOD_LIBRARY
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies Sunken Library.
+  exits:
+  - dir: out
+    to: P_LIB_RUSTWOOD
+    len: 2
+  - dir: in
+    to: R_RUST_CAMP_01
+    len: 1
+- id: R_RUST_CAMP_01
+  name: Rustwood Anchor
+  cluster: CL_RUSTWOOD_RANGER_CAMP
+  tags:
+  - HUB_RUSTWOOD_RANGER
+  - safe_pocket
+  desc: |-
+    A small camp with maps nailed to a board and a ranger who has seen every kind of lost.
+    This is a safe pocket: waiting here is explicitly safe, and resetting to restock is always allowed.
+  exits:
+  - dir: to_P_RUSTWOOD_CHECKPOINT
+    to: P_RUSTWOOD_CHECKPOINT
+    len: 1
+  - dir: to_P_RUSTWOOD_LIBRARY
+    to: P_RUSTWOOD_LIBRARY
+    len: 1
+  - dir: to_R_RUST_PYLON_01
+    to: R_RUST_PYLON_01
+    len: 1
+  - dir: to_R_RUST_PYLON_02
+    to: R_RUST_PYLON_02
+    len: 1
+  - dir: to_R_RUST_HUNT_START_01
+    to: R_RUST_HUNT_START_01
+    len: 1
+  - dir: to_R_RUST_STUMP_RING_01
+    to: R_RUST_STUMP_RING_01
+    len: 1
+  - dir: wander_camp
+    to: R_RUST_CAMP_02
+    len: 1
+- id: R_RUST_PYLON_01
+  name: Rust Tower Shadow
+  cluster: CL_RUSTWOOD_PYLONS
+  tags: []
+  desc: |-
+    Trees grow around metal like it is natural.
+    Sightlines are strange here; listen before you pull.
+  exits:
+  - dir: hub
+    to: R_RUST_CAMP_01
+    len: 1
+  - dir: wander_pylon
+    to: R_RUST_PYLON_03
+    len: 1
+- id: R_RUST_PYLON_02
+  name: Broken Fence
+  cluster: CL_RUSTWOOD_PYLONS
+  tags: []
+  desc: |-
+    A clearing dominated by a rusted pylon.
+    Humming wires suggest the old grid never fully died.
+  exits:
+  - dir: hub
+    to: R_RUST_CAMP_01
+    len: 1
+- id: R_RUST_HUNT_START_01
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_TRAILS
+  tags: []
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: hub
+    to: R_RUST_CAMP_01
+    len: 1
+  - dir: wander_trail
+    to: R_RUST_TRAIL_01
+    len: 1
+- id: R_RUST_STUMP_RING_01
+  name: Stump Ring
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - setpiece.h18.stump_ring_finish
+  desc: |-
+    A ring of cut stumps forms a crude arena under the trees.
+    Chalk marks and snare wire suggest this is where you corner something that refuses a fair fight.
+  exits:
+  - dir: hub
+    to: R_RUST_CAMP_01
+    len: 1
+  - dir: cache
+    to: R_RUST_STUMP_REWARD_01
+    len: 1
+  - dir: wander_grove
+    to: R_RUST_GROVE_01
+    len: 1
+- id: R_RUST_STUMP_REWARD_01
+  name: Hunt Cache
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - setpiece.h18.stump_reward_cache
+  desc: |-
+    A hidden cache splits open in the roots, packed with tagged salvage and a sealed tin.
+    The woods feel quieter, like something decided to keep its distance.
+  exits:
+  - dir: back
+    to: R_RUST_STUMP_RING_01
+    len: 1
+  - dir: south
+    to: R_RUST_CAMP_01
+    len: 1
+- id: R_RUST_GROVE_01
+  name: Forest Trail
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_STUMP_RING_01
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_02
+    len: 1
+- id: R_RUST_GROVE_02
+  name: Forest Trail
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_01
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_03
+    len: 1
+- id: R_RUST_GROVE_03
+  name: Thorned Turn
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_02
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_04
+    len: 1
+- id: R_RUST_GROVE_04
+  name: Forest Trail
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_03
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_05
+    len: 1
+- id: R_RUST_GROVE_05
+  name: Thorned Turn
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_04
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_06
+    len: 1
+- id: R_RUST_GROVE_06
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_05
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_07
+    len: 1
+- id: R_RUST_GROVE_07
+  name: Foggy Hollow
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_06
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_08
+    len: 1
+- id: R_RUST_GROVE_08
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_07
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_09
+    len: 1
+- id: R_RUST_GROVE_09
+  name: Foggy Hollow
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_08
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_10
+    len: 1
+- id: R_RUST_GROVE_10
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_09
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_11
+    len: 1
+- id: R_RUST_GROVE_11
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_10
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_12
+    len: 1
+- id: R_RUST_GROVE_12
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_11
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_13
+    len: 1
+- id: R_RUST_GROVE_13
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_12
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_14
+    len: 1
+- id: R_RUST_GROVE_14
+  name: Foggy Hollow
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_13
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_15
+    len: 1
+- id: R_RUST_GROVE_15
+  name: Foggy Hollow
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_14
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_16
+    len: 1
+- id: R_RUST_GROVE_16
+  name: Forest Trail
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_15
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_17
+    len: 1
+- id: R_RUST_GROVE_17
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_16
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_18
+    len: 1
+- id: R_RUST_GROVE_18
+  name: Thorned Turn
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_17
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_19
+    len: 1
+- id: R_RUST_GROVE_19
+  name: Foggy Hollow
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_18
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_20
+    len: 1
+- id: R_RUST_GROVE_20
+  name: Foggy Hollow
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_19
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_21
+    len: 1
+- id: R_RUST_GROVE_21
+  name: Foggy Hollow
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_20
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_22
+    len: 1
+- id: R_RUST_GROVE_22
+  name: Thorned Turn
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_21
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_23
+    len: 1
+- id: R_RUST_GROVE_23
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_22
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_24
+    len: 1
+- id: R_RUST_GROVE_24
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_23
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_25
+    len: 1
+- id: R_RUST_GROVE_25
+  name: Thorned Turn
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_24
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_26
+    len: 1
+- id: R_RUST_GROVE_26
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_25
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_27
+    len: 1
+- id: R_RUST_GROVE_27
+  name: Foggy Hollow
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_26
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_28
+    len: 1
+- id: R_RUST_GROVE_28
+  name: Foggy Hollow
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_27
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_29
+    len: 1
+- id: R_RUST_GROVE_29
+  name: Thorned Turn
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_28
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_30
+    len: 1
+- id: R_RUST_GROVE_30
+  name: Forest Trail
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_29
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_31
+    len: 1
+- id: R_RUST_GROVE_31
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_30
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_32
+    len: 1
+- id: R_RUST_GROVE_32
+  name: Forest Trail
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_31
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_33
+    len: 1
+- id: R_RUST_GROVE_33
+  name: Forest Trail
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_32
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_34
+    len: 1
+- id: R_RUST_GROVE_34
+  name: Foggy Hollow
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_33
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_35
+    len: 1
+- id: R_RUST_GROVE_35
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_34
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_36
+    len: 1
+- id: R_RUST_GROVE_36
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_35
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_37
+    len: 1
+- id: R_RUST_GROVE_37
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_36
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_38
+    len: 1
+- id: R_RUST_GROVE_38
+  name: Thorned Turn
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_37
+    len: 1
+  - dir: ahead
+    to: R_RUST_GROVE_39
+    len: 1
+- id: R_RUST_GROVE_39
+  name: Forest Trail
+  cluster: CL_RUSTWOOD_GROVES
+  tags:
+  - landmark.rustwood.groves
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_GROVE_38
+    len: 1
+  - dir: ahead
+    to: R_RUST_STUMP_RING_01
+    len: 1
+- id: R_RUST_PYLON_03
+  name: Pylon Clearing
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    A clearing dominated by a rusted pylon.
+    Humming wires suggest the old grid never fully died.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_01
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_04
+    len: 1
+- id: R_RUST_PYLON_04
+  name: Rust Tower Shadow
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    Trees grow around metal like it is natural.
+    Sightlines are strange here; listen before you pull.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_03
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_05
+    len: 1
+- id: R_RUST_PYLON_05
+  name: Wire Grove
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    Trees grow around metal like it is natural.
+    Sightlines are strange here; listen before you pull.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_04
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_06
+    len: 1
+- id: R_RUST_PYLON_06
+  name: Pylon Clearing
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    A clearing dominated by a rusted pylon.
+    Humming wires suggest the old grid never fully died.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_05
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_07
+    len: 1
+- id: R_RUST_PYLON_07
+  name: Broken Fence
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    A clearing dominated by a rusted pylon.
+    Humming wires suggest the old grid never fully died.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_06
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_08
+    len: 1
+- id: R_RUST_PYLON_08
+  name: Wire Grove
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    Trees grow around metal like it is natural.
+    Sightlines are strange here; listen before you pull.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_07
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_09
+    len: 1
+- id: R_RUST_PYLON_09
+  name: Rust Tower Shadow
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    Trees grow around metal like it is natural.
+    Sightlines are strange here; listen before you pull.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_08
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_10
+    len: 1
+- id: R_RUST_PYLON_10
+  name: Broken Fence
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    A clearing dominated by a rusted pylon.
+    Humming wires suggest the old grid never fully died.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_09
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_11
+    len: 1
+- id: R_RUST_PYLON_11
+  name: Broken Fence
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    A clearing dominated by a rusted pylon.
+    Humming wires suggest the old grid never fully died.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_10
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_12
+    len: 1
+- id: R_RUST_PYLON_12
+  name: Pylon Clearing
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    A clearing dominated by a rusted pylon.
+    Humming wires suggest the old grid never fully died.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_11
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_13
+    len: 1
+- id: R_RUST_PYLON_13
+  name: Broken Fence
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    A clearing dominated by a rusted pylon.
+    Humming wires suggest the old grid never fully died.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_12
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_14
+    len: 1
+- id: R_RUST_PYLON_14
+  name: Rust Tower Shadow
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    Trees grow around metal like it is natural.
+    Sightlines are strange here; listen before you pull.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_13
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_15
+    len: 1
+- id: R_RUST_PYLON_15
+  name: Pylon Clearing
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    A clearing dominated by a rusted pylon.
+    Humming wires suggest the old grid never fully died.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_14
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_16
+    len: 1
+- id: R_RUST_PYLON_16
+  name: Broken Fence
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    A clearing dominated by a rusted pylon.
+    Humming wires suggest the old grid never fully died.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_15
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_17
+    len: 1
+- id: R_RUST_PYLON_17
+  name: Pylon Clearing
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    A clearing dominated by a rusted pylon.
+    Humming wires suggest the old grid never fully died.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_16
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_18
+    len: 1
+- id: R_RUST_PYLON_18
+  name: Broken Fence
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    A clearing dominated by a rusted pylon.
+    Humming wires suggest the old grid never fully died.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_17
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_19
+    len: 1
+- id: R_RUST_PYLON_19
+  name: Wire Grove
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    Trees grow around metal like it is natural.
+    Sightlines are strange here; listen before you pull.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_18
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_20
+    len: 1
+- id: R_RUST_PYLON_20
+  name: Rust Tower Shadow
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    Trees grow around metal like it is natural.
+    Sightlines are strange here; listen before you pull.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_19
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_21
+    len: 1
+- id: R_RUST_PYLON_21
+  name: Pylon Clearing
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    A clearing dominated by a rusted pylon.
+    Humming wires suggest the old grid never fully died.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_20
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_22
+    len: 1
+- id: R_RUST_PYLON_22
+  name: Pylon Clearing
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    A clearing dominated by a rusted pylon.
+    Humming wires suggest the old grid never fully died.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_21
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_23
+    len: 1
+- id: R_RUST_PYLON_23
+  name: Broken Fence
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    A clearing dominated by a rusted pylon.
+    Humming wires suggest the old grid never fully died.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_22
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_24
+    len: 1
+- id: R_RUST_PYLON_24
+  name: Broken Fence
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    A clearing dominated by a rusted pylon.
+    Humming wires suggest the old grid never fully died.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_23
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_25
+    len: 1
+- id: R_RUST_PYLON_25
+  name: Pylon Clearing
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    A clearing dominated by a rusted pylon.
+    Humming wires suggest the old grid never fully died.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_24
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_26
+    len: 1
+- id: R_RUST_PYLON_26
+  name: Rust Tower Shadow
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    Trees grow around metal like it is natural.
+    Sightlines are strange here; listen before you pull.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_25
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_27
+    len: 1
+- id: R_RUST_PYLON_27
+  name: Pylon Clearing
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    A clearing dominated by a rusted pylon.
+    Humming wires suggest the old grid never fully died.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_26
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_28
+    len: 1
+- id: R_RUST_PYLON_28
+  name: Wire Grove
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    Trees grow around metal like it is natural.
+    Sightlines are strange here; listen before you pull.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_27
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_29
+    len: 1
+- id: R_RUST_PYLON_29
+  name: Wire Grove
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    Trees grow around metal like it is natural.
+    Sightlines are strange here; listen before you pull.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_28
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_30
+    len: 1
+- id: R_RUST_PYLON_30
+  name: Rust Tower Shadow
+  cluster: CL_RUSTWOOD_PYLONS
+  tags:
+  - landmark.rustwood.pylons
+  desc: |-
+    Trees grow around metal like it is natural.
+    Sightlines are strange here; listen before you pull.
+  exits:
+  - dir: back
+    to: R_RUST_PYLON_29
+    len: 1
+  - dir: ahead
+    to: R_RUST_PYLON_01
+    len: 1
+- id: R_RUST_CAMP_02
+  name: Firepit Ring
+  cluster: CL_RUSTWOOD_RANGER_CAMP
+  tags:
+  - safe_pocket
+  - landmark.firepit_ring
+  desc: |-
+    A firepit ring of black stones sits under a patched tarp.
+    Someone left snare wire and a blunt note: WAITING IS SAFE HERE.
+  exits:
+  - dir: back
+    to: R_RUST_CAMP_01
+    len: 1
+  - dir: ahead
+    to: R_RUST_CAMP_03
+    len: 1
+- id: R_RUST_CAMP_03
+  name: Map Board
+  cluster: CL_RUSTWOOD_RANGER_CAMP
+  tags:
+  - landmark.map_board
+  desc: |-
+    A map board is nailed to a tree with routes marked in thick pencil: PYLONS, GROVES, LIBRARY.
+    The cleanest note on the board reads: "reset to camp. don't die tired."
+  exits:
+  - dir: back
+    to: R_RUST_CAMP_02
+    len: 1
+  - dir: ahead
+    to: R_RUST_CAMP_04
+    len: 1
+- id: R_RUST_CAMP_04
+  name: Trap Bench
+  cluster: CL_RUSTWOOD_RANGER_CAMP
+  tags:
+  - landmark.trap_bench
+  desc: |-
+    A low bench is covered with simple traps: snares, hooks, and battered stakes.
+    It is a reminder that the woods reward patience more than bravado.
+  exits:
+  - dir: back
+    to: R_RUST_CAMP_03
+    len: 1
+  - dir: ahead
+    to: R_RUST_CAMP_05
+    len: 1
+- id: R_RUST_CAMP_05
+  name: Bandage Crate
+  cluster: CL_RUSTWOOD_RANGER_CAMP
+  tags:
+  - landmark.bandage_crate
+  desc: |-
+    A crate of basic bandages and cracked vials sits under oilcloth.
+    Nothing here is fancy, but it is the difference between a clean reset and a wipe.
+  exits:
+  - dir: back
+    to: R_RUST_CAMP_04
+    len: 1
+  - dir: ahead
+    to: R_RUST_CAMP_06
+    len: 1
+- id: R_RUST_CAMP_06
+  name: Parts Bin
+  cluster: CL_RUSTWOOD_RANGER_CAMP
+  tags:
+  - landmark.parts_bin
+  desc: |-
+    A bin of spare clips, old batteries, and snapped straps.
+    Someone keeps the camp running like it is a job, not a vibe.
+  exits:
+  - dir: back
+    to: R_RUST_CAMP_05
+    len: 1
+  - dir: ahead
+    to: R_RUST_CAMP_07
+    len: 1
+- id: R_RUST_CAMP_07
+  name: Trail Ledger
+  cluster: CL_RUSTWOOD_RANGER_CAMP
+  tags:
+  - landmark.trail_ledger
+  desc: |-
+    A ledger lists sightings and trail notes in short, repeatable phrases.
+    Most entries end the same way: "cold -> warm -> hot. don't chase blind."
+  exits:
+  - dir: back
+    to: R_RUST_CAMP_06
+    len: 1
+  - dir: ahead
+    to: R_RUST_CAMP_08
+    len: 1
+- id: R_RUST_CAMP_08
+  name: Snare Kit Cache
+  cluster: CL_RUSTWOOD_RANGER_CAMP
+  tags:
+  - landmark.snare_kit
+  desc: |-
+    A small kit of snare line and chalk is tucked into a metal tube.
+    The chalk is for trap squares. The line is for anything that tries to run.
+  exits:
+  - dir: back
+    to: R_RUST_CAMP_07
+    len: 1
+  - dir: ahead
+    to: R_RUST_CAMP_09
+    len: 1
+- id: R_RUST_CAMP_09
+  name: Pylon Sketch
+  cluster: CL_RUSTWOOD_RANGER_CAMP
+  tags:
+  - landmark.pylon_sketch
+  desc: |-
+    A quick sketch shows pylons as a chain of sightline breaks, not as a straight road.
+    The note under it is simple: "use corners. don't eat arrows."
+  exits:
+  - dir: back
+    to: R_RUST_CAMP_08
+    len: 1
+  - dir: ahead
+    to: R_RUST_CAMP_10
+    len: 1
+- id: R_RUST_CAMP_10
+  name: Quiet Bench
+  cluster: CL_RUSTWOOD_RANGER_CAMP
+  tags:
+  - safe_pocket
+  - landmark.quiet_bench
+  desc: |-
+    A quiet bench faces the trees like someone was listening for an answer.
+    If you need to stop and breathe, this is the right kind of place to do it.
+  exits:
+  - dir: back
+    to: R_RUST_CAMP_09
+    len: 1
+  - dir: ahead
+    to: R_RUST_CAMP_01
+    len: 1
+- id: R_RUST_TRAIL_01
+  name: Clue Node
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - setpiece.h18.trail_clues
+  desc: |-
+    Scratches, sap smears, and a broken fern line point deeper into Rustwood.
+    This is where the hunt becomes a pattern: cold -> warm -> hot, if you keep reading the signs.
+  exits:
+  - dir: back
+    to: R_RUST_HUNT_START_01
+    len: 1
+  - dir: ahead
+    to: R_RUST_CLEARING_01
+    len: 1
+- id: R_RUST_CLEARING_01
+  name: Fern Clearing
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - setpiece.h18.first_ambush
+  desc: |-
+    A fern clearing with a long view and too many places to hide movement.
+    Something bursts from the brush, tests your formation, then slips away on purpose.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_01
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_02
+    len: 1
+- id: R_RUST_TRAIL_02
+  name: Fresh Sap Trail
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.relocation_marker
+  desc: |-
+    Fresh sap streaks the bark like someone drew an arrow with a knife.
+    The message is loud: it relocated, and it wants you to chase the wrong way if you rush.
+  exits:
+  - dir: back
+    to: R_RUST_CLEARING_01
+    len: 1
+  - dir: camp
+    to: R_RUST_CAMP_01
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_03
+    len: 1
+- id: R_RUST_TRAIL_03
+  name: Thorned Turn
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_02
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_04
+    len: 1
+- id: R_RUST_TRAIL_04
+  name: Thorned Turn
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_03
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_05
+    len: 1
+- id: R_RUST_TRAIL_05
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_04
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_06
+    len: 1
+- id: R_RUST_TRAIL_06
+  name: Thorned Turn
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_05
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_07
+    len: 1
+- id: R_RUST_TRAIL_07
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_06
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_08
+    len: 1
+- id: R_RUST_TRAIL_08
+  name: Thorned Turn
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_07
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_09
+    len: 1
+- id: R_RUST_TRAIL_09
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_08
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_10
+    len: 1
+- id: R_RUST_TRAIL_10
+  name: Thorned Turn
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_09
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_11
+    len: 1
+- id: R_RUST_TRAIL_11
+  name: Thorned Turn
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_10
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_12
+    len: 1
+- id: R_RUST_TRAIL_12
+  name: Forest Trail
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_11
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_13
+    len: 1
+- id: R_RUST_TRAIL_13
+  name: Foggy Hollow
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_12
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_14
+    len: 1
+- id: R_RUST_TRAIL_14
+  name: Forest Trail
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_13
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_15
+    len: 1
+- id: R_RUST_TRAIL_15
+  name: Thorned Turn
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_14
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_16
+    len: 1
+- id: R_RUST_TRAIL_16
+  name: Thorned Turn
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_15
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_17
+    len: 1
+- id: R_RUST_TRAIL_17
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_16
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_18
+    len: 1
+- id: R_RUST_TRAIL_18
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_17
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_19
+    len: 1
+- id: R_RUST_TRAIL_19
+  name: Thorned Turn
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_18
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_20
+    len: 1
+- id: R_RUST_TRAIL_20
+  name: Forest Trail
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_19
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_21
+    len: 1
+- id: R_RUST_TRAIL_21
+  name: Thorned Turn
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_20
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_22
+    len: 1
+- id: R_RUST_TRAIL_22
+  name: Foggy Hollow
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_21
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_23
+    len: 1
+- id: R_RUST_TRAIL_23
+  name: Foggy Hollow
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_22
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_24
+    len: 1
+- id: R_RUST_TRAIL_24
+  name: Forest Trail
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_23
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_25
+    len: 1
+- id: R_RUST_TRAIL_25
+  name: Forest Trail
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_24
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_26
+    len: 1
+- id: R_RUST_TRAIL_26
+  name: Forest Trail
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_25
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_27
+    len: 1
+- id: R_RUST_TRAIL_27
+  name: Forest Trail
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_26
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_28
+    len: 1
+- id: R_RUST_TRAIL_28
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_27
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_29
+    len: 1
+- id: R_RUST_TRAIL_29
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_28
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_30
+    len: 1
+- id: R_RUST_TRAIL_30
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_29
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_31
+    len: 1
+- id: R_RUST_TRAIL_31
+  name: Foggy Hollow
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_30
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_32
+    len: 1
+- id: R_RUST_TRAIL_32
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_31
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_33
+    len: 1
+- id: R_RUST_TRAIL_33
+  name: Thorned Turn
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_32
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_34
+    len: 1
+- id: R_RUST_TRAIL_34
+  name: Thorned Turn
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    A forest trail where rusted debris hides in the needles.
+    Predators prefer ambushes, not fair fights.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_33
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_35
+    len: 1
+- id: R_RUST_TRAIL_35
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_34
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_36
+    len: 1
+- id: R_RUST_TRAIL_36
+  name: Foggy Hollow
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_35
+    len: 1
+  - dir: ahead
+    to: R_RUST_TRAIL_37
+    len: 1
+- id: R_RUST_TRAIL_37
+  name: Mossy Track
+  cluster: CL_RUSTWOOD_TRAILS
+  tags:
+  - landmark.rustwood.trails
+  desc: |-
+    Branches swallow the sky.
+    If you hear something you can't see, that's the point.
+  exits:
+  - dir: back
+    to: R_RUST_TRAIL_36
+    len: 1
+  - dir: ahead
+    to: R_RUST_HUNT_START_01
+    len: 1

@@ -1,0 +1,2407 @@
+version: 1
+zone_id: the_core
+zone_name: The Core
+area_id: A01
+level_band:
+- 15
+- 17
+start_room: P_CORE_GARDENS
+rooms:
+- id: P_CORE_GARDENS
+  name: Crater Gardens Transfer
+  cluster: CL_CORE_GATE_RING
+  tags:
+  - portal.P_CORE_GARDENS
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies Crater Gardens.
+  exits:
+  - dir: out
+    to: P_GARDENS_CORE
+    len: 4
+    state: sealed
+    gate: gate.core.entry
+  - dir: in
+    to: R_CORE_GATE_01
+    len: 1
+- id: P_CORE_SEAM
+  name: The Seam Transfer
+  cluster: CL_CORE_GATE_RING
+  tags:
+  - portal.P_CORE_SEAM
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies The Seam.
+  exits:
+  - dir: out
+    to: P_SEAM_CORE
+    len: 4
+    state: sealed
+    gate: gate.seam.entry
+  - dir: in
+    to: R_CORE_GATE_01
+    len: 1
+- id: R_CORE_GATE_01
+  name: The Core Anchor
+  cluster: CL_CORE_GATE_RING
+  tags:
+  - HUB_CORE_GATE
+  - portal.P_CORE_GARDENS
+  - portal.P_CORE_SEAM
+  desc: |-
+    An entry ring where every surface looks intentional.
+    If there is a test, it starts here.
+  exits:
+  - dir: to_P_CORE_GARDENS
+    to: P_CORE_GARDENS
+    len: 1
+  - dir: to_P_CORE_SEAM
+    to: P_CORE_SEAM
+    len: 1
+  - dir: to_R_CORE_APPROACH_01
+    to: R_CORE_APPROACH_01
+    len: 1
+  - dir: wander_ring
+    to: R_CORE_RING_01
+    len: 1
+- id: R_CORE_APPROACH_01
+  name: Machine Walk
+  cluster: CL_CORE_APPROACH
+  tags: []
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: hub
+    to: R_CORE_GATE_01
+    len: 1
+  - dir: to_R_CORE_INNER_01
+    to: R_CORE_INNER_01
+    len: 1
+  - dir: wander_approach
+    to: R_CORE_APPROACH_02
+    len: 1
+- id: R_CORE_INNER_01
+  name: Beam Sweep Corridor
+  cluster: CL_CORE_INNERWORKS
+  tags: []
+  desc: |-
+    A corridor where the Core teaches its prime rule: movement is the mechanic.
+    Safe squares are marked. The sweep cadence is learnable.
+  exits:
+  - dir: south
+    to: R_CORE_APPROACH_01
+    len: 1
+  - dir: north
+    to: R_CORE_LOCK_1_01
+    len: 1
+- id: R_CORE_LOCK_1_01
+  name: Machine Walk
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - setpiece.q13.lock_1_precision
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: south
+    to: R_CORE_INNER_01
+    len: 1
+  - dir: north
+    to: R_CORE_RESET_01
+    len: 1
+  - dir: wander_innerwork
+    to: R_CORE_INNERWORK_01
+    len: 1
+- id: R_CORE_RESET_01
+  name: Audit Sink
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - safe_pocket
+  desc: |-
+    A short reset chamber with a panel labeled AUDIT SINK.
+    It looks like the only place the Core will let you breathe on purpose.
+  exits:
+  - dir: south
+    to: R_CORE_LOCK_1_01
+    len: 1
+  - dir: north
+    to: R_CORE_INNER_02
+    len: 1
+- id: R_CORE_INNER_02
+  name: Rotating Fields Hall
+  cluster: CL_CORE_INNERWORKS
+  tags: []
+  desc: |-
+    Overlapping fields rotate like a clock you cannot argue with.
+    The safest play is calm: stack, spread, then move on cadence.
+  exits:
+  - dir: south
+    to: R_CORE_RESET_01
+    len: 1
+  - dir: north
+    to: R_CORE_LOCK_2_01
+    len: 1
+- id: R_CORE_LOCK_2_01
+  name: Geometry Lock
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - setpiece.q13.lock_2_geometry
+  desc: |-
+    Safe squares rotate. Add waves punish stubbornness.
+    The lock advances only during clean windows.
+  exits:
+  - dir: south
+    to: R_CORE_INNER_02
+    len: 1
+  - dir: north
+    to: R_CORE_RESET_02
+    len: 1
+- id: R_CORE_RESET_02
+  name: Reset Chamber
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - safe_pocket
+  desc: |-
+    Another deliberate pause: a checkpoint that refuses to be subtle.
+    A panel offers recovery at a visible time cost.
+  exits:
+  - dir: south
+    to: R_CORE_LOCK_2_01
+    len: 1
+  - dir: north
+    to: R_CORE_INNER_03
+    len: 1
+- id: R_CORE_INNER_03
+  name: Moving Beam Hall
+  cluster: CL_CORE_INNERWORKS
+  tags: []
+  desc: |-
+    A hallway built to punish panic running.
+    Step to a marker, wait for lull, then move.
+  exits:
+  - dir: south
+    to: R_CORE_RESET_02
+    len: 1
+  - dir: north
+    to: R_CORE_LOCK_3_01
+    len: 1
+- id: R_CORE_LOCK_3_01
+  name: Sustain Lock
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - setpiece.q13.lock_3_sustain
+  desc: |-
+    Sustained pressure with objective windows.
+    If the party tunnels damage instead of timing, the lock wins.
+  exits:
+  - dir: south
+    to: R_CORE_INNER_03
+    len: 1
+  - dir: north
+    to: R_CORE_RESET_03
+    len: 1
+- id: R_CORE_RESET_03
+  name: Pre-Arena Staging
+  cluster: CL_CORE_GATE_RING
+  tags:
+  - safe_pocket
+  desc: |-
+    A staging line before the arena with unmistakable signage.
+    This is the last place to reset before you get counted.
+  exits:
+  - dir: south
+    to: R_CORE_LOCK_3_01
+    len: 1
+  - dir: north
+    to: R_CORE_AUDITOR_GATE_01
+    len: 1
+- id: R_CORE_AUDITOR_GATE_01
+  name: Auditor Gate
+  cluster: CL_CORE_GATE_RING
+  tags: []
+  desc: |-
+    The heart board reads 3/3 locks.
+    The Core acknowledges your progress with uncomfortable accuracy.
+  exits:
+  - dir: south
+    to: R_CORE_RESET_03
+    len: 1
+  - dir: north
+    to: R_CORE_AUDITOR_01
+    len: 1
+- id: R_CORE_AUDITOR_01
+  name: Resonance Bowl
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - setpiece.q13.core_auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: south
+    to: R_CORE_GATE_01
+    len: 1
+  - dir: wander_arena
+    to: R_CORE_ARENA_01
+    len: 1
+- id: R_CORE_APPROACH_02
+  name: Machine Walk
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_01
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_03
+    len: 1
+- id: R_CORE_APPROACH_03
+  name: Servo Gallery
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_02
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_04
+    len: 1
+- id: R_CORE_APPROACH_04
+  name: Innerworks Run
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_03
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_05
+    len: 1
+- id: R_CORE_APPROACH_05
+  name: Core Passage
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_04
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_06
+    len: 1
+- id: R_CORE_APPROACH_06
+  name: Servo Gallery
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_05
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_07
+    len: 1
+- id: R_CORE_APPROACH_07
+  name: Core Passage
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_06
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_08
+    len: 1
+- id: R_CORE_APPROACH_08
+  name: Core Passage
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_07
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_09
+    len: 1
+- id: R_CORE_APPROACH_09
+  name: Servo Gallery
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_08
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_10
+    len: 1
+- id: R_CORE_APPROACH_10
+  name: Machine Walk
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_09
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_11
+    len: 1
+- id: R_CORE_APPROACH_11
+  name: Machine Walk
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_10
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_12
+    len: 1
+- id: R_CORE_APPROACH_12
+  name: Innerworks Run
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_11
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_13
+    len: 1
+- id: R_CORE_APPROACH_13
+  name: Servo Gallery
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_12
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_14
+    len: 1
+- id: R_CORE_APPROACH_14
+  name: Core Passage
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_13
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_15
+    len: 1
+- id: R_CORE_APPROACH_15
+  name: Innerworks Run
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_14
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_16
+    len: 1
+- id: R_CORE_APPROACH_16
+  name: Core Passage
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_15
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_17
+    len: 1
+- id: R_CORE_APPROACH_17
+  name: Core Passage
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_16
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_18
+    len: 1
+- id: R_CORE_APPROACH_18
+  name: Machine Walk
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_17
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_19
+    len: 1
+- id: R_CORE_APPROACH_19
+  name: Innerworks Run
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_18
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_20
+    len: 1
+- id: R_CORE_APPROACH_20
+  name: Servo Gallery
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_19
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_21
+    len: 1
+- id: R_CORE_APPROACH_21
+  name: Servo Gallery
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_20
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_22
+    len: 1
+- id: R_CORE_APPROACH_22
+  name: Servo Gallery
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_21
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_23
+    len: 1
+- id: R_CORE_APPROACH_23
+  name: Servo Gallery
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_22
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_24
+    len: 1
+- id: R_CORE_APPROACH_24
+  name: Core Passage
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_23
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_25
+    len: 1
+- id: R_CORE_APPROACH_25
+  name: Innerworks Run
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_24
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_26
+    len: 1
+- id: R_CORE_APPROACH_26
+  name: Innerworks Run
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_25
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_27
+    len: 1
+- id: R_CORE_APPROACH_27
+  name: Innerworks Run
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_26
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_28
+    len: 1
+- id: R_CORE_APPROACH_28
+  name: Machine Walk
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_27
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_29
+    len: 1
+- id: R_CORE_APPROACH_29
+  name: Innerworks Run
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_28
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_30
+    len: 1
+- id: R_CORE_APPROACH_30
+  name: Machine Walk
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_29
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_31
+    len: 1
+- id: R_CORE_APPROACH_31
+  name: Machine Walk
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_30
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_32
+    len: 1
+- id: R_CORE_APPROACH_32
+  name: Servo Gallery
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_31
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_33
+    len: 1
+- id: R_CORE_APPROACH_33
+  name: Innerworks Run
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_32
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_34
+    len: 1
+- id: R_CORE_APPROACH_34
+  name: Servo Gallery
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_33
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_35
+    len: 1
+- id: R_CORE_APPROACH_35
+  name: Machine Walk
+  cluster: CL_CORE_APPROACH
+  tags:
+  - landmark.core.approach
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_APPROACH_34
+    len: 1
+  - dir: ahead
+    to: R_CORE_APPROACH_01
+    len: 1
+- id: R_CORE_ARENA_01
+  name: Judgment Floor
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_AUDITOR_01
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_02
+    len: 1
+- id: R_CORE_ARENA_02
+  name: Auditor Hall
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_01
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_03
+    len: 1
+- id: R_CORE_ARENA_03
+  name: Resonance Bowl
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_02
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_04
+    len: 1
+- id: R_CORE_ARENA_04
+  name: Judgment Floor
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_03
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_05
+    len: 1
+- id: R_CORE_ARENA_05
+  name: Final Approach
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_04
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_06
+    len: 1
+- id: R_CORE_ARENA_06
+  name: Judgment Floor
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_05
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_07
+    len: 1
+- id: R_CORE_ARENA_07
+  name: Auditor Hall
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_06
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_08
+    len: 1
+- id: R_CORE_ARENA_08
+  name: Final Approach
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_07
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_09
+    len: 1
+- id: R_CORE_ARENA_09
+  name: Judgment Floor
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_08
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_10
+    len: 1
+- id: R_CORE_ARENA_10
+  name: Final Approach
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_09
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_11
+    len: 1
+- id: R_CORE_ARENA_11
+  name: Final Approach
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_10
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_12
+    len: 1
+- id: R_CORE_ARENA_12
+  name: Resonance Bowl
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_11
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_13
+    len: 1
+- id: R_CORE_ARENA_13
+  name: Final Approach
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_12
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_14
+    len: 1
+- id: R_CORE_ARENA_14
+  name: Final Approach
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_13
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_15
+    len: 1
+- id: R_CORE_ARENA_15
+  name: Judgment Floor
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_14
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_16
+    len: 1
+- id: R_CORE_ARENA_16
+  name: Auditor Hall
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_15
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_17
+    len: 1
+- id: R_CORE_ARENA_17
+  name: Judgment Floor
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_16
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_18
+    len: 1
+- id: R_CORE_ARENA_18
+  name: Judgment Floor
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_17
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_19
+    len: 1
+- id: R_CORE_ARENA_19
+  name: Auditor Hall
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_18
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_20
+    len: 1
+- id: R_CORE_ARENA_20
+  name: Resonance Bowl
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_19
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_21
+    len: 1
+- id: R_CORE_ARENA_21
+  name: Final Approach
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_20
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_22
+    len: 1
+- id: R_CORE_ARENA_22
+  name: Judgment Floor
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_21
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_23
+    len: 1
+- id: R_CORE_ARENA_23
+  name: Auditor Hall
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_22
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_24
+    len: 1
+- id: R_CORE_ARENA_24
+  name: Judgment Floor
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_23
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_25
+    len: 1
+- id: R_CORE_ARENA_25
+  name: Resonance Bowl
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_24
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_26
+    len: 1
+- id: R_CORE_ARENA_26
+  name: Judgment Floor
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_25
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_27
+    len: 1
+- id: R_CORE_ARENA_27
+  name: Auditor Hall
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_26
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_28
+    len: 1
+- id: R_CORE_ARENA_28
+  name: Auditor Hall
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_27
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_29
+    len: 1
+- id: R_CORE_ARENA_29
+  name: Judgment Floor
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_28
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_30
+    len: 1
+- id: R_CORE_ARENA_30
+  name: Resonance Bowl
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_29
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_31
+    len: 1
+- id: R_CORE_ARENA_31
+  name: Judgment Floor
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_30
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_32
+    len: 1
+- id: R_CORE_ARENA_32
+  name: Final Approach
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_31
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_33
+    len: 1
+- id: R_CORE_ARENA_33
+  name: Auditor Hall
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_32
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_34
+    len: 1
+- id: R_CORE_ARENA_34
+  name: Final Approach
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_33
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_35
+    len: 1
+- id: R_CORE_ARENA_35
+  name: Auditor Hall
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_34
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_36
+    len: 1
+- id: R_CORE_ARENA_36
+  name: Judgment Floor
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_35
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_37
+    len: 1
+- id: R_CORE_ARENA_37
+  name: Resonance Bowl
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_36
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_38
+    len: 1
+- id: R_CORE_ARENA_38
+  name: Resonance Bowl
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_37
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_39
+    len: 1
+- id: R_CORE_ARENA_39
+  name: Auditor Hall
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_38
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_40
+    len: 1
+- id: R_CORE_ARENA_40
+  name: Auditor Hall
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_39
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_41
+    len: 1
+- id: R_CORE_ARENA_41
+  name: Final Approach
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_40
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_42
+    len: 1
+- id: R_CORE_ARENA_42
+  name: Auditor Hall
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_41
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_43
+    len: 1
+- id: R_CORE_ARENA_43
+  name: Judgment Floor
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_42
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_44
+    len: 1
+- id: R_CORE_ARENA_44
+  name: Auditor Hall
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_43
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_45
+    len: 1
+- id: R_CORE_ARENA_45
+  name: Auditor Hall
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    The space opens into something built for evaluation.
+    Your mistakes will be obvious here.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_44
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_46
+    len: 1
+- id: R_CORE_ARENA_46
+  name: Final Approach
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_45
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_47
+    len: 1
+- id: R_CORE_ARENA_47
+  name: Final Approach
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_46
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_48
+    len: 1
+- id: R_CORE_ARENA_48
+  name: Final Approach
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_47
+    len: 1
+  - dir: ahead
+    to: R_CORE_ARENA_49
+    len: 1
+- id: R_CORE_ARENA_49
+  name: Judgment Floor
+  cluster: CL_CORE_AUDITOR_ARENA
+  tags:
+  - landmark.core.auditor_arena
+  desc: |-
+    A wide chamber with too few places to hide.
+    It has boss-room honesty.
+  exits:
+  - dir: back
+    to: R_CORE_ARENA_48
+    len: 1
+  - dir: ahead
+    to: R_CORE_AUDITOR_01
+    len: 1
+- id: R_CORE_RING_01
+  name: Sentinel Walk
+  cluster: CL_CORE_GATE_RING
+  tags:
+  - landmark.core.gate_ring
+  desc: |-
+    A ring of machine stone with precise seams.
+    It feels like the world is checking your posture.
+  exits:
+  - dir: back
+    to: R_CORE_GATE_01
+    len: 1
+  - dir: ahead
+    to: R_CORE_RING_02
+    len: 1
+- id: R_CORE_RING_02
+  name: Gate Ring
+  cluster: CL_CORE_GATE_RING
+  tags:
+  - landmark.core.gate_ring
+  desc: |-
+    A ring of machine stone with precise seams.
+    It feels like the world is checking your posture.
+  exits:
+  - dir: back
+    to: R_CORE_RING_01
+    len: 1
+  - dir: ahead
+    to: R_CORE_RING_03
+    len: 1
+- id: R_CORE_RING_03
+  name: Sentinel Walk
+  cluster: CL_CORE_GATE_RING
+  tags:
+  - landmark.core.gate_ring
+  desc: |-
+    A ring of machine stone with precise seams.
+    It feels like the world is checking your posture.
+  exits:
+  - dir: back
+    to: R_CORE_RING_02
+    len: 1
+  - dir: ahead
+    to: R_CORE_RING_04
+    len: 1
+- id: R_CORE_RING_04
+  name: Gate Ring
+  cluster: CL_CORE_GATE_RING
+  tags:
+  - landmark.core.gate_ring
+  desc: |-
+    A ring of machine stone with precise seams.
+    It feels like the world is checking your posture.
+  exits:
+  - dir: back
+    to: R_CORE_RING_03
+    len: 1
+  - dir: ahead
+    to: R_CORE_RING_05
+    len: 1
+- id: R_CORE_RING_05
+  name: Lockstep Plaza
+  cluster: CL_CORE_GATE_RING
+  tags:
+  - landmark.core.gate_ring
+  desc: |-
+    An entry ring where every surface looks intentional.
+    If there is a test, it starts here.
+  exits:
+  - dir: back
+    to: R_CORE_RING_04
+    len: 1
+  - dir: ahead
+    to: R_CORE_RING_06
+    len: 1
+- id: R_CORE_RING_06
+  name: Entry Halo
+  cluster: CL_CORE_GATE_RING
+  tags:
+  - landmark.core.gate_ring
+  desc: |-
+    An entry ring where every surface looks intentional.
+    If there is a test, it starts here.
+  exits:
+  - dir: back
+    to: R_CORE_RING_05
+    len: 1
+  - dir: ahead
+    to: R_CORE_RING_07
+    len: 1
+- id: R_CORE_RING_07
+  name: Sentinel Walk
+  cluster: CL_CORE_GATE_RING
+  tags:
+  - landmark.core.gate_ring
+  desc: |-
+    A ring of machine stone with precise seams.
+    It feels like the world is checking your posture.
+  exits:
+  - dir: back
+    to: R_CORE_RING_06
+    len: 1
+  - dir: ahead
+    to: R_CORE_RING_08
+    len: 1
+- id: R_CORE_RING_08
+  name: Sentinel Walk
+  cluster: CL_CORE_GATE_RING
+  tags:
+  - landmark.core.gate_ring
+  desc: |-
+    A ring of machine stone with precise seams.
+    It feels like the world is checking your posture.
+  exits:
+  - dir: back
+    to: R_CORE_RING_07
+    len: 1
+  - dir: ahead
+    to: R_CORE_RING_09
+    len: 1
+- id: R_CORE_RING_09
+  name: Gate Ring
+  cluster: CL_CORE_GATE_RING
+  tags:
+  - landmark.core.gate_ring
+  desc: |-
+    A ring of machine stone with precise seams.
+    It feels like the world is checking your posture.
+  exits:
+  - dir: back
+    to: R_CORE_RING_08
+    len: 1
+  - dir: ahead
+    to: R_CORE_RING_10
+    len: 1
+- id: R_CORE_RING_10
+  name: Lockstep Plaza
+  cluster: CL_CORE_GATE_RING
+  tags:
+  - landmark.core.gate_ring
+  desc: |-
+    An entry ring where every surface looks intentional.
+    If there is a test, it starts here.
+  exits:
+  - dir: back
+    to: R_CORE_RING_09
+    len: 1
+  - dir: ahead
+    to: R_CORE_RING_11
+    len: 1
+- id: R_CORE_RING_11
+  name: Gate Ring
+  cluster: CL_CORE_GATE_RING
+  tags:
+  - landmark.core.gate_ring
+  desc: |-
+    A ring of machine stone with precise seams.
+    It feels like the world is checking your posture.
+  exits:
+  - dir: back
+    to: R_CORE_RING_10
+    len: 1
+  - dir: ahead
+    to: R_CORE_RING_12
+    len: 1
+- id: R_CORE_RING_12
+  name: Sentinel Walk
+  cluster: CL_CORE_GATE_RING
+  tags:
+  - landmark.core.gate_ring
+  desc: |-
+    A ring of machine stone with precise seams.
+    It feels like the world is checking your posture.
+  exits:
+  - dir: back
+    to: R_CORE_RING_11
+    len: 1
+  - dir: ahead
+    to: R_CORE_GATE_01
+    len: 1
+- id: R_CORE_INNERWORK_01
+  name: Core Passage
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_LOCK_1_01
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_02
+    len: 1
+- id: R_CORE_INNERWORK_02
+  name: Core Passage
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_01
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_03
+    len: 1
+- id: R_CORE_INNERWORK_03
+  name: Innerworks Run
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_02
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_04
+    len: 1
+- id: R_CORE_INNERWORK_04
+  name: Innerworks Run
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_03
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_05
+    len: 1
+- id: R_CORE_INNERWORK_05
+  name: Machine Walk
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_04
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_06
+    len: 1
+- id: R_CORE_INNERWORK_06
+  name: Innerworks Run
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_05
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_07
+    len: 1
+- id: R_CORE_INNERWORK_07
+  name: Servo Gallery
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_06
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_08
+    len: 1
+- id: R_CORE_INNERWORK_08
+  name: Machine Walk
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_07
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_09
+    len: 1
+- id: R_CORE_INNERWORK_09
+  name: Core Passage
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_08
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_10
+    len: 1
+- id: R_CORE_INNERWORK_10
+  name: Machine Walk
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_09
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_11
+    len: 1
+- id: R_CORE_INNERWORK_11
+  name: Innerworks Run
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_10
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_12
+    len: 1
+- id: R_CORE_INNERWORK_12
+  name: Core Passage
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_11
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_13
+    len: 1
+- id: R_CORE_INNERWORK_13
+  name: Servo Gallery
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_12
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_14
+    len: 1
+- id: R_CORE_INNERWORK_14
+  name: Innerworks Run
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_13
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_15
+    len: 1
+- id: R_CORE_INNERWORK_15
+  name: Machine Walk
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_14
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_16
+    len: 1
+- id: R_CORE_INNERWORK_16
+  name: Machine Walk
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_15
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_17
+    len: 1
+- id: R_CORE_INNERWORK_17
+  name: Machine Walk
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_16
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_18
+    len: 1
+- id: R_CORE_INNERWORK_18
+  name: Core Passage
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_17
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_19
+    len: 1
+- id: R_CORE_INNERWORK_19
+  name: Servo Gallery
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_18
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_20
+    len: 1
+- id: R_CORE_INNERWORK_20
+  name: Core Passage
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_19
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_21
+    len: 1
+- id: R_CORE_INNERWORK_21
+  name: Machine Walk
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_20
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_22
+    len: 1
+- id: R_CORE_INNERWORK_22
+  name: Core Passage
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_21
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_23
+    len: 1
+- id: R_CORE_INNERWORK_23
+  name: Core Passage
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_22
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_24
+    len: 1
+- id: R_CORE_INNERWORK_24
+  name: Servo Gallery
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_23
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_25
+    len: 1
+- id: R_CORE_INNERWORK_25
+  name: Core Passage
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_24
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_26
+    len: 1
+- id: R_CORE_INNERWORK_26
+  name: Innerworks Run
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_25
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_27
+    len: 1
+- id: R_CORE_INNERWORK_27
+  name: Machine Walk
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_26
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_28
+    len: 1
+- id: R_CORE_INNERWORK_28
+  name: Innerworks Run
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_27
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_29
+    len: 1
+- id: R_CORE_INNERWORK_29
+  name: Machine Walk
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_28
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_30
+    len: 1
+- id: R_CORE_INNERWORK_30
+  name: Core Passage
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_29
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_31
+    len: 1
+- id: R_CORE_INNERWORK_31
+  name: Innerworks Run
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_30
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_32
+    len: 1
+- id: R_CORE_INNERWORK_32
+  name: Innerworks Run
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_31
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_33
+    len: 1
+- id: R_CORE_INNERWORK_33
+  name: Core Passage
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_32
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_34
+    len: 1
+- id: R_CORE_INNERWORK_34
+  name: Innerworks Run
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_33
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_35
+    len: 1
+- id: R_CORE_INNERWORK_35
+  name: Servo Gallery
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_34
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_36
+    len: 1
+- id: R_CORE_INNERWORK_36
+  name: Core Passage
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_35
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_37
+    len: 1
+- id: R_CORE_INNERWORK_37
+  name: Core Passage
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_36
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_38
+    len: 1
+- id: R_CORE_INNERWORK_38
+  name: Servo Gallery
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_37
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_39
+    len: 1
+- id: R_CORE_INNERWORK_39
+  name: Core Passage
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_38
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_40
+    len: 1
+- id: R_CORE_INNERWORK_40
+  name: Innerworks Run
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_39
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_41
+    len: 1
+- id: R_CORE_INNERWORK_41
+  name: Servo Gallery
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_40
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_42
+    len: 1
+- id: R_CORE_INNERWORK_42
+  name: Core Passage
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_41
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_43
+    len: 1
+- id: R_CORE_INNERWORK_43
+  name: Machine Walk
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_42
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_44
+    len: 1
+- id: R_CORE_INNERWORK_44
+  name: Machine Walk
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_43
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_45
+    len: 1
+- id: R_CORE_INNERWORK_45
+  name: Machine Walk
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_44
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_46
+    len: 1
+- id: R_CORE_INNERWORK_46
+  name: Innerworks Run
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_45
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_47
+    len: 1
+- id: R_CORE_INNERWORK_47
+  name: Innerworks Run
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_46
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_48
+    len: 1
+- id: R_CORE_INNERWORK_48
+  name: Machine Walk
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Ancient machinery hums behind the walls.
+    Every room feels like part of a larger organism.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_47
+    len: 1
+  - dir: ahead
+    to: R_CORE_INNERWORK_49
+    len: 1
+- id: R_CORE_INNERWORK_49
+  name: Innerworks Run
+  cluster: CL_CORE_INNERWORKS
+  tags:
+  - landmark.core.innerworks
+  desc: |-
+    Clean geometry and cold air.
+    This place rewards coordination, not bravery.
+  exits:
+  - dir: back
+    to: R_CORE_INNERWORK_48
+    len: 1
+  - dir: ahead
+    to: R_CORE_LOCK_1_01
+    len: 1

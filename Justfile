@@ -7,6 +7,35 @@ ssh_opts := "-o StrictHostKeyChecking=accept-new"
 help:
   @just --list
 
+# --- Local sanity checks ---
+
+fmt:
+  cargo fmt --all
+
+fmt-check:
+  cargo fmt --all -- --check
+
+clippy:
+  cargo clippy --workspace --all-targets
+
+py-check:
+  python3 -m compileall -q scripts
+
+check:
+  just fmt-check
+  just py-check
+  cargo test -q
+  just world-validate
+  just proto-lint
+  just proto-coverage
+  just e2e-local
+  just e2e-party
+  just e2e-ws
+  just e2e-groups
+
+e2e-groups:
+  python3 scripts/e2e_groups_raft.py
+
 # Load env/<name>.env into the recipe environment.
 _with-env env cmd:
   bash -ceu 'set -o pipefail; set -a; source "env/{{env}}.env"; set +a; {{cmd}}'
@@ -63,41 +92,96 @@ certbot-issue-host host domain email ssh_user="admin" ssh_port="22":
   '
 
 # Issue/renew a certificate for DOMAIN + www.DOMAIN (DNS-01 via Route53).
-certbot-issue-web email env="prd" domain="" staging="0":
+#
+# If `email` is empty, certbot will register without an email (still supports auto-renew via certbot.timer).
+# NOTE: `staging=1` means "Let's Encrypt test cert" (certbot `--test-cert`), not the slopmud `stg` environment.
+certbot-issue-web email="" env="prd" domain="" staging="0":
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
     base="{{domain}}"; \
     if [ -z "${base}" ]; then base="${DOMAIN}"; fi; \
+    email="{{email}}"; \
+    dst_dir="${TLS_DST_DIR:-/etc/slopmud/tls}"; \
+    svc="${WEB_SERVICE_NAME:-slopmud-web}"; \
+    cert_name="${CERTBOT_CERT_NAME:-${base}}"; \
     args=""; \
     if [ "{{staging}}" = "1" ]; then args="--test-cert"; fi; \
+    emargs="--register-unsafely-without-email"; \
+    if [ -n "${email}" ]; then emargs="-m ${email}"; fi; \
+    # Domains: if CERTBOT_DOMAINS is set (space-separated), use it; otherwise default to base + www.base.\n    dargs=\"\"; \
+    if [ -n \"${CERTBOT_DOMAINS:-}\" ]; then \
+      for d in ${CERTBOT_DOMAINS}; do dargs=\"$dargs -d $d\"; done; \
+    else \
+      dargs=\"-d ${base} -d www.${base}\"; \
+    fi; \
+    hook="bash -ceu '\'' \
+      dst=\"'\"'\"${dst_dir}\"'\"'\"\"; \
+      svc=\"'\"'\"${svc}\"'\"'\"\"; \
+      install -d -o slopmud -g slopmud -m 0750 \"${dst}\"; \
+      install -o slopmud -g slopmud -m 0640 \"${RENEWED_LINEAGE}/fullchain.pem\" \"${dst}/fullchain.pem\"; \
+      install -o slopmud -g slopmud -m 0640 \"${RENEWED_LINEAGE}/privkey.pem\" \"${dst}/privkey.pem\"; \
+      systemctl restart \"${svc}\" 2>/dev/null || true; \
+    '\''"; \
     ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" " \
       set -euo pipefail; \
       sudo certbot certonly --dns-route53 \
-        -d ${base} -d www.${base} \
+        ${dargs} \
         --non-interactive --agree-tos \
-        -m {{email}} \
+        ${emargs} \
+        --cert-name \"${cert_name}\" \
+        --deploy-hook \"${hook}\" \
         --keep-until-expiring ${args}; \
       sudo systemctl enable --now certbot.timer 2>/dev/null || true; \
       sudo certbot certificates | sed -n \"1,200p\" || true; \
     "; \
   '
 
-# Install a certbot deploy hook that copies renewed certs to /etc/slopmud/tls
-# (readable by the slopmud user) and restarts the web service.
+# Install an env-scoped certbot deploy hook that copies renewed certs into TLS_DST_DIR
+# (readable by the slopmud user) and restarts WEB_SERVICE_NAME.
+#
+# The hook checks CERTBOT_CERT_NAME (or DOMAIN) against RENEWED_LINEAGE, so multiple
+# envs/certs can coexist on one host without commingling.
 certbot-hook-install env="prd":
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
-    scp -P "${SSH_PORT}" {{ssh_opts}} scripts/certbot_deploy_hook_slopmud.sh "${SSH_USER}@${HOST}:/tmp/slopmud-certbot-hook.sh"; \
+    dst_dir="${TLS_DST_DIR:-/etc/slopmud/tls}"; \
+    svc="${WEB_SERVICE_NAME:-slopmud-web}"; \
+    cert_name="${CERTBOT_CERT_NAME:-${DOMAIN}}"; \
+    hook_name="slopmud-${ENV_NAME:-{{env}}}.sh"; \
+    tmp_hook="$(mktemp)"; \
+    trap "rm -f \"${tmp_hook}\"" EXIT; \
+    { \
+      printf "%s\\n" "#!/usr/bin/env bash"; \
+      printf "%s\\n" "set -euo pipefail"; \
+      printf "\\n"; \
+      printf "%s\\n" ": \"\\${RENEWED_LINEAGE:?missing RENEWED_LINEAGE}\""; \
+      printf "\\n"; \
+      printf "%s\\n" "expected=\"${cert_name}\""; \
+      printf "%s\\n" "if [[ \"\\$(basename \"\\${RENEWED_LINEAGE}\")\" != \"\\${expected}\" ]]; then"; \
+      printf "%s\\n" "  exit 0"; \
+      printf "%s\\n" "fi"; \
+      printf "\\n"; \
+      printf "%s\\n" "dst_dir=\"${dst_dir}\""; \
+      printf "%s\\n" "svc=\"${svc}\""; \
+      printf "\\n"; \
+      printf "%s\\n" "install -d -o slopmud -g slopmud -m 0750 \"\\${dst_dir}\""; \
+      printf "%s\\n" "install -o slopmud -g slopmud -m 0640 \"\\${RENEWED_LINEAGE}/fullchain.pem\" \"\\${dst_dir}/fullchain.pem\""; \
+      printf "%s\\n" "install -o slopmud -g slopmud -m 0640 \"\\${RENEWED_LINEAGE}/privkey.pem\" \"\\${dst_dir}/privkey.pem\""; \
+      printf "\\n"; \
+      printf "%s\\n" "systemctl restart \"\\${svc}\" 2>/dev/null || true"; \
+    } >"${tmp_hook}"; \
+    scp -P "${SSH_PORT}" {{ssh_opts}} "${tmp_hook}" "${SSH_USER}@${HOST}:/tmp/${hook_name}"; \
     ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" " \
       set -euo pipefail; \
       if ! id -u slopmud >/dev/null 2>&1; then \
         sudo useradd --system --home \"${REMOTE_ROOT}\" --create-home --shell /usr/sbin/nologin slopmud; \
       fi; \
       sudo install -d -m 0755 /etc/letsencrypt/renewal-hooks/deploy; \
-      sudo install -m 0755 -o root -g root /tmp/slopmud-certbot-hook.sh /etc/letsencrypt/renewal-hooks/deploy/slopmud.sh; \
-      sudo rm -f /tmp/slopmud-certbot-hook.sh; \
+      sudo install -m 0755 -o root -g root \"/tmp/${hook_name}\" \"/etc/letsencrypt/renewal-hooks/deploy/${hook_name}\"; \
+      sudo rm -f \"/tmp/${hook_name}\"; \
+      sudo rm -f /etc/letsencrypt/renewal-hooks/deploy/slopmud.sh 2>/dev/null || true; \
     "; \
   '
 
@@ -108,18 +192,20 @@ certbot-tls-sync env="prd" domain="":
     set -a; source "env/{{env}}.env"; set +a; \
     base="{{domain}}"; \
     if [ -z "${base}" ]; then base="${DOMAIN}"; fi; \
+    dst_dir="${TLS_DST_DIR:-/etc/slopmud/tls}"; \
+    svc="${WEB_SERVICE_NAME:-slopmud-web}"; \
+    cert_name="${CERTBOT_CERT_NAME:-${base}}"; \
     ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" " \
       set -euo pipefail; \
       if ! id -u slopmud >/dev/null 2>&1; then \
         sudo useradd --system --home \"${REMOTE_ROOT}\" --create-home --shell /usr/sbin/nologin slopmud; \
       fi; \
-      lineage=/etc/letsencrypt/live/${base}; \
-      test -r \"${lineage}/fullchain.pem\"; \
-      test -r \"${lineage}/privkey.pem\"; \
-      sudo install -d -o slopmud -g slopmud -m 0750 /etc/slopmud/tls; \
-      sudo install -o slopmud -g slopmud -m 0640 \"${lineage}/fullchain.pem\" /etc/slopmud/tls/fullchain.pem; \
-      sudo install -o slopmud -g slopmud -m 0640 \"${lineage}/privkey.pem\" /etc/slopmud/tls/privkey.pem; \
-      sudo systemctl restart slopmud-web 2>/dev/null || true; \
+      sudo test -r \"/etc/letsencrypt/live/${cert_name}/fullchain.pem\"; \
+      sudo test -r \"/etc/letsencrypt/live/${cert_name}/privkey.pem\"; \
+      sudo install -d -o slopmud -g slopmud -m 0750 \"${dst_dir}\"; \
+      sudo install -o slopmud -g slopmud -m 0640 \"/etc/letsencrypt/live/${cert_name}/fullchain.pem\" \"${dst_dir}/fullchain.pem\"; \
+      sudo install -o slopmud -g slopmud -m 0640 \"/etc/letsencrypt/live/${cert_name}/privkey.pem\" \"${dst_dir}/privkey.pem\"; \
+      sudo systemctl restart \"${svc}\" 2>/dev/null || true; \
     "; \
   '
 
@@ -137,7 +223,7 @@ certbot-renew-host host ssh_user="admin" ssh_port="22" dry_run="0":
     else \
       sudo certbot renew; \
     fi; \
-    sudo systemctl restart slopmud-web 2>/dev/null || true; \
+    # Individual certs may have per-cert deploy hooks that restart the right service.\n    true; \
   '
 
 certbot-status env="prd":
@@ -163,7 +249,6 @@ cerbot-renew env="prd" dry_run="0":
 # End-to-end: install certbot, issue slopmud.com + www, sync certs, deploy HTTPS-enabled web, and verify.
 https-setup email env="prd":
   just certbot-install {{env}}
-  just certbot-hook-install {{env}}
   just certbot-issue-web {{email}} {{env}}
   just certbot-tls-sync {{env}}
   just deploy {{env}}
@@ -175,8 +260,11 @@ https-smoke env="prd" domain="":
     set -a; source "env/{{env}}.env"; set +a; \
     base="{{domain}}"; \
     if [ -z "${base}" ]; then base="${DOMAIN}"; fi; \
-    curl -fsS "https://${base}/healthz" | sed -n "1p"; \
-    curl -fsS "https://www.${base}/healthz" | sed -n "1p"; \
+    port="${HTTPS_BIND##*:}"; \
+    # Allow overriding via domain arg that already contains :port.\n    if [[ "${base}" == *:* ]]; then port=""; fi; \
+    hp=""; if [[ -n "${port}" && "${port}" != "443" ]]; then hp=":${port}"; fi; \
+    curl -fsS "https://${base}${hp}/healthz" | sed -n "1p"; \
+    curl -fsS "https://www.${base}${hp}/healthz" | sed -n "1p"; \
   '
 
 # --- Local dev: static web server (serves ./web_homepage by default) ---
@@ -185,10 +273,34 @@ web-build:
   cargo build -p static_web
 
 web-run:
-  cargo run -p static_web -- --bind 0.0.0.0:8080 --dir web_homepage
+  bash -ceu ' \
+    set -a; source env/dev.env; set +a; \
+    cargo run -p static_web -- --bind 0.0.0.0:4943 --dir web_homepage --session-tcp-addr "${SESSION_TCP_ADDR}"; \
+  '
 
 web-run-local:
-  cargo run -p static_web -- --bind 127.0.0.1:8080 --dir web_homepage
+  bash -ceu ' \
+    set -a; source env/dev.env; set +a; \
+    cargo run -p static_web -- --bind 127.0.0.1:4943 --dir web_homepage --session-tcp-addr "${SESSION_TCP_ADDR}"; \
+  '
+
+# --- Local dev: web server with auth endpoints (Google SSO) ---
+
+web-sso-build:
+  cargo build -p slopmud_web
+
+web-sso-run:
+  bash -ceu ' \
+    set -a; source env/dev.env; set +a; \
+    cargo run -p slopmud_web -- --bind 0.0.0.0:4942 --dir web_homepage --session-tcp-addr "${SESSION_TCP_ADDR}"; \
+  '
+
+web-sso-run-local:
+  # Matches the common local Google redirect: http://localhost:4942/auth/google/callback
+  bash -ceu ' \
+    set -a; source env/dev.env; set +a; \
+    cargo run -p slopmud_web -- --bind 127.0.0.1:4942 --dir web_homepage --session-tcp-addr "${SESSION_TCP_ADDR}"; \
+  '
 
 # --- Local dev: slopmud server ---
 
@@ -218,6 +330,9 @@ e2e-local:
 
 e2e-party:
   python3 scripts/e2e_party_run.py
+
+e2e-web-local:
+  python3 scripts/e2e_web_selenium_local.py
 
 proto-lint:
   python3 scripts/protoadventure_lint.py
@@ -250,6 +365,40 @@ areas-validate:
 
 area-files-validate:
   python3 scripts/area_files_validate.py
+
+area-files-report zone_id="" fmt="md":
+  bash -ceu ' \
+    args=(--format "{{fmt}}"); \
+    if [ -n "{{zone_id}}" ]; then args+=(--zone-id "{{zone_id}}"); fi; \
+    python3 scripts/area_files_report.py "${args[@]}"; \
+  '
+
+area-files-stubgen zone_id="":
+  bash -ceu ' \
+    if [ -n "{{zone_id}}" ]; then \
+      python3 scripts/area_files_stubgen.py --zone-id "{{zone_id}}"; \
+    else \
+      python3 scripts/area_files_stubgen.py --all; \
+    fi; \
+  '
+
+area-files-budgetfill zone_id="":
+  bash -ceu ' \
+    if [ -n "{{zone_id}}" ]; then \
+      python3 scripts/area_files_budgetfill.py --zone-id "{{zone_id}}"; \
+    else \
+      python3 scripts/area_files_budgetfill.py --all; \
+    fi; \
+  '
+
+area-files-themify zone_id="":
+  bash -ceu ' \
+    if [ -n "{{zone_id}}" ]; then \
+      python3 scripts/area_files_themify.py --zone-id "{{zone_id}}"; \
+    else \
+      python3 scripts/area_files_themify.py --all; \
+    fi; \
+  '
 
 world-validate:
   just overworld-validate
@@ -308,7 +457,21 @@ deploy env="prd":
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
     if [ "${ENABLED:-1}" != "1" ]; then echo "{{env}} disabled (ENABLED=${ENABLED:-})"; exit 0; fi; \
-    ./scripts/deploy_static_web.sh "env/{{env}}.env"; \
+    bin="$(basename "${REMOTE_BIN}")"; \
+    if [ "${bin}" = "slopmud_web" ]; then \
+      ./scripts/deploy_slopmud_web.sh "env/{{env}}.env"; \
+    else \
+      ./scripts/deploy_static_web.sh "env/{{env}}.env"; \
+    fi; \
+  '
+
+# Deploy web with OAuth endpoints (slopmud_web). Uses the same env file keys as deploy_static_web.sh.
+deploy-web-sso env="prd":
+  bash -ceu ' \
+    set -o pipefail; \
+    set -a; source "env/{{env}}.env"; set +a; \
+    if [ "${ENABLED:-1}" != "1" ]; then echo "{{env}} disabled (ENABLED=${ENABLED:-})"; exit 0; fi; \
+    ./scripts/deploy_slopmud_web.sh "env/{{env}}.env"; \
   '
 
 web-install env="prd":
@@ -373,6 +536,38 @@ deploy-shard env="prd":
 deploy-slopmud-all:
   just deploy-slopmud dev
   just deploy-slopmud prd
+
+# --- Deploy: SBC (raft/enforcer/metrics/decider) ---
+
+deploy-sbc env="prd":
+  bash -ceu ' \
+    set -o pipefail; \
+    set -a; source "env/{{env}}.env"; set +a; \
+    if [ "${ENABLED:-1}" != "1" ]; then echo "{{env}} disabled (ENABLED=${ENABLED:-})"; exit 0; fi; \
+    ./scripts/deploy_sbc.sh "env/{{env}}.env"; \
+  '
+
+sbc-status env="prd":
+  bash -ceu ' \
+    set -o pipefail; \
+    set -a; source "env/{{env}}.env"; set +a; \
+    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" " \
+      sudo systemctl status sbc-raftd --no-pager || true; \
+      echo; \
+      sudo systemctl status sbc-metricsd --no-pager || true; \
+      echo; \
+      sudo systemctl status sbc-enforcerd --no-pager || true; \
+      echo; \
+      curl -fsSL http://127.0.0.1:9911/status | sed -n \"1,200p\" || true; \
+    "; \
+  '
+
+sbc-logs env="prd" unit="sbc-enforcerd":
+  bash -ceu ' \
+    set -o pipefail; \
+    set -a; source "env/{{env}}.env"; set +a; \
+    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" "sudo journalctl -u {{unit}} -f --no-pager"; \
+  '
 
 # --- Deploy: internal_oidc service (prd) ---
 

@@ -69,7 +69,7 @@ Linear spine with three short pylon spokes, then a boss, then a handoff to Rail 
 - teach: patrol timing intro; the idea of "safe travel nodes"
 - quest: set `q.q6_hillfort_signal.state=enter`
 - prop: a plain-text board listing pylon directions, rough route length (short/medium/long), and a checkbox-like "lit/unlit" status
-- exits: west -> `R_HILL_APPROACH_01`, east -> `R_HILL_COURT_01`
+- exits: west -> `R_HILL_APPROACH_01`, east -> `R_HILL_COURT_01`, overworld -> `R_RAIL_TERM_01` (handoff after boss)
 
 ### R_HILL_COURT_01 (CL_HILLFORT_COURTYARDS)
 
@@ -79,10 +79,10 @@ Linear spine with three short pylon spokes, then a boss, then a handoff to Rail 
 - feedback: patrol timing cue exists (audible or text) before a patrol intersects the courtyard
 - exits:
   - north -> `R_HILL_PYLON_01`
-  - west -> `R_HILL_PYLON_02`
-  - east -> `R_HILL_PYLON_03`
-  - south -> `R_HILL_BANNER_01` (sealed until 3 pylons)
-  - down -> `R_HILL_CACHE_01` (optional secret)
+  - northwest -> `R_HILL_PYLON_02`
+  - northeast -> `R_HILL_PYLON_03`
+  - south -> `R_HILL_HALL_01` (sealed until 3 pylons; leads to `R_HILL_BANNER_02`)
+  - down -> `R_HILL_CACHE_01` (optional secret; TODO: implement in area file)
 
 ### R_HILL_CACHE_01 (optional secret cache, CL_HILLFORT_COURTYARDS)
 
@@ -134,21 +134,21 @@ Linear spine with three short pylon spokes, then a boss, then a handoff to Rail 
 
 ## Boss Gate
 
-When `pylons_lit == 3`, unseal `R_HILL_BANNER_01`.
+When `pylons_lit == 3`, unseal `R_HILL_HALL_01`.
 
-### R_HILL_BANNER_01 (banner hall approach)
+### R_HILL_HALL_01 (banner hall approach)
 
 - beat: long hall with hanging banners; audio cue: "breathing machine".
-- exits: south -> `R_HILL_BANNER_01A`
+- exits: south -> `R_HILL_HALL_02`, north -> `R_HILL_COURT_01`
 
-### R_HILL_BANNER_01A (forced-interrupt tutorial, banner hall approach)
+### R_HILL_HALL_02 (forced-interrupt tutorial, banner hall approach)
 
 - beat: a small antechamber with a "signal horn" that emits a call. If left uninterrupted it spawns a single add.
 - teach: interrupts are a team skill; do it fast, not perfectly
 - telegraph: the call has a distinct cue (audible + one-line text) unlike normal attacks
 - teach: assign an interrupt captain and a backup, even if the party is overgeared
 - note: this should be low-stakes and repeatable (no wipe, no shame)
-- exits: south -> `R_HILL_BANNER_02`
+- exits: south -> `R_HILL_BANNER_02`, north -> `R_HILL_HALL_01`
 
 ### R_HILL_BANNER_02 (setpiece.q6.banner_hall)
 
@@ -159,25 +159,26 @@ When `pylons_lit == 3`, unseal `R_HILL_BANNER_01`.
 - hint: on the first call only, add one explicit hint line that it can be broken by fast disruption
 - optional: "Banner Dampers" objective reduces add pressure: if the party destroyed/disabled 3 dampers in pylon rooms, set `add_pressure=1` and reduce add spawns
 - optional: add minimal nonlethal framing for patrol units (disable/power down/drive off), without changing the core mechanics
-- exits: north -> `R_HILL_REPORT_01`
+- exits: north -> `R_HILL_HALL_02`
 
-### R_HILL_REPORT_01 (back at HUB_HILLFORT_COMMAND)
+### Report In (back at HUB_HILLFORT_COMMAND)
 
 - beat: report in; patrol leader marks a niche as a safehouse.
 - beat: one line explains why the niche is safe (signal coverage, patrol pattern, or hardened door)
 - quest:
   - set `gate.hillfort.safehouse=1`
   - set `q.q6_hillfort_signal.state=complete` (handoff)
-- exits: east -> `R_RAIL_TERM_01`
+- next: travel to Rail Spur via overworld portals:
+  - `P_HILLFORT_CHECKPOINT` -> `P_CHECKPOINT_HILLFORT` -> `P_CHECKPOINT_RAIL` -> `P_RAIL_CHECKPOINT` -> `R_RAIL_TERM_01`
 
 ### R_RAIL_TERM_01 (CL_RAIL_TERMINAL, HUB_RAIL_TERMINAL)
 
 - beat: terminal shed with a battered machine that prints a pass.
 - quest: set `gate.rail_spur.pass=1`
 - exits:
-  - north -> `R_RAIL_TERM_02` (teaser; requires pass)
+  - north -> `R_RAIL_TERMINAL_02` (teaser; requires pass)
 
-### R_RAIL_TERM_02 (rail teaser event)
+### R_RAIL_TERMINAL_02 (rail teaser event)
 
 - beat: one platform room with a locked timetable board and a short "world event" teaser that can only be watched, not solved yet.
 - teach: passes unlock future routes and event nodes

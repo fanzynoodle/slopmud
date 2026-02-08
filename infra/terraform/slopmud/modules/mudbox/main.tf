@@ -162,8 +162,13 @@ data "aws_iam_policy_document" "dns_admin" {
 }
 
 locals {
+  ssm_read_param_names = distinct(concat(
+    var.ssm_read_parameter_names,
+    (var.compliance_portal_config_json_ssm_name != "" ? [var.compliance_portal_config_json_ssm_name] : []),
+  ))
+
   ssm_read_param_arns = [
-    for n in var.ssm_read_parameter_names :
+    for n in local.ssm_read_param_names :
     "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(n, "/")}"
   ]
 }
@@ -218,6 +223,49 @@ resource "aws_iam_role_policy_attachment" "ssm_read_params" {
 
   role       = aws_iam_role.ssm[0].name
   policy_arn = aws_iam_policy.ssm_read_params[0].arn
+}
+
+resource "aws_ssm_parameter" "compliance_portal_config_json" {
+  count = var.enable_compute && var.compliance_portal_config_json_ssm_name != "" && var.compliance_portal_config_json_ssm_value != "" ? 1 : 0
+
+  name        = var.compliance_portal_config_json_ssm_name
+  description = "slopmud compliance portal config JSON"
+  type        = "SecureString"
+  value       = var.compliance_portal_config_json_ssm_value
+  overwrite   = true
+
+  tags = local.tags
+}
+
+data "aws_iam_policy_document" "ses_send" {
+  count = var.enable_compute && var.ses_send_enabled ? 1 : 0
+
+  statement {
+    sid    = "SesSendEmail"
+    effect = "Allow"
+    actions = [
+      "ses:SendEmail",
+      "ses:SendRawEmail",
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_policy" "ses_send" {
+  count = var.enable_compute && var.ses_send_enabled ? 1 : 0
+
+  name_prefix = "${var.name_prefix}-ses-send-"
+  description = "Allow the instance role to send email via Amazon SES."
+  policy      = data.aws_iam_policy_document.ses_send[0].json
+
+  tags = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ses_send" {
+  count = var.enable_compute && var.ses_send_enabled ? 1 : 0
+
+  role       = aws_iam_role.ssm[0].name
+  policy_arn = aws_iam_policy.ses_send[0].arn
 }
 
 resource "aws_iam_policy" "dns_admin" {
@@ -425,6 +473,16 @@ resource "aws_route53_record" "www_cname" {
   ]
 }
 
+resource "aws_route53_record" "extra_cnames" {
+  count = var.create_hosted_zone && length(var.extra_cname_record_names) > 0 && (var.enable_compute || var.cname_target != "") ? length(var.extra_cname_record_names) : 0
+
+  zone_id = local.hosted_zone_id
+  name    = "${var.extra_cname_record_names[count.index]}.${trim(var.zone_name, ".")}"
+  type    = "CNAME"
+  ttl     = 60
+  records = [var.cname_target != "" ? var.cname_target : aws_instance.this[0].public_dns]
+}
+
 resource "aws_route53_record" "apex_a" {
   count = var.create_hosted_zone && var.enable_compute ? 1 : 0
 
@@ -433,4 +491,16 @@ resource "aws_route53_record" "apex_a" {
   type    = "A"
   ttl     = 60
   records = [aws_instance.this[0].public_ip]
+}
+
+resource "aws_route53_record" "sbc_enable_a" {
+  count = var.create_hosted_zone && var.sbc_enable_dns_record_name != "" ? 1 : 0
+
+  zone_id = local.hosted_zone_id
+  name    = "${var.sbc_enable_dns_record_name}.${trim(var.zone_name, ".")}"
+  type    = "A"
+  ttl     = var.sbc_enable_dns_record_ttl
+  records = [
+    var.sbc_enable_dns_record_enabled ? var.sbc_enable_dns_record_ip : var.sbc_enable_dns_record_disabled_ip,
+  ]
 }

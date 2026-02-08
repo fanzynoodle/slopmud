@@ -8,6 +8,8 @@ license = "MIT OR 0BSD"
 anyhow = "1.0.96"
 fanzylog = { path = "../fanzylog" }
 bytes = "1.10.1"
+chrono = { version = "0.4.39", default-features = false, features = ["clock", "std"] }
+compliance = { path = "../compliance" }
 getrandom = "0.2.15"
 memchr = "2.7.4"
 mudproto = { path = "../mudproto" }
@@ -21,3 +23,7 @@ zeroize = "1.8.1"
 reqwest = { version = "0.12.12", default-features = false, features = ["json", "rustls-tls"] }
 argon2 = "0.5.3"
 password-hash = "0.5.0"
+sbc_core = { path = "../sbc_core" }
+
+aws-config = "1.5.13"
+aws-sdk-s3 = "1.74.0"

@@ -1,0 +1,1435 @@
+version: 1
+zone_id: town_gaia_gate
+zone_name: 'Town: Gaia Gate'
+area_id: A01
+level_band:
+- 1
+- 4
+start_room: R_TOWN_GATE_01
+rooms:
+- id: P_TOWN_NS
+  name: Gaia Gate Security Arch
+  cluster: CL_TOWN_GATE_PLAZA
+  tags:
+  - portal.P_TOWN_NS
+  desc: |-
+    A quiet security archway and a strip of clean floor that feels like a border.
+    The city smells like food. The school smells like disinfectant.
+
+    A sign reads: KEEP MOVING. ASK FOR HELP. DON'T PANIC.
+  exits:
+  - dir: south
+    to: P_NS_TOWN
+    len: 1
+  - dir: north
+    to: R_TOWN_GATE_01
+    len: 1
+- id: R_TOWN_GATE_01
+  name: Arrivals Plaza
+  cluster: CL_TOWN_GATE_PLAZA
+  tags:
+  - HUB_TOWN_GATE
+  desc: |-
+    A bright plaza of painted concrete and patient guards. Banners insist this is normal: GAIA, HUMAN + ROBOT.
+    A kiosk blinks with starter options. A path leads toward the town's working heart.
+  exits:
+  - dir: south
+    to: P_TOWN_NS
+    len: 1
+  - dir: east
+    to: R_TOWN_GATE_02
+    len: 1
+  - dir: north
+    to: R_TOWN_JOBBOARD_TEASER
+    len: 1
+  - dir: hall
+    to: R_TOWN_CLASS_ROW_01
+    len: 1
+  - dir: market
+    to: R_TOWN_MARKET_01
+    len: 1
+  - dir: plaza
+    to: R_TOWN_GATE_PLAZA_01
+    len: 1
+- id: R_TOWN_GATE_02
+  name: Starter Kit Kiosk
+  cluster: CL_TOWN_GATE_PLAZA
+  desc: |-
+    A kiosk with two big buttons and a smaller one labeled READ FIRST.
+    A bored guard watches you like they've seen this choice ruin a day.
+  exits:
+  - dir: west
+    to: R_TOWN_GATE_01
+    len: 1
+  - dir: south
+    to: R_TOWN_GATE_PLAZA_01
+    len: 1
+- id: R_TOWN_CLASS_ROW_01
+  name: Hall Row
+  cluster: CL_TOWN_GATE_PLAZA
+  desc: |-
+    A colonnade lined with banners for each calling. Doors bear simple sigils.
+    A sign reads: CHOOSE A HALL BY NAME.
+  exits:
+  - dir: back
+    to: R_TOWN_GATE_01
+    len: 1
+- id: R_TOWN_JOBBOARD_TEASER
+  name: Work Notices
+  cluster: CL_TOWN_JOB_BOARD
+  desc: |-
+    You can see the job board square ahead. Paper flutters like a mechanical flock.
+    Somebody is already shouting: "work available."
+  exits:
+  - dir: south
+    to: R_TOWN_JOB_01
+    len: 1
+  - dir: back
+    to: R_TOWN_GATE_01
+    len: 1
+- id: R_TOWN_JOB_01
+  name: Job Board Square
+  cluster: CL_TOWN_JOB_BOARD
+  tags:
+  - HUB_TOWN_JOB_BOARD
+  desc: |-
+    A loud square of too many papers and not enough time. A clerk stamps forms with religious devotion.
+    A public ledger tracks who finished what. The board never stops eating problems.
+    (try: look board)
+  exits:
+  - dir: east
+    to: R_TOWN_MARKET_01
+    len: 1
+  - dir: south
+    to: R_TOWN_ALLEY_01
+    len: 1
+  - dir: north
+    to: R_TOWN_EDGE_01
+    len: 1
+  - dir: west
+    to: R_TOWN_MAINT_01
+    len: 1
+  - dir: square
+    to: R_TOWN_JOB_BOARD_01
+    len: 1
+- id: R_TOWN_MARKET_01
+  name: Market Row
+  cluster: CL_TOWN_MARKET_ROW
+  desc: |-
+    Vendor stalls, repair benches, and a steady churn of small commerce.
+    Everyone here looks like they're pretending not to watch your hands.
+  exits:
+  - dir: west
+    to: R_TOWN_JOB_01
+    len: 1
+  - dir: east
+    to: R_TOWN_CLINIC_01
+    len: 1
+  - dir: tavern
+    to: R_TOWN_TAVERN_01
+    len: 1
+  - dir: row
+    to: R_TOWN_MARKET_ROW_01
+    len: 1
+- id: R_TOWN_TAVERN_01
+  name: The Tavern
+  cluster: CL_TOWN_MARKET_ROW
+  desc: |-
+    Warm light, cheap wood, and a hard-earned quiet.
+    A chalkboard reads: NO SOLICITING. NO SPAM. YES STORIES.
+  exits:
+  - dir: back
+    to: R_TOWN_MARKET_01
+    len: 1
+- id: R_TOWN_CLINIC_01
+  name: Clinic Intake
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: |-
+    A medic scans sealed samples and bad ideas. A dispenser hums with cheap relief.
+    A little sign promises help without judgment, which feels like a lie but works anyway.
+  exits:
+  - dir: west
+    to: R_TOWN_MARKET_01
+    len: 1
+  - dir: south
+    to: R_TOWN_ALLEY_02
+    len: 1
+  - dir: north
+    to: R_TOWN_EDGE_01
+    len: 1
+  - dir: graveyard
+    to: R_TOWN_GRAVEYARD_01
+    len: 1
+  - dir: ward
+    to: R_TOWN_BANK_CLINIC_01
+    len: 1
+- id: R_TOWN_GRAVEYARD_01
+  name: The Graveyard
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: |-
+    A small fenced yard of dark soil and pale stones. The air tastes like rain and old names.
+    A narrow path leads back toward the living.
+  exits:
+  - dir: up
+    to: R_TOWN_CLINIC_01
+    len: 1
+- id: R_TOWN_MAINT_01
+  name: Maintenance Office
+  cluster: CL_TOWN_MAINT_OFFICE
+  tags:
+  - HUB_TOWN_MAINT
+  desc: |-
+    A cramped office with a big, unconvincing safety poster. Paperwork stacks like sandbags.
+    A hatch in the floor is labeled: SEWERS.
+  exits:
+  - dir: east
+    to: R_TOWN_JOB_01
+    len: 1
+  - dir: south
+    to: R_TOWN_ALLEY_03
+    len: 1
+  - dir: down
+    to: P_TOWN_SEWERS
+    len: 1
+  - dir: office
+    to: R_TOWN_MAINT_OFFICE_01
+    len: 1
+- id: P_TOWN_SEWERS
+  name: Sewer Access Hatch
+  cluster: CL_TOWN_MAINT_OFFICE
+  tags:
+  - portal.P_TOWN_SEWERS
+  desc: |-
+    A metal hatch with a ladder disappearing into wet dark. You can hear flow below.
+    A warning placard is bolted on with unnecessary enthusiasm.
+  exits:
+  - dir: up
+    to: R_TOWN_MAINT_01
+    len: 1
+  - dir: down
+    to: P_SEWERS_TOWN
+    len: 1
+    state: sealed
+    gate: gate.sewers.entry
+- id: R_TOWN_ALLEY_01
+  name: Quiet Lane
+  cluster: CL_TOWN_ALLEYS
+  desc: |-
+    A lane marked with chalk arrows and too many "no soliciting" tags.
+    The sound of the square fades, replaced by the quieter work of hiding.
+  exits:
+  - dir: north
+    to: R_TOWN_ALLEY_02
+    len: 1
+  - dir: east
+    to: R_TOWN_JOB_01
+    len: 1
+  - dir: lanes
+    to: R_TOWN_ALLEYS_01
+    len: 1
+- id: R_TOWN_ALLEY_02
+  name: Checkpoint Corner
+  cluster: CL_TOWN_ALLEYS
+  desc: |-
+    A sloppy checkpoint of bored troublemakers and a rope they pretend matters.
+    A service door sits nearby, looking locked just to see if you believe it.
+  exits:
+  - dir: south
+    to: R_TOWN_ALLEY_01
+    len: 1
+  - dir: east
+    to: R_TOWN_SERVICE_DOOR_01
+    len: 1
+  - dir: up
+    to: R_TOWN_ROOFTOPS_01
+    len: 1
+  - dir: back
+    to: R_TOWN_ALLEY_01
+    len: 1
+  - dir: north
+    to: R_TOWN_CLINIC_01
+    len: 1
+- id: R_TOWN_SERVICE_DOOR_01
+  name: Service Door
+  cluster: CL_TOWN_ALLEYS
+  desc: |-
+    A service door with a handle polished by people who know better than to ask permission.
+    It bypasses the crowd and their little games.
+  exits:
+  - dir: back
+    to: R_TOWN_ALLEY_02
+    len: 1
+  - dir: east
+    to: R_TOWN_ALLEY_03
+    len: 1
+- id: R_TOWN_ROOFTOPS_01
+  name: Rooftop Route
+  cluster: CL_TOWN_ALLEYS
+  desc: |-
+    Ladders, gaps, and a low wall that's perfect until it isn't.
+    From up here the town looks honest, which is how you know it's lying.
+  exits:
+  - dir: back
+    to: R_TOWN_ALLEY_02
+    len: 1
+  - dir: drop
+    to: R_TOWN_ALLEY_03
+    len: 1
+- id: R_TOWN_ALLEY_03
+  name: Warded Backroom Door
+  cluster: CL_TOWN_ALLEYS
+  desc: |-
+    A door with a knocker that looks too clean. The wood around it is scratched by careful hands.
+    You get the sense the wrong touch will make the whole block aware of you.
+  exits:
+  - dir: back
+    to: R_TOWN_ALLEY_02
+    len: 1
+  - dir: east
+    to: R_TOWN_FENCE_BACKROOM_01
+    len: 1
+  - dir: north
+    to: R_TOWN_MAINT_01
+    len: 1
+- id: R_TOWN_FENCE_BACKROOM_01
+  name: The Fence
+  cluster: CL_TOWN_ALLEYS
+  desc: |-
+    A backroom with clean shelves and dirty business. The Fence watches without blinking.
+    They ask one question that makes morality feel like accounting.
+  exits:
+  - dir: back
+    to: R_TOWN_ALLEY_03
+    len: 1
+  - dir: end
+    to: R_TOWN_FENCE_REWARD_01
+    len: 1
+- id: R_TOWN_FENCE_REWARD_01
+  name: Fence Ledger
+  cluster: CL_TOWN_ALLEYS
+  desc: |-
+    A ledger, a stamp, and an understanding that you can draw a line and still progress.
+    A trapdoor in the ceiling suggests an optional shortcut for the trusted.
+  exits:
+  - dir: back
+    to: R_TOWN_ALLEY_01
+    len: 1
+- id: R_TOWN_EDGE_01
+  name: Edge Gates
+  cluster: CL_TOWN_EDGE
+  desc: |-
+    Outward gates, warning placards, and a bored guard with a stamp.
+    Some routes are open. Others are sealed so loudly you cannot mistake it for a bug.
+  exits:
+  - dir: south
+    to: R_TOWN_CLINIC_01
+    len: 1
+  - dir: west
+    to: R_TOWN_JOB_01
+    len: 1
+  - dir: east
+    to: P_TOWN_MEADOW
+    len: 1
+  - dir: north
+    to: P_TOWN_ORCHARD
+    len: 1
+  - dir: road
+    to: R_TOWN_EDGE_02
+    len: 1
+  - dir: coast
+    to: A02_COASTLINE_COMMONS
+    len: 1
+    state: sealed
+    opens_area: A02
+  - dir: gleamfields
+    to: A04_GLEAMFIELDS
+    len: 1
+    state: sealed
+    opens_area: A04
+- id: P_TOWN_MEADOW
+  name: Meadowline Gate
+  cluster: CL_TOWN_EDGE
+  tags:
+  - portal.P_TOWN_MEADOW
+  desc: |-
+    A gate with a painted sign: MEADOWLINE. SAFE LOOP. CLEAR SIGHTLINES.
+    Beyond is grass and the kind of danger that's honest enough to be useful.
+  exits:
+  - dir: west
+    to: R_TOWN_EDGE_01
+    len: 1
+  - dir: east
+    to: P_MEADOW_TOWN
+    len: 1
+- id: P_TOWN_ORCHARD
+  name: Scrap Orchard Gate
+  cluster: CL_TOWN_EDGE
+  tags:
+  - portal.P_TOWN_ORCHARD
+  desc: |-
+    A gate with a crooked notice: SCRAP ORCHARD. WATCH YOUR LINE.
+    Roots and half-buried metal wait like a puzzle that wants to hurt you.
+  exits:
+  - dir: south
+    to: R_TOWN_EDGE_01
+    len: 1
+  - dir: north
+    to: P_ORCHARD_TOWN
+    len: 1
+- id: R_TOWN_GATE_PLAZA_01
+  name: Town Gate Plaza (1)
+  cluster: CL_TOWN_GATE_PLAZA
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_GATE_PLAZA).'
+  exits:
+  - dir: back
+    to: R_TOWN_GATE_01
+    len: 1
+  - dir: next
+    to: R_TOWN_GATE_PLAZA_02
+    len: 1
+- id: R_TOWN_GATE_PLAZA_02
+  name: Town Gate Plaza (2)
+  cluster: CL_TOWN_GATE_PLAZA
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_GATE_PLAZA).'
+  exits:
+  - dir: next
+    to: R_TOWN_GATE_PLAZA_03
+    len: 1
+  - dir: back
+    to: R_TOWN_GATE_PLAZA_01
+    len: 1
+- id: R_TOWN_GATE_PLAZA_03
+  name: Town Gate Plaza (3)
+  cluster: CL_TOWN_GATE_PLAZA
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_GATE_PLAZA).'
+  exits:
+  - dir: next
+    to: R_TOWN_GATE_PLAZA_04
+    len: 1
+  - dir: back
+    to: R_TOWN_GATE_PLAZA_02
+    len: 1
+- id: R_TOWN_GATE_PLAZA_04
+  name: Town Gate Plaza (4)
+  cluster: CL_TOWN_GATE_PLAZA
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_GATE_PLAZA).'
+  exits:
+  - dir: next
+    to: R_TOWN_GATE_PLAZA_05
+    len: 1
+  - dir: back
+    to: R_TOWN_GATE_PLAZA_03
+    len: 1
+- id: R_TOWN_GATE_PLAZA_05
+  name: Town Gate Plaza (5)
+  cluster: CL_TOWN_GATE_PLAZA
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_GATE_PLAZA).'
+  exits:
+  - dir: next
+    to: R_TOWN_GATE_PLAZA_06
+    len: 1
+  - dir: back
+    to: R_TOWN_GATE_PLAZA_04
+    len: 1
+- id: R_TOWN_GATE_PLAZA_06
+  name: Town Gate Plaza (6)
+  cluster: CL_TOWN_GATE_PLAZA
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_GATE_PLAZA).'
+  exits:
+  - dir: next
+    to: R_TOWN_GATE_PLAZA_07
+    len: 1
+  - dir: back
+    to: R_TOWN_GATE_PLAZA_05
+    len: 1
+- id: R_TOWN_GATE_PLAZA_07
+  name: Town Gate Plaza (7)
+  cluster: CL_TOWN_GATE_PLAZA
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_GATE_PLAZA).'
+  exits:
+  - dir: next
+    to: R_TOWN_GATE_PLAZA_08
+    len: 1
+  - dir: back
+    to: R_TOWN_GATE_PLAZA_06
+    len: 1
+- id: R_TOWN_GATE_PLAZA_08
+  name: Town Gate Plaza (8)
+  cluster: CL_TOWN_GATE_PLAZA
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_GATE_PLAZA).'
+  exits:
+  - dir: next
+    to: R_TOWN_GATE_PLAZA_09
+    len: 1
+  - dir: back
+    to: R_TOWN_GATE_PLAZA_07
+    len: 1
+- id: R_TOWN_GATE_PLAZA_09
+  name: Town Gate Plaza (9)
+  cluster: CL_TOWN_GATE_PLAZA
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_GATE_PLAZA).'
+  exits:
+  - dir: next
+    to: R_TOWN_GATE_PLAZA_10
+    len: 1
+  - dir: back
+    to: R_TOWN_GATE_PLAZA_08
+    len: 1
+- id: R_TOWN_GATE_PLAZA_10
+  name: Town Gate Plaza (10)
+  cluster: CL_TOWN_GATE_PLAZA
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_GATE_PLAZA).'
+  exits:
+  - dir: next
+    to: R_TOWN_GATE_PLAZA_11
+    len: 1
+  - dir: back
+    to: R_TOWN_GATE_PLAZA_09
+    len: 1
+- id: R_TOWN_GATE_PLAZA_11
+  name: Town Gate Plaza (11)
+  cluster: CL_TOWN_GATE_PLAZA
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_GATE_PLAZA).'
+  exits:
+  - dir: next
+    to: R_TOWN_GATE_PLAZA_12
+    len: 1
+  - dir: back
+    to: R_TOWN_GATE_PLAZA_10
+    len: 1
+- id: R_TOWN_GATE_PLAZA_12
+  name: Town Gate Plaza (12)
+  cluster: CL_TOWN_GATE_PLAZA
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_GATE_PLAZA).'
+  exits:
+  - dir: next
+    to: R_TOWN_GATE_PLAZA_13
+    len: 1
+  - dir: back
+    to: R_TOWN_GATE_PLAZA_11
+    len: 1
+- id: R_TOWN_GATE_PLAZA_13
+  name: Town Gate Plaza (13)
+  cluster: CL_TOWN_GATE_PLAZA
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_GATE_PLAZA).'
+  exits:
+  - dir: next
+    to: R_TOWN_GATE_PLAZA_14
+    len: 1
+  - dir: back
+    to: R_TOWN_GATE_PLAZA_12
+    len: 1
+- id: R_TOWN_GATE_PLAZA_14
+  name: Town Gate Plaza (14)
+  cluster: CL_TOWN_GATE_PLAZA
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_GATE_PLAZA).'
+  exits:
+  - dir: next
+    to: R_TOWN_GATE_PLAZA_15
+    len: 1
+  - dir: back
+    to: R_TOWN_GATE_PLAZA_13
+    len: 1
+- id: R_TOWN_GATE_PLAZA_15
+  name: Town Gate Plaza (15)
+  cluster: CL_TOWN_GATE_PLAZA
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_GATE_PLAZA).'
+  exits:
+  - dir: next
+    to: R_TOWN_GATE_PLAZA_16
+    len: 1
+  - dir: back
+    to: R_TOWN_GATE_PLAZA_14
+    len: 1
+- id: R_TOWN_GATE_PLAZA_16
+  name: Town Gate Plaza (16)
+  cluster: CL_TOWN_GATE_PLAZA
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_GATE_PLAZA).'
+  exits:
+  - dir: back
+    to: R_TOWN_GATE_PLAZA_15
+    len: 1
+- id: R_TOWN_JOB_BOARD_01
+  name: Town Job Board (1)
+  cluster: CL_TOWN_JOB_BOARD
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_JOB_BOARD).'
+  exits:
+  - dir: back
+    to: R_TOWN_JOB_01
+    len: 1
+  - dir: next
+    to: R_TOWN_JOB_BOARD_02
+    len: 1
+- id: R_TOWN_JOB_BOARD_02
+  name: Town Job Board (2)
+  cluster: CL_TOWN_JOB_BOARD
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_JOB_BOARD).'
+  exits:
+  - dir: next
+    to: R_TOWN_JOB_BOARD_03
+    len: 1
+  - dir: back
+    to: R_TOWN_JOB_BOARD_01
+    len: 1
+- id: R_TOWN_JOB_BOARD_03
+  name: Town Job Board (3)
+  cluster: CL_TOWN_JOB_BOARD
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_JOB_BOARD).'
+  exits:
+  - dir: next
+    to: R_TOWN_JOB_BOARD_04
+    len: 1
+  - dir: back
+    to: R_TOWN_JOB_BOARD_02
+    len: 1
+- id: R_TOWN_JOB_BOARD_04
+  name: Town Job Board (4)
+  cluster: CL_TOWN_JOB_BOARD
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_JOB_BOARD).'
+  exits:
+  - dir: next
+    to: R_TOWN_JOB_BOARD_05
+    len: 1
+  - dir: back
+    to: R_TOWN_JOB_BOARD_03
+    len: 1
+- id: R_TOWN_JOB_BOARD_05
+  name: Town Job Board (5)
+  cluster: CL_TOWN_JOB_BOARD
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_JOB_BOARD).'
+  exits:
+  - dir: next
+    to: R_TOWN_JOB_BOARD_06
+    len: 1
+  - dir: back
+    to: R_TOWN_JOB_BOARD_04
+    len: 1
+- id: R_TOWN_JOB_BOARD_06
+  name: Town Job Board (6)
+  cluster: CL_TOWN_JOB_BOARD
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_JOB_BOARD).'
+  exits:
+  - dir: next
+    to: R_TOWN_JOB_BOARD_07
+    len: 1
+  - dir: back
+    to: R_TOWN_JOB_BOARD_05
+    len: 1
+- id: R_TOWN_JOB_BOARD_07
+  name: Town Job Board (7)
+  cluster: CL_TOWN_JOB_BOARD
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_JOB_BOARD).'
+  exits:
+  - dir: next
+    to: R_TOWN_JOB_BOARD_08
+    len: 1
+  - dir: back
+    to: R_TOWN_JOB_BOARD_06
+    len: 1
+- id: R_TOWN_JOB_BOARD_08
+  name: Town Job Board (8)
+  cluster: CL_TOWN_JOB_BOARD
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_JOB_BOARD).'
+  exits:
+  - dir: back
+    to: R_TOWN_JOB_BOARD_07
+    len: 1
+- id: R_TOWN_MARKET_ROW_01
+  name: Town Market Row (1)
+  cluster: CL_TOWN_MARKET_ROW
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MARKET_ROW).'
+  exits:
+  - dir: back
+    to: R_TOWN_MARKET_01
+    len: 1
+  - dir: next
+    to: R_TOWN_MARKET_ROW_02
+    len: 1
+- id: R_TOWN_MARKET_ROW_02
+  name: Town Market Row (2)
+  cluster: CL_TOWN_MARKET_ROW
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MARKET_ROW).'
+  exits:
+  - dir: next
+    to: R_TOWN_MARKET_ROW_03
+    len: 1
+  - dir: back
+    to: R_TOWN_MARKET_ROW_01
+    len: 1
+- id: R_TOWN_MARKET_ROW_03
+  name: Town Market Row (3)
+  cluster: CL_TOWN_MARKET_ROW
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MARKET_ROW).'
+  exits:
+  - dir: next
+    to: R_TOWN_MARKET_ROW_04
+    len: 1
+  - dir: back
+    to: R_TOWN_MARKET_ROW_02
+    len: 1
+- id: R_TOWN_MARKET_ROW_04
+  name: Town Market Row (4)
+  cluster: CL_TOWN_MARKET_ROW
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MARKET_ROW).'
+  exits:
+  - dir: next
+    to: R_TOWN_MARKET_ROW_05
+    len: 1
+  - dir: back
+    to: R_TOWN_MARKET_ROW_03
+    len: 1
+- id: R_TOWN_MARKET_ROW_05
+  name: Town Market Row (5)
+  cluster: CL_TOWN_MARKET_ROW
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MARKET_ROW).'
+  exits:
+  - dir: next
+    to: R_TOWN_MARKET_ROW_06
+    len: 1
+  - dir: back
+    to: R_TOWN_MARKET_ROW_04
+    len: 1
+- id: R_TOWN_MARKET_ROW_06
+  name: Town Market Row (6)
+  cluster: CL_TOWN_MARKET_ROW
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MARKET_ROW).'
+  exits:
+  - dir: next
+    to: R_TOWN_MARKET_ROW_07
+    len: 1
+  - dir: back
+    to: R_TOWN_MARKET_ROW_05
+    len: 1
+- id: R_TOWN_MARKET_ROW_07
+  name: Town Market Row (7)
+  cluster: CL_TOWN_MARKET_ROW
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MARKET_ROW).'
+  exits:
+  - dir: next
+    to: R_TOWN_MARKET_ROW_08
+    len: 1
+  - dir: back
+    to: R_TOWN_MARKET_ROW_06
+    len: 1
+- id: R_TOWN_MARKET_ROW_08
+  name: Town Market Row (8)
+  cluster: CL_TOWN_MARKET_ROW
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MARKET_ROW).'
+  exits:
+  - dir: next
+    to: R_TOWN_MARKET_ROW_09
+    len: 1
+  - dir: back
+    to: R_TOWN_MARKET_ROW_07
+    len: 1
+- id: R_TOWN_MARKET_ROW_09
+  name: Town Market Row (9)
+  cluster: CL_TOWN_MARKET_ROW
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MARKET_ROW).'
+  exits:
+  - dir: next
+    to: R_TOWN_MARKET_ROW_10
+    len: 1
+  - dir: back
+    to: R_TOWN_MARKET_ROW_08
+    len: 1
+- id: R_TOWN_MARKET_ROW_10
+  name: Town Market Row (10)
+  cluster: CL_TOWN_MARKET_ROW
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MARKET_ROW).'
+  exits:
+  - dir: next
+    to: R_TOWN_MARKET_ROW_11
+    len: 1
+  - dir: back
+    to: R_TOWN_MARKET_ROW_09
+    len: 1
+- id: R_TOWN_MARKET_ROW_11
+  name: Town Market Row (11)
+  cluster: CL_TOWN_MARKET_ROW
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MARKET_ROW).'
+  exits:
+  - dir: next
+    to: R_TOWN_MARKET_ROW_12
+    len: 1
+  - dir: back
+    to: R_TOWN_MARKET_ROW_10
+    len: 1
+- id: R_TOWN_MARKET_ROW_12
+  name: Town Market Row (12)
+  cluster: CL_TOWN_MARKET_ROW
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MARKET_ROW).'
+  exits:
+  - dir: next
+    to: R_TOWN_MARKET_ROW_13
+    len: 1
+  - dir: back
+    to: R_TOWN_MARKET_ROW_11
+    len: 1
+- id: R_TOWN_MARKET_ROW_13
+  name: Town Market Row (13)
+  cluster: CL_TOWN_MARKET_ROW
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MARKET_ROW).'
+  exits:
+  - dir: next
+    to: R_TOWN_MARKET_ROW_14
+    len: 1
+  - dir: back
+    to: R_TOWN_MARKET_ROW_12
+    len: 1
+- id: R_TOWN_MARKET_ROW_14
+  name: Town Market Row (14)
+  cluster: CL_TOWN_MARKET_ROW
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MARKET_ROW).'
+  exits:
+  - dir: next
+    to: R_TOWN_MARKET_ROW_15
+    len: 1
+  - dir: back
+    to: R_TOWN_MARKET_ROW_13
+    len: 1
+- id: R_TOWN_MARKET_ROW_15
+  name: Town Market Row (15)
+  cluster: CL_TOWN_MARKET_ROW
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MARKET_ROW).'
+  exits:
+  - dir: next
+    to: R_TOWN_MARKET_ROW_16
+    len: 1
+  - dir: back
+    to: R_TOWN_MARKET_ROW_14
+    len: 1
+- id: R_TOWN_MARKET_ROW_16
+  name: Town Market Row (16)
+  cluster: CL_TOWN_MARKET_ROW
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MARKET_ROW).'
+  exits:
+  - dir: next
+    to: R_TOWN_MARKET_ROW_17
+    len: 1
+  - dir: back
+    to: R_TOWN_MARKET_ROW_15
+    len: 1
+- id: R_TOWN_MARKET_ROW_17
+  name: Town Market Row (17)
+  cluster: CL_TOWN_MARKET_ROW
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MARKET_ROW).'
+  exits:
+  - dir: next
+    to: R_TOWN_MARKET_ROW_18
+    len: 1
+  - dir: back
+    to: R_TOWN_MARKET_ROW_16
+    len: 1
+- id: R_TOWN_MARKET_ROW_18
+  name: Town Market Row (18)
+  cluster: CL_TOWN_MARKET_ROW
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MARKET_ROW).'
+  exits:
+  - dir: back
+    to: R_TOWN_MARKET_ROW_17
+    len: 1
+- id: R_TOWN_BANK_CLINIC_01
+  name: Town Bank Clinic (1)
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_BANK_CLINIC).'
+  exits:
+  - dir: back
+    to: R_TOWN_CLINIC_01
+    len: 1
+  - dir: next
+    to: R_TOWN_BANK_CLINIC_02
+    len: 1
+- id: R_TOWN_BANK_CLINIC_02
+  name: Town Bank Clinic (2)
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_BANK_CLINIC).'
+  exits:
+  - dir: next
+    to: R_TOWN_BANK_CLINIC_03
+    len: 1
+  - dir: back
+    to: R_TOWN_BANK_CLINIC_01
+    len: 1
+- id: R_TOWN_BANK_CLINIC_03
+  name: Town Bank Clinic (3)
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_BANK_CLINIC).'
+  exits:
+  - dir: next
+    to: R_TOWN_BANK_CLINIC_04
+    len: 1
+  - dir: back
+    to: R_TOWN_BANK_CLINIC_02
+    len: 1
+- id: R_TOWN_BANK_CLINIC_04
+  name: Town Bank Clinic (4)
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_BANK_CLINIC).'
+  exits:
+  - dir: next
+    to: R_TOWN_BANK_CLINIC_05
+    len: 1
+  - dir: back
+    to: R_TOWN_BANK_CLINIC_03
+    len: 1
+- id: R_TOWN_BANK_CLINIC_05
+  name: Town Bank Clinic (5)
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_BANK_CLINIC).'
+  exits:
+  - dir: next
+    to: R_TOWN_BANK_CLINIC_06
+    len: 1
+  - dir: back
+    to: R_TOWN_BANK_CLINIC_04
+    len: 1
+- id: R_TOWN_BANK_CLINIC_06
+  name: Town Bank Clinic (6)
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_BANK_CLINIC).'
+  exits:
+  - dir: next
+    to: R_TOWN_BANK_CLINIC_07
+    len: 1
+  - dir: back
+    to: R_TOWN_BANK_CLINIC_05
+    len: 1
+- id: R_TOWN_BANK_CLINIC_07
+  name: Town Bank Clinic (7)
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_BANK_CLINIC).'
+  exits:
+  - dir: next
+    to: R_TOWN_BANK_CLINIC_08
+    len: 1
+  - dir: back
+    to: R_TOWN_BANK_CLINIC_06
+    len: 1
+- id: R_TOWN_BANK_CLINIC_08
+  name: Town Bank Clinic (8)
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_BANK_CLINIC).'
+  exits:
+  - dir: next
+    to: R_TOWN_BANK_CLINIC_09
+    len: 1
+  - dir: back
+    to: R_TOWN_BANK_CLINIC_07
+    len: 1
+- id: R_TOWN_BANK_CLINIC_09
+  name: Town Bank Clinic (9)
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_BANK_CLINIC).'
+  exits:
+  - dir: next
+    to: R_TOWN_BANK_CLINIC_10
+    len: 1
+  - dir: back
+    to: R_TOWN_BANK_CLINIC_08
+    len: 1
+- id: R_TOWN_BANK_CLINIC_10
+  name: Town Bank Clinic (10)
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_BANK_CLINIC).'
+  exits:
+  - dir: next
+    to: R_TOWN_BANK_CLINIC_11
+    len: 1
+  - dir: back
+    to: R_TOWN_BANK_CLINIC_09
+    len: 1
+- id: R_TOWN_BANK_CLINIC_11
+  name: Town Bank Clinic (11)
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_BANK_CLINIC).'
+  exits:
+  - dir: next
+    to: R_TOWN_BANK_CLINIC_12
+    len: 1
+  - dir: back
+    to: R_TOWN_BANK_CLINIC_10
+    len: 1
+- id: R_TOWN_BANK_CLINIC_12
+  name: Town Bank Clinic (12)
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_BANK_CLINIC).'
+  exits:
+  - dir: next
+    to: R_TOWN_BANK_CLINIC_13
+    len: 1
+  - dir: back
+    to: R_TOWN_BANK_CLINIC_11
+    len: 1
+- id: R_TOWN_BANK_CLINIC_13
+  name: Town Bank Clinic (13)
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_BANK_CLINIC).'
+  exits:
+  - dir: next
+    to: R_TOWN_BANK_CLINIC_14
+    len: 1
+  - dir: back
+    to: R_TOWN_BANK_CLINIC_12
+    len: 1
+- id: R_TOWN_BANK_CLINIC_14
+  name: Town Bank Clinic (14)
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_BANK_CLINIC).'
+  exits:
+  - dir: next
+    to: R_TOWN_BANK_CLINIC_15
+    len: 1
+  - dir: back
+    to: R_TOWN_BANK_CLINIC_13
+    len: 1
+- id: R_TOWN_BANK_CLINIC_15
+  name: Town Bank Clinic (15)
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_BANK_CLINIC).'
+  exits:
+  - dir: next
+    to: R_TOWN_BANK_CLINIC_16
+    len: 1
+  - dir: back
+    to: R_TOWN_BANK_CLINIC_14
+    len: 1
+- id: R_TOWN_BANK_CLINIC_16
+  name: Town Bank Clinic (16)
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_BANK_CLINIC).'
+  exits:
+  - dir: next
+    to: R_TOWN_BANK_CLINIC_17
+    len: 1
+  - dir: back
+    to: R_TOWN_BANK_CLINIC_15
+    len: 1
+- id: R_TOWN_BANK_CLINIC_17
+  name: Town Bank Clinic (17)
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_BANK_CLINIC).'
+  exits:
+  - dir: next
+    to: R_TOWN_BANK_CLINIC_18
+    len: 1
+  - dir: back
+    to: R_TOWN_BANK_CLINIC_16
+    len: 1
+- id: R_TOWN_BANK_CLINIC_18
+  name: Town Bank Clinic (18)
+  cluster: CL_TOWN_BANK_CLINIC
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_BANK_CLINIC).'
+  exits:
+  - dir: back
+    to: R_TOWN_BANK_CLINIC_17
+    len: 1
+- id: R_TOWN_MAINT_OFFICE_01
+  name: Town Maint Office (1)
+  cluster: CL_TOWN_MAINT_OFFICE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MAINT_OFFICE).'
+  exits:
+  - dir: back
+    to: R_TOWN_MAINT_01
+    len: 1
+  - dir: next
+    to: R_TOWN_MAINT_OFFICE_02
+    len: 1
+- id: R_TOWN_MAINT_OFFICE_02
+  name: Town Maint Office (2)
+  cluster: CL_TOWN_MAINT_OFFICE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MAINT_OFFICE).'
+  exits:
+  - dir: next
+    to: R_TOWN_MAINT_OFFICE_03
+    len: 1
+  - dir: back
+    to: R_TOWN_MAINT_OFFICE_01
+    len: 1
+- id: R_TOWN_MAINT_OFFICE_03
+  name: Town Maint Office (3)
+  cluster: CL_TOWN_MAINT_OFFICE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MAINT_OFFICE).'
+  exits:
+  - dir: next
+    to: R_TOWN_MAINT_OFFICE_04
+    len: 1
+  - dir: back
+    to: R_TOWN_MAINT_OFFICE_02
+    len: 1
+- id: R_TOWN_MAINT_OFFICE_04
+  name: Town Maint Office (4)
+  cluster: CL_TOWN_MAINT_OFFICE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MAINT_OFFICE).'
+  exits:
+  - dir: next
+    to: R_TOWN_MAINT_OFFICE_05
+    len: 1
+  - dir: back
+    to: R_TOWN_MAINT_OFFICE_03
+    len: 1
+- id: R_TOWN_MAINT_OFFICE_05
+  name: Town Maint Office (5)
+  cluster: CL_TOWN_MAINT_OFFICE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MAINT_OFFICE).'
+  exits:
+  - dir: next
+    to: R_TOWN_MAINT_OFFICE_06
+    len: 1
+  - dir: back
+    to: R_TOWN_MAINT_OFFICE_04
+    len: 1
+- id: R_TOWN_MAINT_OFFICE_06
+  name: Town Maint Office (6)
+  cluster: CL_TOWN_MAINT_OFFICE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MAINT_OFFICE).'
+  exits:
+  - dir: next
+    to: R_TOWN_MAINT_OFFICE_07
+    len: 1
+  - dir: back
+    to: R_TOWN_MAINT_OFFICE_05
+    len: 1
+- id: R_TOWN_MAINT_OFFICE_07
+  name: Town Maint Office (7)
+  cluster: CL_TOWN_MAINT_OFFICE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MAINT_OFFICE).'
+  exits:
+  - dir: next
+    to: R_TOWN_MAINT_OFFICE_08
+    len: 1
+  - dir: back
+    to: R_TOWN_MAINT_OFFICE_06
+    len: 1
+- id: R_TOWN_MAINT_OFFICE_08
+  name: Town Maint Office (8)
+  cluster: CL_TOWN_MAINT_OFFICE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_MAINT_OFFICE).'
+  exits:
+  - dir: back
+    to: R_TOWN_MAINT_OFFICE_07
+    len: 1
+- id: R_TOWN_ALLEYS_01
+  name: Town Alleys (1)
+  cluster: CL_TOWN_ALLEYS
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_ALLEYS).'
+  exits:
+  - dir: back
+    to: R_TOWN_ALLEY_01
+    len: 1
+  - dir: next
+    to: R_TOWN_ALLEYS_02
+    len: 1
+- id: R_TOWN_ALLEYS_02
+  name: Town Alleys (2)
+  cluster: CL_TOWN_ALLEYS
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_ALLEYS).'
+  exits:
+  - dir: next
+    to: R_TOWN_ALLEYS_03
+    len: 1
+  - dir: back
+    to: R_TOWN_ALLEYS_01
+    len: 1
+- id: R_TOWN_ALLEYS_03
+  name: Town Alleys (3)
+  cluster: CL_TOWN_ALLEYS
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_ALLEYS).'
+  exits:
+  - dir: next
+    to: R_TOWN_ALLEYS_04
+    len: 1
+  - dir: back
+    to: R_TOWN_ALLEYS_02
+    len: 1
+- id: R_TOWN_ALLEYS_04
+  name: Town Alleys (4)
+  cluster: CL_TOWN_ALLEYS
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_ALLEYS).'
+  exits:
+  - dir: next
+    to: R_TOWN_ALLEYS_05
+    len: 1
+  - dir: back
+    to: R_TOWN_ALLEYS_03
+    len: 1
+- id: R_TOWN_ALLEYS_05
+  name: Town Alleys (5)
+  cluster: CL_TOWN_ALLEYS
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_ALLEYS).'
+  exits:
+  - dir: next
+    to: R_TOWN_ALLEYS_06
+    len: 1
+  - dir: back
+    to: R_TOWN_ALLEYS_04
+    len: 1
+- id: R_TOWN_ALLEYS_06
+  name: Town Alleys (6)
+  cluster: CL_TOWN_ALLEYS
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_ALLEYS).'
+  exits:
+  - dir: next
+    to: R_TOWN_ALLEYS_07
+    len: 1
+  - dir: back
+    to: R_TOWN_ALLEYS_05
+    len: 1
+- id: R_TOWN_ALLEYS_07
+  name: Town Alleys (7)
+  cluster: CL_TOWN_ALLEYS
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_ALLEYS).'
+  exits:
+  - dir: next
+    to: R_TOWN_ALLEYS_08
+    len: 1
+  - dir: back
+    to: R_TOWN_ALLEYS_06
+    len: 1
+- id: R_TOWN_ALLEYS_08
+  name: Town Alleys (8)
+  cluster: CL_TOWN_ALLEYS
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_ALLEYS).'
+  exits:
+  - dir: next
+    to: R_TOWN_ALLEYS_09
+    len: 1
+  - dir: back
+    to: R_TOWN_ALLEYS_07
+    len: 1
+- id: R_TOWN_ALLEYS_09
+  name: Town Alleys (9)
+  cluster: CL_TOWN_ALLEYS
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_ALLEYS).'
+  exits:
+  - dir: next
+    to: R_TOWN_ALLEYS_10
+    len: 1
+  - dir: back
+    to: R_TOWN_ALLEYS_08
+    len: 1
+- id: R_TOWN_ALLEYS_10
+  name: Town Alleys (10)
+  cluster: CL_TOWN_ALLEYS
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_ALLEYS).'
+  exits:
+  - dir: next
+    to: R_TOWN_ALLEYS_11
+    len: 1
+  - dir: back
+    to: R_TOWN_ALLEYS_09
+    len: 1
+- id: R_TOWN_ALLEYS_11
+  name: Town Alleys (11)
+  cluster: CL_TOWN_ALLEYS
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_ALLEYS).'
+  exits:
+  - dir: next
+    to: R_TOWN_ALLEYS_12
+    len: 1
+  - dir: back
+    to: R_TOWN_ALLEYS_10
+    len: 1
+- id: R_TOWN_ALLEYS_12
+  name: Town Alleys (12)
+  cluster: CL_TOWN_ALLEYS
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_ALLEYS).'
+  exits:
+  - dir: next
+    to: R_TOWN_ALLEYS_13
+    len: 1
+  - dir: back
+    to: R_TOWN_ALLEYS_11
+    len: 1
+- id: R_TOWN_ALLEYS_13
+  name: Town Alleys (13)
+  cluster: CL_TOWN_ALLEYS
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_ALLEYS).'
+  exits:
+  - dir: back
+    to: R_TOWN_ALLEYS_12
+    len: 1
+- id: R_TOWN_EDGE_02
+  name: Town Edge (1)
+  cluster: CL_TOWN_EDGE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_EDGE).'
+  exits:
+  - dir: back
+    to: R_TOWN_EDGE_01
+    len: 1
+  - dir: next
+    to: R_TOWN_EDGE_03
+    len: 1
+- id: R_TOWN_EDGE_03
+  name: Town Edge (2)
+  cluster: CL_TOWN_EDGE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_EDGE).'
+  exits:
+  - dir: next
+    to: R_TOWN_EDGE_04
+    len: 1
+  - dir: back
+    to: R_TOWN_EDGE_02
+    len: 1
+- id: R_TOWN_EDGE_04
+  name: Town Edge (3)
+  cluster: CL_TOWN_EDGE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_EDGE).'
+  exits:
+  - dir: next
+    to: R_TOWN_EDGE_05
+    len: 1
+  - dir: back
+    to: R_TOWN_EDGE_03
+    len: 1
+- id: R_TOWN_EDGE_05
+  name: Town Edge (4)
+  cluster: CL_TOWN_EDGE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_EDGE).'
+  exits:
+  - dir: next
+    to: R_TOWN_EDGE_06
+    len: 1
+  - dir: back
+    to: R_TOWN_EDGE_04
+    len: 1
+- id: R_TOWN_EDGE_06
+  name: Town Edge (5)
+  cluster: CL_TOWN_EDGE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_EDGE).'
+  exits:
+  - dir: next
+    to: R_TOWN_EDGE_07
+    len: 1
+  - dir: back
+    to: R_TOWN_EDGE_05
+    len: 1
+- id: R_TOWN_EDGE_07
+  name: Town Edge (6)
+  cluster: CL_TOWN_EDGE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_EDGE).'
+  exits:
+  - dir: next
+    to: R_TOWN_EDGE_08
+    len: 1
+  - dir: back
+    to: R_TOWN_EDGE_06
+    len: 1
+- id: R_TOWN_EDGE_08
+  name: Town Edge (7)
+  cluster: CL_TOWN_EDGE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_EDGE).'
+  exits:
+  - dir: next
+    to: R_TOWN_EDGE_09
+    len: 1
+  - dir: back
+    to: R_TOWN_EDGE_07
+    len: 1
+- id: R_TOWN_EDGE_09
+  name: Town Edge (8)
+  cluster: CL_TOWN_EDGE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_EDGE).'
+  exits:
+  - dir: next
+    to: R_TOWN_EDGE_10
+    len: 1
+  - dir: back
+    to: R_TOWN_EDGE_08
+    len: 1
+- id: R_TOWN_EDGE_10
+  name: Town Edge (9)
+  cluster: CL_TOWN_EDGE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_EDGE).'
+  exits:
+  - dir: next
+    to: R_TOWN_EDGE_11
+    len: 1
+  - dir: back
+    to: R_TOWN_EDGE_09
+    len: 1
+- id: R_TOWN_EDGE_11
+  name: Town Edge (10)
+  cluster: CL_TOWN_EDGE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_EDGE).'
+  exits:
+  - dir: next
+    to: R_TOWN_EDGE_12
+    len: 1
+  - dir: back
+    to: R_TOWN_EDGE_10
+    len: 1
+- id: R_TOWN_EDGE_12
+  name: Town Edge (11)
+  cluster: CL_TOWN_EDGE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_EDGE).'
+  exits:
+  - dir: next
+    to: R_TOWN_EDGE_13
+    len: 1
+  - dir: back
+    to: R_TOWN_EDGE_11
+    len: 1
+- id: R_TOWN_EDGE_13
+  name: Town Edge (12)
+  cluster: CL_TOWN_EDGE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_EDGE).'
+  exits:
+  - dir: next
+    to: R_TOWN_EDGE_14
+    len: 1
+  - dir: back
+    to: R_TOWN_EDGE_12
+    len: 1
+- id: R_TOWN_EDGE_14
+  name: Town Edge (13)
+  cluster: CL_TOWN_EDGE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_EDGE).'
+  exits:
+  - dir: next
+    to: R_TOWN_EDGE_15
+    len: 1
+  - dir: back
+    to: R_TOWN_EDGE_13
+    len: 1
+- id: R_TOWN_EDGE_15
+  name: Town Edge (14)
+  cluster: CL_TOWN_EDGE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_EDGE).'
+  exits:
+  - dir: next
+    to: R_TOWN_EDGE_16
+    len: 1
+  - dir: back
+    to: R_TOWN_EDGE_14
+    len: 1
+- id: R_TOWN_EDGE_16
+  name: Town Edge (15)
+  cluster: CL_TOWN_EDGE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_EDGE).'
+  exits:
+  - dir: next
+    to: R_TOWN_EDGE_17
+    len: 1
+  - dir: back
+    to: R_TOWN_EDGE_15
+    len: 1
+- id: R_TOWN_EDGE_17
+  name: Town Edge (16)
+  cluster: CL_TOWN_EDGE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_EDGE).'
+  exits:
+  - dir: next
+    to: R_TOWN_EDGE_18
+    len: 1
+  - dir: back
+    to: R_TOWN_EDGE_16
+    len: 1
+- id: R_TOWN_EDGE_18
+  name: Town Edge (17)
+  cluster: CL_TOWN_EDGE
+  desc: 'A working stretch of Town: Gaia Gate (CL_TOWN_EDGE).'
+  exits:
+  - dir: back
+    to: R_TOWN_EDGE_17
+    len: 1

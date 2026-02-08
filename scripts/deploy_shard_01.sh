@@ -40,9 +40,9 @@ ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
   set -euo pipefail; \
   if command -v apt-get >/dev/null 2>&1; then \
     sudo DEBIAN_FRONTEND=noninteractive apt-get update -y; \
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates; \
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates awscli; \
   elif command -v dnf >/dev/null 2>&1; then \
-    sudo dnf -y install ca-certificates; \
+    sudo dnf -y install ca-certificates awscli; \
   else \
     echo 'Unsupported OS (need apt-get or dnf)'; exit 2; \
   fi; \
@@ -76,7 +76,30 @@ Group=slopmud
 WorkingDirectory=${REMOTE_ROOT}
 Environment=RUST_LOG=shard_01=info
 Environment=SHARD_BIND=${SHARD_BIND}
-ExecStart=${SHARD_REMOTE_BIN}
+EOF
+
+# Optional: OpenAI config for admin `aiping` command.
+if [[ -n "${OPENAI_API_BASE:-}" ]]; then
+  echo "Environment=OPENAI_API_BASE=${OPENAI_API_BASE}" >>"$tmp_unit"
+fi
+if [[ -n "${OPENAI_PING_MODEL:-}" ]]; then
+  echo "Environment=OPENAI_PING_MODEL=${OPENAI_PING_MODEL}" >>"$tmp_unit"
+fi
+if [[ -n "${OPENAI_API_KEY_SSM:-}" ]]; then
+  echo "Environment=OPENAI_API_KEY_SSM=${OPENAI_API_KEY_SSM}" >>"$tmp_unit"
+fi
+
+exec_start="${SHARD_REMOTE_BIN}"
+if [[ -n "${OPENAI_API_KEY_SSM:-}" ]]; then
+  # Resolve the API key at service start using the instance role.
+  exec_start="/bin/bash -ceu ' \
+    export OPENAI_API_KEY=\"\$(aws ssm get-parameter --region us-east-1 --name \"\${OPENAI_API_KEY_SSM}\" --with-decryption --query Parameter.Value --output text)\"; \
+    exec \"${SHARD_REMOTE_BIN}\"; \
+  '"
+fi
+
+cat >>"$tmp_unit" <<EOF
+ExecStart=${exec_start}
 Restart=always
 RestartSec=2
 NoNewPrivileges=true
@@ -99,9 +122,14 @@ ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
 "
 
 port="${SHARD_BIND##*:}"
-echo "Listening check (port ${port})"
+echo "Waiting for listen (port ${port})"
 ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
   set -euo pipefail; \
-  sudo ss -lntp | grep -n \":${port}\\\\b\" || { echo 'not listening'; exit 1; } \
+  for _ in {1..40}; do \
+    if sudo ss -lntp | grep -q \":${port}\\\\b\"; then exit 0; fi; \
+    sleep 0.25; \
+  done; \
+  sudo ss -lntp | grep -n \":${port}\\\\b\" || true; \
+  echo 'not listening'; \
+  exit 1; \
 "
-

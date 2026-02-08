@@ -145,6 +145,8 @@ pub fn instantiate_rooms(instance_prefix: &str, plan: &BuildPlan) -> Vec<(String
                 exits.push(ExitDef {
                     dir: e.dir.clone(),
                     to: to.clone(),
+                    sealed: false,
+                    gate: None,
                 });
             }
         }
@@ -249,7 +251,12 @@ fn parse_exits(rest: &str) -> Vec<ExitDef> {
             to = sp.trim().to_string();
         }
         if !dir.is_empty() && !to.is_empty() {
-            out.push(ExitDef { dir, to });
+            out.push(ExitDef {
+                dir,
+                to,
+                sealed: false,
+                gate: None,
+            });
         }
     }
     out

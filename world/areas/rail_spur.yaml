@@ -1,0 +1,774 @@
+version: 1
+zone_id: rail_spur
+zone_name: Rail Spur
+area_id: A01
+level_band:
+- 5
+- 7
+start_room: P_RAIL_CHECKPOINT
+rooms:
+- id: P_RAIL_CHECKPOINT
+  name: Old Road Checkpoint Transfer
+  cluster: CL_RAIL_TERMINAL
+  tags:
+  - portal.P_RAIL_CHECKPOINT
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies Old Road Checkpoint.
+  exits:
+  - dir: out
+    to: P_CHECKPOINT_RAIL
+    len: 2
+  - dir: in
+    to: R_RAIL_TERM_01
+    len: 1
+- id: R_RAIL_TERM_01
+  name: Rail Spur Anchor
+  cluster: CL_RAIL_TERMINAL
+  tags:
+  - HUB_RAIL_TERMINAL
+  - portal.P_RAIL_CHECKPOINT
+  desc: |-
+    A terminal that still thinks it has a schedule.
+    The metal underfoot is cold even when the air is not.
+  exits:
+  - dir: to_P_RAIL_CHECKPOINT
+    to: P_RAIL_CHECKPOINT
+    len: 1
+  - dir: to_R_RAIL_EVENT_01
+    to: R_RAIL_EVENT_01
+    len: 1
+  - dir: to_R_RAIL_TERMINAL_02
+    to: R_RAIL_TERMINAL_02
+    len: 1
+    state: sealed
+    gate: gate.rail_spur.pass
+  - dir: to_line
+    to: R_RAIL_LINE_01
+    len: 1
+    state: sealed
+    gate: gate.rail_spur.pass
+  - dir: wander_terminal
+    to: R_RAIL_TERMINAL_03
+    len: 1
+- id: R_RAIL_EVENT_01
+  name: Yard Spur
+  cluster: CL_RAIL_YARDS
+  tags:
+  - setpiece.e17.chase_start
+  desc: |-
+    A rail yard that feels half-alive.
+    Something moves when you aren't looking.
+  exits:
+  - dir: hub
+    to: R_RAIL_TERM_01
+    len: 1
+  - dir: wander_yard
+    to: R_RAIL_YARD_01
+    len: 1
+- id: R_RAIL_TERMINAL_02
+  name: Loading Dock
+  cluster: CL_RAIL_TERMINAL
+  tags:
+  - setpiece.e17.brake_node_final
+  desc: |-
+    A terminal that still thinks it has a schedule.
+    The metal underfoot is cold even when the air is not.
+  exits:
+  - dir: hub
+    to: R_RAIL_TERM_01
+    len: 1
+- id: R_RAIL_LINE_01
+  name: Service Spur Gate
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.service_spur_gate
+  desc: |-
+    A service spur splits away from the terminal with a clunking switchbox and a faded lock tag.
+    The line ahead is long and exposed, built for speed instead of safety.
+  exits:
+  - dir: back
+    to: R_RAIL_TERM_01
+    len: 1
+  - dir: wander_line
+    to: R_RAIL_LINE_02
+    len: 1
+- id: R_RAIL_LINE_02
+  name: Ballast Straight
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.ballast_straight
+  desc: |-
+    A long straight run of ballast and steel with harsh sightlines.
+    If something comes down the line fast, this is where you spot it early.
+  exits:
+  - dir: back
+    to: R_RAIL_LINE_01
+    len: 1
+  - dir: ahead
+    to: R_RAIL_LINE_03
+    len: 1
+- id: R_RAIL_LINE_03
+  name: Switchbox Post
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.switchbox_post
+  desc: |-
+    A squat switchbox post sits beside the rail, panel dented by old impacts.
+    The line is quiet, but it never feels empty.
+  exits:
+  - dir: back
+    to: R_RAIL_LINE_02
+    len: 1
+  - dir: ahead
+    to: R_RAIL_LINE_04
+    len: 1
+- id: R_RAIL_LINE_04
+  name: Sleeper Run
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.sleeper_run
+  desc: |-
+    Cracked sleepers and uneven ties make your pacing feel slightly wrong.
+    If you need a reset, the terminal is still a clean retreat behind you.
+  exits:
+  - dir: back
+    to: R_RAIL_LINE_03
+    len: 1
+  - dir: ahead
+    to: R_RAIL_LINE_05
+    len: 1
+- id: R_RAIL_LINE_05
+  name: Signal Sightline
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.signal_sightline
+  desc: |-
+    A long, exposed cut with a dead signal mast watching the lane.
+    This is not a good place to get pinned.
+  exits:
+  - dir: back
+    to: R_RAIL_LINE_04
+    len: 1
+  - dir: ahead
+    to: R_RAIL_LINE_06
+    len: 1
+- id: R_RAIL_LINE_06
+  name: Warning Horn Bend
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.warning_horn_bend
+  desc: |-
+    A bent horn bracket hangs over the track like an old joke.
+    The lane ahead stays visible, but the sound carries farther than it should.
+  exits:
+  - dir: back
+    to: R_RAIL_LINE_05
+    len: 1
+  - dir: ahead
+    to: R_RAIL_LINE_07
+    len: 1
+- id: R_RAIL_LINE_07
+  name: Crosstie Hollow
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.crosstie_hollow
+  desc: |-
+    A shallow hollow beside the ties collects rainwater and scrap.
+    It is not real cover, but it breaks sightlines enough to matter.
+  exits:
+  - dir: back
+    to: R_RAIL_LINE_06
+    len: 1
+  - dir: ahead
+    to: R_RAIL_LINE_08
+    len: 1
+- id: R_RAIL_LINE_08
+  name: Rail Cut
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.rail_cut
+  desc: |-
+    The ground drops away into a cut that forces you to stay on the rails.
+    If an event hits, you will see it coming, and so will it.
+  exits:
+  - dir: back
+    to: R_RAIL_LINE_07
+    len: 1
+  - dir: ahead
+    to: R_RAIL_LINE_09
+    len: 1
+- id: R_RAIL_LINE_09
+  name: Trackside Ladder
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.trackside_ladder
+  desc: |-
+    A short maintenance ladder climbs to a signal platform that no longer works.
+    The height gives you a view and nothing else.
+  exits:
+  - dir: back
+    to: R_RAIL_LINE_08
+    len: 1
+  - dir: ahead
+    to: R_RAIL_LINE_10
+    len: 1
+- id: R_RAIL_LINE_10
+  name: Cold Steel
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.cold_steel
+  desc: |-
+    The rails sweat cold in a way that makes your hands want gloves.
+    Even a calm walk here feels like trespassing.
+  exits:
+  - dir: back
+    to: R_RAIL_LINE_09
+    len: 1
+  - dir: ahead
+    to: R_RAIL_LINE_11
+    len: 1
+- id: R_RAIL_LINE_11
+  name: Graffiti Milepost
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.graffiti_milepost
+  desc: |-
+    A milepost is covered in fast marker: arrows, warnings, and one big word: RUN.
+    Someone tried to teach survival with handwriting.
+  exits:
+  - dir: back
+    to: R_RAIL_LINE_10
+    len: 1
+  - dir: ahead
+    to: R_RAIL_LINE_12
+    len: 1
+- id: R_RAIL_LINE_12
+  name: Signal Mast Walk
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.signal_mast_walk
+  desc: |-
+    A dead signal mast looms over the track, lens cracked and dark.
+    The straight lane makes distance readable and danger honest.
+  exits:
+  - dir: back
+    to: R_RAIL_LINE_11
+    len: 1
+  - dir: ahead
+    to: R_RAIL_LINE_13
+    len: 1
+- id: R_RAIL_LINE_13
+  name: Cracked Tie Bridge
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.cracked_tie_bridge
+  desc: |-
+    The ties here are cracked and patched with scrap straps and stubborn bolts.
+    The whole section vibrates when something heavy moves nearby.
+  exits:
+  - dir: back
+    to: R_RAIL_LINE_12
+    len: 1
+  - dir: ahead
+    to: R_RAIL_LINE_14
+    len: 1
+- id: R_RAIL_LINE_14
+  name: Gravel Choke
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.gravel_choke
+  desc: |-
+    Loose gravel piles into a choke that steals traction mid-fight.
+    If you get pressured here, back up into cleaner ground.
+  exits:
+  - dir: back
+    to: R_RAIL_LINE_13
+    len: 1
+  - dir: ahead
+    to: R_RAIL_LINE_15
+    len: 1
+- id: R_RAIL_LINE_15
+  name: Chainlink Gap
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.chainlink_gap
+  desc: |-
+    A torn chainlink fence flaps beside the track like a broken flag.
+    The gap makes a tempting shortcut that is not actually safer.
+  exits:
+  - dir: back
+    to: R_RAIL_LINE_14
+    len: 1
+  - dir: ahead
+    to: R_RAIL_LINE_16
+    len: 1
+- id: R_RAIL_LINE_16
+  name: Maintenance Hatch
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.maintenance_hatch
+  desc: |-
+    A maintenance hatch sits flush with the ground, bolts rusted into place.
+    The metal smells like old rain and machine oil.
+  exits:
+  - dir: back
+    to: R_RAIL_LINE_15
+    len: 1
+  - dir: ahead
+    to: R_RAIL_LINE_17
+    len: 1
+- id: R_RAIL_LINE_17
+  name: Tremor Plate
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.tremor_plate
+  desc: |-
+    A steel plate spans a gap in the ballast and hums when you step on it.
+    If something heavy is moving, you feel it here first.
+  exits:
+  - dir: back
+    to: R_RAIL_LINE_16
+    len: 1
+  - dir: ahead
+    to: R_RAIL_LINE_18
+    len: 1
+- id: R_RAIL_LINE_18
+  name: Wind Rail
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.wind_rail
+  desc: |-
+    Wind runs along the rails and turns them into a low, constant note.
+    It feels like the whole line is tuned to warn you.
+  exits:
+  - dir: back
+    to: R_RAIL_LINE_17
+    len: 1
+  - dir: ahead
+    to: R_RAIL_LINE_19
+    len: 1
+- id: R_RAIL_LINE_19
+  name: Rust Signal Plate
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.rust_signal_plate
+  desc: |-
+    A rusted signal plate lies on the ground with arrows punched through it.
+    It points nowhere reliable, but it makes you look up.
+  exits:
+  - dir: back
+    to: R_RAIL_LINE_18
+    len: 1
+  - dir: ahead
+    to: R_RAIL_LINE_20
+    len: 1
+- id: R_RAIL_LINE_20
+  name: Long Sightline
+  cluster: CL_RAIL_LINE
+  tags:
+  - landmark.long_sightline
+  desc: |-
+    A straight, exposed stretch where the line feels like a runway.
+    If an event hits, you will see it coming, and you should already be moving.
+  exits:
+  - dir: back
+    to: R_RAIL_LINE_19
+    len: 1
+  - dir: ahead
+    to: R_RAIL_LINE_01
+    len: 1
+- id: R_RAIL_TERMINAL_03
+  name: Timetable Rotunda
+  cluster: CL_RAIL_TERMINAL
+  tags:
+  - landmark.rail_spur.terminal
+  desc: |-
+    A circular hall with a cracked timetable board bolted to the wall.
+    The board insists everything is "on time" in fading stencil.
+  exits:
+  - dir: back
+    to: R_RAIL_TERM_01
+    len: 1
+  - dir: ahead
+    to: R_RAIL_TERMINAL_04
+    len: 1
+- id: R_RAIL_TERMINAL_04
+  name: Ticket Hall
+  cluster: CL_RAIL_TERMINAL
+  tags:
+  - landmark.rail_spur.terminal
+  desc: |-
+    A long counter sits behind thick glass, abandoned but spotless.
+    A hand-written note on the glass reads: "ASK NICELY ANYWAY."
+  exits:
+  - dir: back
+    to: R_RAIL_TERMINAL_03
+    len: 1
+  - dir: ahead
+    to: R_RAIL_TERMINAL_05
+    len: 1
+- id: R_RAIL_TERMINAL_05
+  name: Lost-And-Found Cages
+  cluster: CL_RAIL_TERMINAL
+  tags:
+  - landmark.rail_spur.terminal
+  desc: |-
+    Wire cages hold umbrellas, gloves, and unclaimed tokens stamped with old dates.
+    Most labels are gone, like someone wanted the past to stay anonymous.
+  exits:
+  - dir: back
+    to: R_RAIL_TERMINAL_04
+    len: 1
+  - dir: ahead
+    to: R_RAIL_TERMINAL_06
+    len: 1
+- id: R_RAIL_TERMINAL_06
+  name: Staff Breakroom
+  cluster: CL_RAIL_TERMINAL
+  tags:
+  - landmark.rail_spur.terminal
+  desc: |-
+    A dented kettle and a stack of paper cups sit beneath a stopped wall clock.
+    The air smells faintly of machine oil and stale sugar.
+  exits:
+  - dir: back
+    to: R_RAIL_TERMINAL_05
+    len: 1
+  - dir: ahead
+    to: R_RAIL_TERMINAL_07
+    len: 1
+- id: R_RAIL_TERMINAL_07
+  name: Pass Printer Alcove
+  cluster: CL_RAIL_TERMINAL
+  tags:
+  - landmark.rail_spur.terminal
+  desc: |-
+    A battered machine sits in a recess, slot lights dark but stubbornly intact.
+    A tray beneath it is full of torn stubs and rejected passes.
+  exits:
+  - dir: back
+    to: R_RAIL_TERMINAL_06
+    len: 1
+  - dir: ahead
+    to: R_RAIL_TERMINAL_08
+    len: 1
+- id: R_RAIL_TERMINAL_08
+  name: Maintenance Desk
+  cluster: CL_RAIL_TERMINAL
+  tags:
+  - landmark.rail_spur.terminal
+  desc: |-
+    A workbench is littered with bolts, wire ties, and a hand-drawn switch diagram.
+    A tiny radio keeps cycling static like it is waiting for permission to speak.
+  exits:
+  - dir: back
+    to: R_RAIL_TERMINAL_07
+    len: 1
+  - dir: ahead
+    to: R_RAIL_TERMINAL_09
+    len: 1
+- id: R_RAIL_TERMINAL_09
+  name: Cargo Scale
+  cluster: CL_RAIL_TERMINAL
+  tags:
+  - landmark.rail_spur.terminal
+  desc: |-
+    A floor scale is set into the concrete, painted lines worn down to ghosts.
+    The dial is scratched up from being argued with.
+  exits:
+  - dir: back
+    to: R_RAIL_TERMINAL_08
+    len: 1
+  - dir: ahead
+    to: R_RAIL_TERMINAL_10
+    len: 1
+- id: R_RAIL_TERMINAL_10
+  name: Buffer Stop Window
+  cluster: CL_RAIL_TERMINAL
+  tags:
+  - landmark.rail_spur.terminal
+  desc: |-
+    A reinforced window looks down the last meters of track into the terminal.
+    The buffer stop is scarred and polished by impacts that should not have happened.
+  exits:
+  - dir: back
+    to: R_RAIL_TERMINAL_09
+    len: 1
+  - dir: ahead
+    to: R_RAIL_TERMINAL_11
+    len: 1
+- id: R_RAIL_TERMINAL_11
+  name: Relay Closet
+  cluster: CL_RAIL_TERMINAL
+  tags:
+  - landmark.rail_spur.terminal
+  desc: |-
+    A cramped closet of labeled relays and tangled cable runs.
+    The labels are careful and old: someone once cared about making this legible.
+  exits:
+  - dir: back
+    to: R_RAIL_TERMINAL_10
+    len: 1
+  - dir: ahead
+    to: R_RAIL_TERMINAL_12
+    len: 1
+- id: R_RAIL_TERMINAL_12
+  name: Signal Power Room
+  cluster: CL_RAIL_TERMINAL
+  tags:
+  - landmark.rail_spur.terminal
+  desc: |-
+    A bank of breakers sits behind mesh, each switch tagged with a hand-written warning.
+    The air is warmer here, like the building is still trying.
+  exits:
+  - dir: back
+    to: R_RAIL_TERMINAL_11
+    len: 1
+  - dir: ahead
+    to: R_RAIL_TERMINAL_13
+    len: 1
+- id: R_RAIL_TERMINAL_13
+  name: Platform Edge
+  cluster: CL_RAIL_TERMINAL
+  tags:
+  - landmark.rail_spur.terminal
+  desc: |-
+    A platform lip runs alongside the spur, paint flaking off the safety stripe.
+    The rails outside look like a promise and a threat in the same line.
+  exits:
+  - dir: back
+    to: R_RAIL_TERMINAL_12
+    len: 1
+  - dir: ahead
+    to: R_RAIL_TERMINAL_14
+    len: 1
+- id: R_RAIL_TERMINAL_14
+  name: Battered Ticket Booth
+  cluster: CL_RAIL_TERMINAL
+  tags:
+  - landmark.rail_spur.terminal
+  desc: |-
+    A small booth with a metal slot and a stool bolted to the floor.
+    The glass is spiderwebbed, but the latch still clicks like it has standards.
+  exits:
+  - dir: back
+    to: R_RAIL_TERMINAL_13
+    len: 1
+  - dir: ahead
+    to: R_RAIL_TERM_01
+    len: 1
+- id: R_RAIL_YARD_01
+  name: Switchyard Throat
+  cluster: CL_RAIL_YARDS
+  tags:
+  - landmark.rail_spur.yards
+  desc: |-
+    Multiple rails converge here, lips shining where wheels keep biting.
+    The ballast is full of dropped fasteners and old footprints.
+  exits:
+  - dir: back
+    to: R_RAIL_EVENT_01
+    len: 1
+  - dir: ahead
+    to: R_RAIL_YARD_02
+    len: 1
+- id: R_RAIL_YARD_02
+  name: Tie Stack Row
+  cluster: CL_RAIL_YARDS
+  tags:
+  - landmark.rail_spur.yards
+  desc: |-
+    Stacks of spare ties are piled like crude barricades.
+    The wood smells sharp and chemical, built to outlast the people using it.
+  exits:
+  - dir: back
+    to: R_RAIL_YARD_01
+    len: 1
+  - dir: ahead
+    to: R_RAIL_YARD_03
+    len: 1
+- id: R_RAIL_YARD_03
+  name: Bent Signal Post
+  cluster: CL_RAIL_YARDS
+  tags:
+  - landmark.rail_spur.yards
+  desc: |-
+    A signal post leans off true, bracket bolts replaced with mismatched hardware.
+    Rails split and rejoin around it; angles and cover start to matter.
+  exits:
+  - dir: back
+    to: R_RAIL_YARD_02
+    len: 1
+  - dir: ahead
+    to: R_RAIL_YARD_04
+    len: 1
+- id: R_RAIL_YARD_04
+  name: Switch Lever Stand
+  cluster: CL_RAIL_YARDS
+  tags:
+  - landmark.rail_spur.yards
+  - setpiece.e17.lever_1
+  desc: |-
+    A waist-high lever stand sits between two branching spurs, handle worn smooth.
+    The switch points are visible from here, ready to betray bad timing.
+    (try: pull lever)
+  exits:
+  - dir: back
+    to: R_RAIL_YARD_03
+    len: 1
+  - dir: ahead
+    to: R_RAIL_YARD_05
+    len: 1
+- id: R_RAIL_YARD_05
+  name: Derail Spur
+  cluster: CL_RAIL_YARDS
+  tags:
+  - landmark.rail_spur.yards
+  desc: |-
+    A short spur ends in a deliberate derail hump, built to throw runaway carts off.
+    Someone painted a skull on the end post, just in case.
+  exits:
+  - dir: back
+    to: R_RAIL_YARD_04
+    len: 1
+  - dir: ahead
+    to: R_RAIL_YARD_06
+    len: 1
+- id: R_RAIL_YARD_06
+  name: Gravel Island
+  cluster: CL_RAIL_YARDS
+  tags:
+  - landmark.rail_spur.yards
+  desc: |-
+    A raised island of crushed rock breaks the yard into lanes.
+    It is enough to hide behind, not enough to feel safe.
+  exits:
+  - dir: back
+    to: R_RAIL_YARD_05
+    len: 1
+  - dir: ahead
+    to: R_RAIL_YARD_07
+    len: 1
+- id: R_RAIL_YARD_07
+  name: Oil Drum Shade
+  cluster: CL_RAIL_YARDS
+  tags:
+  - landmark.rail_spur.yards
+  desc: |-
+    A cluster of dented oil drums sits under a sheet-metal lean-to.
+    The ground is dark here, smelling like old grease and rain.
+  exits:
+  - dir: back
+    to: R_RAIL_YARD_06
+    len: 1
+  - dir: ahead
+    to: R_RAIL_YARD_08
+    len: 1
+- id: R_RAIL_YARD_08
+  name: Deadman Switch
+  cluster: CL_RAIL_YARDS
+  tags:
+  - landmark.rail_spur.yards
+  - setpiece.e17.lever_2
+  desc: |-
+    A deadman switch box sits on a post with a broken seal and a warning tag.
+    It looks like it used to stop things, before it started being ignored.
+    (try: pull lever)
+  exits:
+  - dir: back
+    to: R_RAIL_YARD_07
+    len: 1
+  - dir: ahead
+    to: R_RAIL_YARD_09
+    len: 1
+- id: R_RAIL_YARD_09
+  name: Brake Shoe Bin
+  cluster: CL_RAIL_YARDS
+  tags:
+  - landmark.rail_spur.yards
+  desc: |-
+    A heavy bin holds worn brake shoes and twisted metal straps.
+    The pile clinks when the wind hits it, like it wants attention.
+  exits:
+  - dir: back
+    to: R_RAIL_YARD_08
+    len: 1
+  - dir: ahead
+    to: R_RAIL_YARD_10
+    len: 1
+- id: R_RAIL_YARD_10
+  name: Chain Fence Bend
+  cluster: CL_RAIL_YARDS
+  tags:
+  - landmark.rail_spur.yards
+  desc: |-
+    A chain fence bends around the yard edge, patched with wire and stubbornness.
+    You can hear the terminal beyond it, muffled and safe-sounding.
+  exits:
+  - dir: back
+    to: R_RAIL_YARD_09
+    len: 1
+  - dir: ahead
+    to: R_RAIL_YARD_11
+    len: 1
+- id: R_RAIL_YARD_11
+  name: Weed-Choked Siding
+  cluster: CL_RAIL_YARDS
+  tags:
+  - landmark.rail_spur.yards
+  desc: |-
+    A siding line disappears into weeds that somehow survive the ballast.
+    Old cans and torn gloves have been kicked into the growth like offerings.
+  exits:
+  - dir: back
+    to: R_RAIL_YARD_10
+    len: 1
+  - dir: ahead
+    to: R_RAIL_YARD_12
+    len: 1
+- id: R_RAIL_YARD_12
+  name: Ballast Ridge
+  cluster: CL_RAIL_YARDS
+  tags:
+  - landmark.rail_spur.yards
+  desc: |-
+    A ridge of ballast rises between the lines like a crude spine.
+    It gives you a better view and nowhere to hide.
+  exits:
+  - dir: back
+    to: R_RAIL_YARD_11
+    len: 1
+  - dir: ahead
+    to: R_RAIL_YARD_13
+    len: 1
+- id: R_RAIL_YARD_13
+  name: Service Pit
+  cluster: CL_RAIL_YARDS
+  tags:
+  - landmark.rail_spur.yards
+  desc: |-
+    A shallow pit for undercarriage work runs alongside a short spur.
+    The tools are gone, but the stained concrete remembers the jobs.
+  exits:
+  - dir: back
+    to: R_RAIL_YARD_12
+    len: 1
+  - dir: ahead
+    to: R_RAIL_YARD_14
+    len: 1
+- id: R_RAIL_YARD_14
+  name: Yard Buffer Stop
+  cluster: CL_RAIL_YARDS
+  tags:
+  - landmark.rail_spur.yards
+  desc: |-
+    A final spur ends at a battered buffer stop and a scatter of impact marks.
+    Something big hit here once and left fast.
+  exits:
+  - dir: back
+    to: R_RAIL_YARD_13
+    len: 1
+  - dir: ahead
+    to: R_RAIL_EVENT_01
+    len: 1

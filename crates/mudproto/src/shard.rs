@@ -87,12 +87,18 @@ pub fn parse_req(p: Bytes) -> Result<ShardReq, ProtoError> {
             let mut i = 1 + 16 + 1;
             let auth = if has_auth {
                 if p.len() < i + 2 {
-                    return Err(ProtoError::TooShort { need: i + 2, got: p.len() });
+                    return Err(ProtoError::TooShort {
+                        need: i + 2,
+                        got: p.len(),
+                    });
                 }
                 let len = u16::from_be_bytes([p[i], p[i + 1]]) as usize;
                 i += 2;
                 if p.len() < i + len {
-                    return Err(ProtoError::TooShort { need: i + len, got: p.len() });
+                    return Err(ProtoError::TooShort {
+                        need: i + len,
+                        got: p.len(),
+                    });
                 }
                 let a = p.slice(i..i + len);
                 i += len;
@@ -102,7 +108,10 @@ pub fn parse_req(p: Bytes) -> Result<ShardReq, ProtoError> {
             };
             let (race, class, sex, pronouns) = if has_build {
                 if p.len() < i + 1 {
-                    return Err(ProtoError::TooShort { need: i + 1, got: p.len() });
+                    return Err(ProtoError::TooShort {
+                        need: i + 1,
+                        got: p.len(),
+                    });
                 }
                 let rlen = p[i] as usize;
                 i += 1;
@@ -137,7 +146,10 @@ pub fn parse_req(p: Bytes) -> Result<ShardReq, ProtoError> {
                 let plen = p[i] as usize;
                 i += 1;
                 if p.len() < i + plen {
-                    return Err(ProtoError::TooShort { need: i + plen, got: p.len() });
+                    return Err(ProtoError::TooShort {
+                        need: i + plen,
+                        got: p.len(),
+                    });
                 }
                 let pronouns = p.slice(i..i + plen);
                 i += plen;

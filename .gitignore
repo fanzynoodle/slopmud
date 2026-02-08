@@ -29,3 +29,12 @@
 
 # Local coordination (not committed)
 /locks/**/*.lock
+/locks/nearline_scrollback/
+/locks/nearline_scrollback/**
+
+# Local runtime state (not committed)
+/var/
+/var/**
+
+# Local auth db (not committed)
+accounts.json

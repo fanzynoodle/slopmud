@@ -26,6 +26,7 @@ HTTPS_BIND="${HTTPS_BIND:-}"
 TLS_CERT="${TLS_CERT:-}"
 TLS_KEY="${TLS_KEY:-}"
 SESSION_TCP_ADDR="${SESSION_TCP_ADDR:-}"
+WEB_SERVICE_NAME="${WEB_SERVICE_NAME:-slopmud-web}"
 
 ssh_opts=(-o StrictHostKeyChecking=accept-new)
 ssh_port_opt=(-p "$SSH_PORT")
@@ -112,20 +113,23 @@ CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 WantedBy=multi-user.target
 EOF
 
-echo "Installing systemd unit (slopmud-web) + stopping nginx if present"
-scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$tmp_unit" "${SSH_USER}@${HOST}:/tmp/slopmud-web.service"
+unit_name="${WEB_SERVICE_NAME}.service"
+
+echo "Installing systemd unit (${WEB_SERVICE_NAME}) + stopping nginx if present"
+scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$tmp_unit" "${SSH_USER}@${HOST}:/tmp/${unit_name}"
 ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
   set -euo pipefail; \
-  sudo mv /tmp/slopmud-web.service /etc/systemd/system/slopmud-web.service; \
+  sudo mv /tmp/${unit_name} /etc/systemd/system/${unit_name}; \
   sudo systemctl daemon-reload; \
   sudo systemctl disable --now nginx 2>/dev/null || true; \
-  sudo systemctl enable --now slopmud-web; \
-  sudo systemctl restart slopmud-web; \
-  sudo systemctl --no-pager --full status slopmud-web || true \
+  sudo systemctl enable --now ${WEB_SERVICE_NAME}; \
+  sudo systemctl restart ${WEB_SERVICE_NAME}; \
+  sudo systemctl --no-pager --full status ${WEB_SERVICE_NAME} || true \
 "
 
-echo "Smoke test (direct IP, Host header = ${DOMAIN})"
-curl -fsSL -H "Host: ${DOMAIN}" "http://${HOST}/" | sed -n '1,25p'
+http_port="${HTTP_BIND##*:}"
+echo "Smoke test (direct IP, Host header = ${DOMAIN}, port = ${http_port})"
+curl -fsSL -H "Host: ${DOMAIN}" "http://${HOST}:${http_port}/" | sed -n '1,25p'
 
 echo "Health check"
-curl -fsSL -H "Host: ${DOMAIN}" "http://${HOST}/healthz" || true
+curl -fsSL -H "Host: ${DOMAIN}" "http://${HOST}:${http_port}/healthz" || true

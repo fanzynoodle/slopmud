@@ -102,9 +102,10 @@ fn parse_cfg() -> anyhow::Result<Config> {
         .map_err(|_| anyhow::anyhow!("bad OIDC_BIND"))?;
     let issuer = std::env::var("OIDC_ISSUER").unwrap_or_else(|_| format!("http://{bind}"));
 
-    let client_id = std::env::var("OIDC_CLIENT_ID").map_err(|_| anyhow::anyhow!("missing OIDC_CLIENT_ID"))?;
-    let client_secret =
-        std::env::var("OIDC_CLIENT_SECRET").map_err(|_| anyhow::anyhow!("missing OIDC_CLIENT_SECRET"))?;
+    let client_id =
+        std::env::var("OIDC_CLIENT_ID").map_err(|_| anyhow::anyhow!("missing OIDC_CLIENT_ID"))?;
+    let client_secret = std::env::var("OIDC_CLIENT_SECRET")
+        .map_err(|_| anyhow::anyhow!("missing OIDC_CLIENT_SECRET"))?;
 
     let token_ttl_s: u64 = std::env::var("OIDC_TOKEN_TTL_S")
         .ok()
@@ -118,7 +119,10 @@ fn parse_cfg() -> anyhow::Result<Config> {
             .or_else(|_| base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(s))
             .context("OIDC_ED25519_SEED_B64 base64 decode (standard or urlsafe)")?;
         if raw.len() != 32 {
-            anyhow::bail!("OIDC_ED25519_SEED_B64 must decode to 32 bytes, got {}", raw.len());
+            anyhow::bail!(
+                "OIDC_ED25519_SEED_B64 must decode to 32 bytes, got {}",
+                raw.len()
+            );
         }
         let mut s = [0u8; 32];
         s.copy_from_slice(&raw);
@@ -132,7 +136,9 @@ fn parse_cfg() -> anyhow::Result<Config> {
     } else {
         let mut seed = [0u8; 32];
         getrandom::getrandom(&mut seed).map_err(|e| anyhow::anyhow!("getrandom: {e:?}"))?;
-        warn!("OIDC_ED25519_SEED_B64 not set; using ephemeral signing key (tokens won't survive restarts)");
+        warn!(
+            "OIDC_ED25519_SEED_B64 not set; using ephemeral signing key (tokens won't survive restarts)"
+        );
         SigningKey::from_bytes(&seed)
     };
 
@@ -172,7 +178,9 @@ fn basic_auth(headers: &HeaderMap) -> Option<(String, String)> {
     let h = headers.get(axum::http::header::AUTHORIZATION)?;
     let s = h.to_str().ok()?;
     let s = s.strip_prefix("Basic ")?;
-    let raw = base64::engine::general_purpose::STANDARD.decode(s.as_bytes()).ok()?;
+    let raw = base64::engine::general_purpose::STANDARD
+        .decode(s.as_bytes())
+        .ok()?;
     let raw = String::from_utf8(raw).ok()?;
     let (u, p) = raw.split_once(':')?;
     Some((u.to_string(), p.to_string()))
@@ -251,7 +259,9 @@ async fn token(
 
     let jwt = match jsonwebtoken::encode(&header, &claims, &key) {
         Ok(s) => s,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "token encode failed\n").into_response(),
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "token encode failed\n").into_response();
+        }
     };
 
     Json(TokenResp {

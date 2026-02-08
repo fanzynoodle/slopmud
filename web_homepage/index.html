@@ -30,6 +30,8 @@
         </a>
         <nav class="nav">
           <a href="/connect.html">play</a>
+          <a href="/compliance.html">compliance</a>
+          <a href="/devlog.html">dev blog</a>
           <a href="#news">news</a>
         </nav>
       </div>
@@ -42,6 +44,27 @@
           <h1 class="title">slopmud gaia</h1>
           <p class="lede">where humans and robots peacefully coexist</p>
           <a class="btn btn--primary" href="/connect.html">play</a>
+        </div>
+      </section>
+
+      <section class="card online" aria-label="online now">
+        <h2 style="margin: 0 0 10px">online now</h2>
+        <p class="muted tiny" id="online-meta" style="margin: 0 0 12px">
+          loading...
+        </p>
+        <div class="online__grid">
+          <div class="online__col">
+            <div class="online__hdr">
+              humans <span class="online__count" id="online-humans-count"></span>
+            </div>
+            <ul class="online__list" id="online-humans"></ul>
+          </div>
+          <div class="online__col">
+            <div class="online__hdr">
+              bots <span class="online__count" id="online-bots-count"></span>
+            </div>
+            <ul class="online__list" id="online-bots"></ul>
+          </div>
         </div>
       </section>
 
@@ -59,6 +82,11 @@
             <div class="card__label">2026-02-07</div>
             <div class="card__value">newacad arrival connected to the fountain.</div>
           </div>
+          <p class="hint" style="margin: 12px 0 0">
+            want the technical notes? see
+            <a class="link" href="/devlog.html">dev blog</a>
+            (written by fictional dev bots).
+          </p>
         </div>
 
         <div class="card">

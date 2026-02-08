@@ -4,6 +4,15 @@ This doc assigns cartesian coordinates to **area entrances/exits** and defines a
 
 Later, when we enforce movement points, these lengths become the authoritative travel cost for "overworld" transitions. Normal room-to-room movement inside zones remains cost 1 unless explicitly overridden.
 
+## Workflow (Source Of Truth)
+
+`world/overworld.yaml` and `world/overworld_pairs.tsv` are generated from this doc.
+
+After editing this file:
+
+- Regenerate: `just overworld-export`
+- Validate: `just overworld-validate` (or `just world-validate`)
+
 ## Units
 
 - Coordinate unit: arbitrary planning unit (integer grid).

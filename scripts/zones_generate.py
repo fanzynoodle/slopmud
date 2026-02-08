@@ -33,10 +33,13 @@ def err(msg: str) -> None:
     sys.stderr.write(msg.rstrip() + "\n")
 
 
-_LEVEL_ROOMS_RE = re.compile(r"\(L(\d+)-(\d+),\s*(\d+)\s+rooms\)")
+# Examples:
+#   "### Newbie School (L1-L2, 50 rooms)"
+#   "### Factory District (Outskirts) (L7-L10, 120 rooms)"
+_LEVEL_ROOMS_RE = re.compile(r"\(L(\d+)\s*-\s*L(\d+),\s*(\d+)\s+rooms\)")
 
 
-def load_zone_beats() -> dict[str, dict]:
+def load_zone_beats(path: Path) -> dict[str, dict]:
     """
     Parse `docs/zone_beats.md` into:
       zone_name -> { level_band: [min,max] | None, target_rooms: int | None, clusters: [CL_*] }
@@ -44,7 +47,7 @@ def load_zone_beats() -> dict[str, dict]:
     This intentionally stays lightweight and table-driven (cluster IDs are the source of truth).
     """
 
-    text = ZONE_BEATS_MD.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8")
 
     zone_name: str | None = None
     out: dict[str, dict] = {}
@@ -52,8 +55,9 @@ def load_zone_beats() -> dict[str, dict]:
     for line in text.splitlines():
         if line.startswith("### "):
             title = line[len("### ") :].strip()
-            # Strip trailing "(...)" from the visible zone name.
-            zone_name = re.sub(r"\s*\(.*\)\s*$", "", title).strip()
+            # Strip only the trailing "(...)" budget trailer, preserving any parentheses
+            # that are part of the zone's name (e.g. "Factory District (Outskirts)").
+            zone_name = re.sub(r"\s*\([^()]*\)\s*$", "", title).strip()
             out.setdefault(zone_name, {"level_band": None, "target_rooms": None, "clusters": []})
 
             m = _LEVEL_ROOMS_RE.search(title)
@@ -122,10 +126,7 @@ def main(argv: list[str]) -> int:
         err("error: no zones found in overworld.yaml")
         return 2
 
-    # Allow caller to override paths via args, but keep single-source parsing.
-    global ZONE_BEATS_MD  # noqa: PLW0603 - intentional: reuse helper with new path
-    ZONE_BEATS_MD = Path(args.zone_beats)
-    beats = load_zone_beats()
+    beats = load_zone_beats(Path(args.zone_beats))
 
     if args.all:
         zone_ids = list(zone_by_id.keys())
@@ -187,4 +188,3 @@ def main(argv: list[str]) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(__import__('sys').argv[1:]))
-

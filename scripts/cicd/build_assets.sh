@@ -11,6 +11,15 @@ clean_build="${CLEAN_BUILD:-0}"
 assets_root="${ASSETS_ROOT:-assets}"
 sha="${GITHUB_SHA:-}"
 
+if [[ "$track" == "staging" ]]; then
+  echo "WARN: TRACK=${track} is an alias; using TRACK=stg" >&2
+  track="stg"
+fi
+if [[ "$track" == "uat" || "$track" == "test" ]]; then
+  echo "WARN: TRACK=${track} is deprecated; using TRACK=stg" >&2
+  track="stg"
+fi
+
 if [[ -z "$sha" ]]; then
   sha="$(git rev-parse HEAD 2>/dev/null || true)"
 fi

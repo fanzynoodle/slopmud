@@ -1,0 +1,1605 @@
+version: 1
+zone_id: skybridge
+zone_name: Skybridge
+area_id: A01
+level_band:
+- 11
+- 13
+start_room: P_SKYBRIDGE_UNDERRAIL
+rooms:
+- id: P_SKYBRIDGE_UNDERRAIL
+  name: The Underrail Transfer
+  cluster: CL_SKY_ANCHORHOUSE
+  tags:
+  - portal.P_SKYBRIDGE_UNDERRAIL
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies The Underrail.
+  exits:
+  - dir: out
+    to: P_UNDERRAIL_SKYBRIDGE
+    len: 3
+    state: sealed
+    gate: gate.skybridge.entry
+  - dir: in
+    to: R_SKY_ANCHOR_01
+    len: 1
+- id: P_SKYBRIDGE_WASTES
+  name: Glass Wastes Transfer
+  cluster: CL_SKY_SPANS
+  tags:
+  - portal.P_SKYBRIDGE_WASTES
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies Glass Wastes.
+  exits:
+  - dir: out
+    to: P_WASTES_SKYBRIDGE
+    len: 3
+    state: sealed
+    gate: gate.glass_wastes.entry
+  - dir: in
+    to: R_SKY_ANCHOR_01
+    len: 1
+- id: R_SKY_ANCHOR_01
+  name: Skybridge Anchor
+  cluster: CL_SKY_ANCHORHOUSE
+  tags:
+  - HUB_SKYBRIDGE_ANCHORHOUSE
+  - portal.P_SKYBRIDGE_UNDERRAIL
+  - safe_pocket
+  desc: |-
+    A steel anchorhouse that hums under tension.
+    This is a safe pocket: regroup here before you step onto open spans.
+  exits:
+  - dir: underrail
+    to: P_SKYBRIDGE_UNDERRAIL
+    len: 1
+  - dir: wastes
+    to: P_SKYBRIDGE_WASTES
+    len: 1
+  - dir: north
+    to: R_SKY_SPAN_01
+    len: 1
+  - dir: east
+    to: R_SKY_SPAN_02
+    len: 1
+  - dir: west
+    to: R_SKY_SPAN_03
+    len: 1
+  - dir: south
+    to: R_SKY_MARSHAL_GATE_01
+    len: 1
+    state: sealed
+    gate: q.q10_anchor_wind.anchors_repaired>=3
+  - dir: wander_anchorhouse
+    to: R_SKY_ANCHORHOUSE_01
+    len: 1
+- id: R_SKY_SPAN_01
+  name: Span Walk
+  cluster: CL_SKY_SPANS
+  tags:
+  - portal.P_SKYBRIDGE_WASTES
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: south
+    to: R_SKY_ANCHOR_01
+    len: 1
+  - dir: north
+    to: R_SKY_A1_01
+    len: 1
+- id: R_SKY_A1_01
+  name: Anchorhouse
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - setpiece.q10.anchor_1
+  desc: |-
+    A steel anchorhouse that hums under tension.
+    If this fails, the spans stop being spans.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_01
+    len: 1
+  - dir: wander_anchor
+    to: R_SKY_ANCHOR_02
+    len: 1
+- id: R_SKY_MARSHAL_01
+  name: Skybridge Path
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - setpiece.q10.wind_marshal_span
+  desc: |-
+    High air, long sightlines, and constant wind.
+    Movement matters as much as damage.
+  exits:
+  - dir: north
+    to: R_SKY_REWARD_01
+    len: 1
+  - dir: south
+    to: R_SKY_MARSHAL_GATE_01
+    len: 1
+  - dir: wander_marshal
+    to: R_SKY_MARSHAL_02
+    len: 1
+- id: R_SKY_MARSHAL_GATE_01
+  name: Marshal Span Gate
+  cluster: CL_SKY_ANCHORHOUSE
+  tags: []
+  desc: |-
+    A gate mechanism built for one purpose: to keep the spans from becoming a massacre.
+    A counter display reads ANCHORS: 0/3.
+  exits:
+  - dir: north
+    to: R_SKY_ANCHOR_01
+    len: 1
+  - dir: south
+    to: R_SKY_MARSHAL_01
+    len: 1
+- id: R_SKY_REWARD_01
+  name: Route Token Desk
+  cluster: CL_SKY_ANCHORHOUSE
+  tags: []
+  desc: |-
+    A desk with a stamped token slot and a wind-battered board of routes.
+    The wasteland route is listed as CLOSED until someone makes it true.
+  exits:
+  - dir: north
+    to: R_SKY_ANCHOR_01
+    len: 1
+- id: R_SKY_ANCHORHOUSE_01
+  name: Bolt Room
+  cluster: CL_SKY_ANCHORHOUSE
+  tags:
+  - landmark.skybridge.anchorhouse
+  desc: |-
+    Bolts, chains, and wind that never fully rests.
+    This is a hub for dangerous travel.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHOR_01
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHORHOUSE_02
+    len: 1
+- id: R_SKY_ANCHORHOUSE_02
+  name: Anchorhouse
+  cluster: CL_SKY_ANCHORHOUSE
+  tags:
+  - landmark.skybridge.anchorhouse
+  desc: |-
+    A steel anchorhouse that hums under tension.
+    If this fails, the spans stop being spans.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHORHOUSE_01
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHORHOUSE_03
+    len: 1
+- id: R_SKY_ANCHORHOUSE_03
+  name: Winch Bay
+  cluster: CL_SKY_ANCHORHOUSE
+  tags:
+  - landmark.skybridge.anchorhouse
+  desc: |-
+    Bolts, chains, and wind that never fully rests.
+    This is a hub for dangerous travel.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHORHOUSE_02
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHORHOUSE_04
+    len: 1
+- id: R_SKY_ANCHORHOUSE_04
+  name: Chain Deck
+  cluster: CL_SKY_ANCHORHOUSE
+  tags:
+  - landmark.skybridge.anchorhouse
+  desc: |-
+    A steel anchorhouse that hums under tension.
+    If this fails, the spans stop being spans.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHORHOUSE_03
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHORHOUSE_05
+    len: 1
+- id: R_SKY_ANCHORHOUSE_05
+  name: Bolt Room
+  cluster: CL_SKY_ANCHORHOUSE
+  tags:
+  - landmark.skybridge.anchorhouse
+  desc: |-
+    Bolts, chains, and wind that never fully rests.
+    This is a hub for dangerous travel.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHORHOUSE_04
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHORHOUSE_06
+    len: 1
+- id: R_SKY_ANCHORHOUSE_06
+  name: Bolt Room
+  cluster: CL_SKY_ANCHORHOUSE
+  tags:
+  - landmark.skybridge.anchorhouse
+  desc: |-
+    Bolts, chains, and wind that never fully rests.
+    This is a hub for dangerous travel.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHORHOUSE_05
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHORHOUSE_07
+    len: 1
+- id: R_SKY_ANCHORHOUSE_07
+  name: Chain Deck
+  cluster: CL_SKY_ANCHORHOUSE
+  tags:
+  - landmark.skybridge.anchorhouse
+  desc: |-
+    A steel anchorhouse that hums under tension.
+    If this fails, the spans stop being spans.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHORHOUSE_06
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHORHOUSE_08
+    len: 1
+- id: R_SKY_ANCHORHOUSE_08
+  name: Bolt Room
+  cluster: CL_SKY_ANCHORHOUSE
+  tags:
+  - landmark.skybridge.anchorhouse
+  desc: |-
+    Bolts, chains, and wind that never fully rests.
+    This is a hub for dangerous travel.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHORHOUSE_07
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHOR_01
+    len: 1
+- id: R_SKY_ANCHOR_02
+  name: Bolt Room
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - landmark.skybridge.anchors
+  desc: |-
+    Bolts, chains, and wind that never fully rests.
+    This is a hub for dangerous travel.
+  exits:
+  - dir: back
+    to: R_SKY_A1_01
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHOR_03
+    len: 1
+- id: R_SKY_ANCHOR_03
+  name: Chain Deck
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - landmark.skybridge.anchors
+  desc: |-
+    A steel anchorhouse that hums under tension.
+    If this fails, the spans stop being spans.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHOR_02
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHOR_04
+    len: 1
+- id: R_SKY_ANCHOR_04
+  name: Winch Bay
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - landmark.skybridge.anchors
+  desc: |-
+    Bolts, chains, and wind that never fully rests.
+    This is a hub for dangerous travel.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHOR_03
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHOR_05
+    len: 1
+- id: R_SKY_ANCHOR_05
+  name: Bolt Room
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - landmark.skybridge.anchors
+  desc: |-
+    Bolts, chains, and wind that never fully rests.
+    This is a hub for dangerous travel.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHOR_04
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHOR_06
+    len: 1
+- id: R_SKY_ANCHOR_06
+  name: Chain Deck
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - landmark.skybridge.anchors
+  desc: |-
+    A steel anchorhouse that hums under tension.
+    If this fails, the spans stop being spans.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHOR_05
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHOR_07
+    len: 1
+- id: R_SKY_ANCHOR_07
+  name: Chain Deck
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - landmark.skybridge.anchors
+  desc: |-
+    A steel anchorhouse that hums under tension.
+    If this fails, the spans stop being spans.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHOR_06
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHOR_08
+    len: 1
+- id: R_SKY_ANCHOR_08
+  name: Bolt Room
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - landmark.skybridge.anchors
+  desc: |-
+    Bolts, chains, and wind that never fully rests.
+    This is a hub for dangerous travel.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHOR_07
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHOR_09
+    len: 1
+- id: R_SKY_ANCHOR_09
+  name: Bolt Room
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - landmark.skybridge.anchors
+  desc: |-
+    Bolts, chains, and wind that never fully rests.
+    This is a hub for dangerous travel.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHOR_08
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHOR_10
+    len: 1
+- id: R_SKY_ANCHOR_10
+  name: Anchorhouse
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - landmark.skybridge.anchors
+  desc: |-
+    A steel anchorhouse that hums under tension.
+    If this fails, the spans stop being spans.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHOR_09
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHOR_11
+    len: 1
+- id: R_SKY_ANCHOR_11
+  name: Anchorhouse
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - landmark.skybridge.anchors
+  desc: |-
+    A steel anchorhouse that hums under tension.
+    If this fails, the spans stop being spans.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHOR_10
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHOR_12
+    len: 1
+- id: R_SKY_ANCHOR_12
+  name: Chain Deck
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - landmark.skybridge.anchors
+  desc: |-
+    A steel anchorhouse that hums under tension.
+    If this fails, the spans stop being spans.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHOR_11
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHOR_13
+    len: 1
+- id: R_SKY_ANCHOR_13
+  name: Winch Bay
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - landmark.skybridge.anchors
+  desc: |-
+    Bolts, chains, and wind that never fully rests.
+    This is a hub for dangerous travel.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHOR_12
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHOR_14
+    len: 1
+- id: R_SKY_ANCHOR_14
+  name: Anchorhouse
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - landmark.skybridge.anchors
+  desc: |-
+    A steel anchorhouse that hums under tension.
+    If this fails, the spans stop being spans.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHOR_13
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHOR_15
+    len: 1
+- id: R_SKY_ANCHOR_15
+  name: Bolt Room
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - landmark.skybridge.anchors
+  desc: |-
+    Bolts, chains, and wind that never fully rests.
+    This is a hub for dangerous travel.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHOR_14
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHOR_16
+    len: 1
+- id: R_SKY_ANCHOR_16
+  name: Chain Deck
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - landmark.skybridge.anchors
+  desc: |-
+    A steel anchorhouse that hums under tension.
+    If this fails, the spans stop being spans.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHOR_15
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHOR_17
+    len: 1
+- id: R_SKY_ANCHOR_17
+  name: Anchorhouse
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - landmark.skybridge.anchors
+  desc: |-
+    A steel anchorhouse that hums under tension.
+    If this fails, the spans stop being spans.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHOR_16
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHOR_18
+    len: 1
+- id: R_SKY_ANCHOR_18
+  name: Anchorhouse
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - landmark.skybridge.anchors
+  desc: |-
+    A steel anchorhouse that hums under tension.
+    If this fails, the spans stop being spans.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHOR_17
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHOR_19
+    len: 1
+- id: R_SKY_ANCHOR_19
+  name: Chain Deck
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - landmark.skybridge.anchors
+  desc: |-
+    A steel anchorhouse that hums under tension.
+    If this fails, the spans stop being spans.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHOR_18
+    len: 1
+  - dir: ahead
+    to: R_SKY_ANCHOR_20
+    len: 1
+- id: R_SKY_ANCHOR_20
+  name: Bolt Room
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - landmark.skybridge.anchors
+  desc: |-
+    Bolts, chains, and wind that never fully rests.
+    This is a hub for dangerous travel.
+  exits:
+  - dir: back
+    to: R_SKY_ANCHOR_19
+    len: 1
+  - dir: ahead
+    to: R_SKY_A1_01
+    len: 1
+- id: R_SKY_SPAN_02
+  name: Windbreak Span
+  cluster: CL_SKY_SPANS
+  tags: []
+  desc: |-
+    A longer span with windbreak panels and painted safe squares.
+    Ranged pressure feels fair here because cover is real.
+  exits:
+  - dir: west
+    to: R_SKY_ANCHOR_01
+    len: 1
+  - dir: east
+    to: R_SKY_A2_01
+    len: 1
+  - dir: secret
+    to: R_SKY_SCAFFOLD_01
+    len: 1
+- id: R_SKY_SPAN_03
+  name: Wind Cut
+  cluster: CL_SKY_SPANS
+  tags: []
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: east
+    to: R_SKY_ANCHOR_01
+    len: 1
+  - dir: west
+    to: R_SKY_A3_01
+    len: 1
+  - dir: secret
+    to: R_SKY_SCAFFOLD_01
+    len: 1
+  - dir: wander_span
+    to: R_SKY_SPAN_04
+    len: 1
+- id: R_SKY_SCAFFOLD_01
+  name: Side Scaffold
+  cluster: CL_SKY_SPANS
+  tags: []
+  desc: |-
+    A scaffold walk with better cover but tighter footing.
+    It feels like competence, not a free win.
+  exits:
+  - dir: east
+    to: R_SKY_SPAN_02
+    len: 1
+  - dir: west
+    to: R_SKY_SPAN_03
+    len: 1
+- id: R_SKY_A2_01
+  name: Anchorhouse
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - setpiece.q10.anchor_2
+  desc: |-
+    A second anchor assembly shudders on a gust cycle.
+    Repair is possible, but only if the room stays stable long enough.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_02
+    len: 1
+- id: R_SKY_A3_01
+  name: Anchorhouse
+  cluster: CL_SKY_ANCHORS
+  tags:
+  - setpiece.q10.anchor_3
+  desc: |-
+    The worst wind anchor, with rails too close for comfort.
+    Correct play is refusing to chase adds into the edge.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_03
+    len: 1
+- id: R_SKY_SPAN_04
+  name: Span Walk
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_03
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_05
+    len: 1
+- id: R_SKY_SPAN_05
+  name: Guardrail Gap
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_04
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_06
+    len: 1
+- id: R_SKY_SPAN_06
+  name: Long Sightline
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_05
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_07
+    len: 1
+- id: R_SKY_SPAN_07
+  name: Wind Cut
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_06
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_08
+    len: 1
+- id: R_SKY_SPAN_08
+  name: Wind Cut
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_07
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_09
+    len: 1
+- id: R_SKY_SPAN_09
+  name: Span Walk
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_08
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_10
+    len: 1
+- id: R_SKY_SPAN_10
+  name: Guardrail Gap
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_09
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_11
+    len: 1
+- id: R_SKY_SPAN_11
+  name: Wind Cut
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_10
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_12
+    len: 1
+- id: R_SKY_SPAN_12
+  name: Span Walk
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_11
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_13
+    len: 1
+- id: R_SKY_SPAN_13
+  name: Wind Cut
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_12
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_14
+    len: 1
+- id: R_SKY_SPAN_14
+  name: Span Walk
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_13
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_15
+    len: 1
+- id: R_SKY_SPAN_15
+  name: Guardrail Gap
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_14
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_16
+    len: 1
+- id: R_SKY_SPAN_16
+  name: Guardrail Gap
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_15
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_17
+    len: 1
+- id: R_SKY_SPAN_17
+  name: Wind Cut
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_16
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_18
+    len: 1
+- id: R_SKY_SPAN_18
+  name: Long Sightline
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_17
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_19
+    len: 1
+- id: R_SKY_SPAN_19
+  name: Long Sightline
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_18
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_20
+    len: 1
+- id: R_SKY_SPAN_20
+  name: Guardrail Gap
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_19
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_21
+    len: 1
+- id: R_SKY_SPAN_21
+  name: Wind Cut
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_20
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_22
+    len: 1
+- id: R_SKY_SPAN_22
+  name: Wind Cut
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_21
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_23
+    len: 1
+- id: R_SKY_SPAN_23
+  name: Long Sightline
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_22
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_24
+    len: 1
+- id: R_SKY_SPAN_24
+  name: Guardrail Gap
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_23
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_25
+    len: 1
+- id: R_SKY_SPAN_25
+  name: Span Walk
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_24
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_26
+    len: 1
+- id: R_SKY_SPAN_26
+  name: Long Sightline
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_25
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_27
+    len: 1
+- id: R_SKY_SPAN_27
+  name: Wind Cut
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_26
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_28
+    len: 1
+- id: R_SKY_SPAN_28
+  name: Span Walk
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_27
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_29
+    len: 1
+- id: R_SKY_SPAN_29
+  name: Guardrail Gap
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_28
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_30
+    len: 1
+- id: R_SKY_SPAN_30
+  name: Guardrail Gap
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_29
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_31
+    len: 1
+- id: R_SKY_SPAN_31
+  name: Span Walk
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_30
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_32
+    len: 1
+- id: R_SKY_SPAN_32
+  name: Wind Cut
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_31
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_33
+    len: 1
+- id: R_SKY_SPAN_33
+  name: Wind Cut
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_32
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_34
+    len: 1
+- id: R_SKY_SPAN_34
+  name: Guardrail Gap
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_33
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_35
+    len: 1
+- id: R_SKY_SPAN_35
+  name: Span Walk
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_34
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_36
+    len: 1
+- id: R_SKY_SPAN_36
+  name: Guardrail Gap
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_35
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_37
+    len: 1
+- id: R_SKY_SPAN_37
+  name: Span Walk
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_36
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_38
+    len: 1
+- id: R_SKY_SPAN_38
+  name: Wind Cut
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_37
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_39
+    len: 1
+- id: R_SKY_SPAN_39
+  name: Long Sightline
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_38
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_40
+    len: 1
+- id: R_SKY_SPAN_40
+  name: Guardrail Gap
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_39
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_41
+    len: 1
+- id: R_SKY_SPAN_41
+  name: Guardrail Gap
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_40
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_42
+    len: 1
+- id: R_SKY_SPAN_42
+  name: Long Sightline
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_41
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_43
+    len: 1
+- id: R_SKY_SPAN_43
+  name: Wind Cut
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_42
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_44
+    len: 1
+- id: R_SKY_SPAN_44
+  name: Guardrail Gap
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_43
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_45
+    len: 1
+- id: R_SKY_SPAN_45
+  name: Span Walk
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_44
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_46
+    len: 1
+- id: R_SKY_SPAN_46
+  name: Span Walk
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_45
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_47
+    len: 1
+- id: R_SKY_SPAN_47
+  name: Guardrail Gap
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_46
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_48
+    len: 1
+- id: R_SKY_SPAN_48
+  name: Long Sightline
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    Steel underfoot and open air on both sides.
+    Ranged threats feel personal here.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_47
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_49
+    len: 1
+- id: R_SKY_SPAN_49
+  name: Span Walk
+  cluster: CL_SKY_SPANS
+  tags:
+  - landmark.skybridge.spans
+  desc: |-
+    A long open span with nothing to hide behind.
+    Wind punishes indecision.
+  exits:
+  - dir: back
+    to: R_SKY_SPAN_48
+    len: 1
+  - dir: ahead
+    to: R_SKY_SPAN_01
+    len: 1
+- id: R_SKY_MARSHAL_02
+  name: Anchor Run
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - landmark.skybridge.wind_marshal
+  desc: |-
+    A narrow path above a long drop.
+    If you panic, go back the way you came.
+  exits:
+  - dir: back
+    to: R_SKY_MARSHAL_01
+    len: 1
+  - dir: ahead
+    to: R_SKY_MARSHAL_03
+    len: 1
+- id: R_SKY_MARSHAL_03
+  name: Skybridge Path
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - landmark.skybridge.wind_marshal
+  desc: |-
+    High air, long sightlines, and constant wind.
+    Movement matters as much as damage.
+  exits:
+  - dir: back
+    to: R_SKY_MARSHAL_02
+    len: 1
+  - dir: ahead
+    to: R_SKY_MARSHAL_04
+    len: 1
+- id: R_SKY_MARSHAL_04
+  name: High Deck
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - landmark.skybridge.wind_marshal
+  desc: |-
+    A narrow path above a long drop.
+    If you panic, go back the way you came.
+  exits:
+  - dir: back
+    to: R_SKY_MARSHAL_03
+    len: 1
+  - dir: ahead
+    to: R_SKY_MARSHAL_05
+    len: 1
+- id: R_SKY_MARSHAL_05
+  name: Anchor Run
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - landmark.skybridge.wind_marshal
+  desc: |-
+    A narrow path above a long drop.
+    If you panic, go back the way you came.
+  exits:
+  - dir: back
+    to: R_SKY_MARSHAL_04
+    len: 1
+  - dir: ahead
+    to: R_SKY_MARSHAL_06
+    len: 1
+- id: R_SKY_MARSHAL_06
+  name: Cable Walk
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - landmark.skybridge.wind_marshal
+  desc: |-
+    High air, long sightlines, and constant wind.
+    Movement matters as much as damage.
+  exits:
+  - dir: back
+    to: R_SKY_MARSHAL_05
+    len: 1
+  - dir: ahead
+    to: R_SKY_MARSHAL_07
+    len: 1
+- id: R_SKY_MARSHAL_07
+  name: High Deck
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - landmark.skybridge.wind_marshal
+  desc: |-
+    A narrow path above a long drop.
+    If you panic, go back the way you came.
+  exits:
+  - dir: back
+    to: R_SKY_MARSHAL_06
+    len: 1
+  - dir: ahead
+    to: R_SKY_MARSHAL_08
+    len: 1
+- id: R_SKY_MARSHAL_08
+  name: Skybridge Path
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - landmark.skybridge.wind_marshal
+  desc: |-
+    High air, long sightlines, and constant wind.
+    Movement matters as much as damage.
+  exits:
+  - dir: back
+    to: R_SKY_MARSHAL_07
+    len: 1
+  - dir: ahead
+    to: R_SKY_MARSHAL_09
+    len: 1
+- id: R_SKY_MARSHAL_09
+  name: Cable Walk
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - landmark.skybridge.wind_marshal
+  desc: |-
+    High air, long sightlines, and constant wind.
+    Movement matters as much as damage.
+  exits:
+  - dir: back
+    to: R_SKY_MARSHAL_08
+    len: 1
+  - dir: ahead
+    to: R_SKY_MARSHAL_10
+    len: 1
+- id: R_SKY_MARSHAL_10
+  name: Anchor Run
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - landmark.skybridge.wind_marshal
+  desc: |-
+    A narrow path above a long drop.
+    If you panic, go back the way you came.
+  exits:
+  - dir: back
+    to: R_SKY_MARSHAL_09
+    len: 1
+  - dir: ahead
+    to: R_SKY_MARSHAL_11
+    len: 1
+- id: R_SKY_MARSHAL_11
+  name: Skybridge Path
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - landmark.skybridge.wind_marshal
+  desc: |-
+    High air, long sightlines, and constant wind.
+    Movement matters as much as damage.
+  exits:
+  - dir: back
+    to: R_SKY_MARSHAL_10
+    len: 1
+  - dir: ahead
+    to: R_SKY_MARSHAL_12
+    len: 1
+- id: R_SKY_MARSHAL_12
+  name: Cable Walk
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - landmark.skybridge.wind_marshal
+  desc: |-
+    High air, long sightlines, and constant wind.
+    Movement matters as much as damage.
+  exits:
+  - dir: back
+    to: R_SKY_MARSHAL_11
+    len: 1
+  - dir: ahead
+    to: R_SKY_MARSHAL_13
+    len: 1
+- id: R_SKY_MARSHAL_13
+  name: High Deck
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - landmark.skybridge.wind_marshal
+  desc: |-
+    A narrow path above a long drop.
+    If you panic, go back the way you came.
+  exits:
+  - dir: back
+    to: R_SKY_MARSHAL_12
+    len: 1
+  - dir: ahead
+    to: R_SKY_MARSHAL_14
+    len: 1
+- id: R_SKY_MARSHAL_14
+  name: Skybridge Path
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - landmark.skybridge.wind_marshal
+  desc: |-
+    High air, long sightlines, and constant wind.
+    Movement matters as much as damage.
+  exits:
+  - dir: back
+    to: R_SKY_MARSHAL_13
+    len: 1
+  - dir: ahead
+    to: R_SKY_MARSHAL_15
+    len: 1
+- id: R_SKY_MARSHAL_15
+  name: High Deck
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - landmark.skybridge.wind_marshal
+  desc: |-
+    A narrow path above a long drop.
+    If you panic, go back the way you came.
+  exits:
+  - dir: back
+    to: R_SKY_MARSHAL_14
+    len: 1
+  - dir: ahead
+    to: R_SKY_MARSHAL_16
+    len: 1
+- id: R_SKY_MARSHAL_16
+  name: High Deck
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - landmark.skybridge.wind_marshal
+  desc: |-
+    A narrow path above a long drop.
+    If you panic, go back the way you came.
+  exits:
+  - dir: back
+    to: R_SKY_MARSHAL_15
+    len: 1
+  - dir: ahead
+    to: R_SKY_MARSHAL_17
+    len: 1
+- id: R_SKY_MARSHAL_17
+  name: High Deck
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - landmark.skybridge.wind_marshal
+  desc: |-
+    A narrow path above a long drop.
+    If you panic, go back the way you came.
+  exits:
+  - dir: back
+    to: R_SKY_MARSHAL_16
+    len: 1
+  - dir: ahead
+    to: R_SKY_MARSHAL_18
+    len: 1
+- id: R_SKY_MARSHAL_18
+  name: High Deck
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - landmark.skybridge.wind_marshal
+  desc: |-
+    A narrow path above a long drop.
+    If you panic, go back the way you came.
+  exits:
+  - dir: back
+    to: R_SKY_MARSHAL_17
+    len: 1
+  - dir: ahead
+    to: R_SKY_MARSHAL_19
+    len: 1
+- id: R_SKY_MARSHAL_19
+  name: High Deck
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - landmark.skybridge.wind_marshal
+  desc: |-
+    A narrow path above a long drop.
+    If you panic, go back the way you came.
+  exits:
+  - dir: back
+    to: R_SKY_MARSHAL_18
+    len: 1
+  - dir: ahead
+    to: R_SKY_MARSHAL_20
+    len: 1
+- id: R_SKY_MARSHAL_20
+  name: High Deck
+  cluster: CL_SKY_WIND_MARSHAL
+  tags:
+  - landmark.skybridge.wind_marshal
+  desc: |-
+    A narrow path above a long drop.
+    If you panic, go back the way you came.
+  exits:
+  - dir: back
+    to: R_SKY_MARSHAL_19
+    len: 1
+  - dir: ahead
+    to: R_SKY_MARSHAL_01
+    len: 1

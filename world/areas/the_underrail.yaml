@@ -1,0 +1,1940 @@
+version: 1
+zone_id: the_underrail
+zone_name: The Underrail
+area_id: A01
+level_band:
+- 9
+- 12
+start_room: P_UNDERRAIL_FACTORY
+rooms:
+- id: P_UNDERRAIL_FACTORY
+  name: Factory District (Outskirts) Transfer
+  cluster: CL_UNDERRAIL_PLATFORM
+  tags:
+  - portal.P_UNDERRAIL_FACTORY
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies Factory District (Outskirts).
+  exits:
+  - dir: out
+    to: P_FACTORY_UNDERRAIL
+    len: 2
+    state: sealed
+    gate: gate.underrail.entry
+  - dir: in
+    to: R_UR_PLATFORM_01
+    len: 1
+- id: P_UNDERRAIL_RESERVOIR
+  name: The Reservoir Transfer
+  cluster: CL_UNDERRAIL_PLATFORM
+  tags:
+  - portal.P_UNDERRAIL_RESERVOIR
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies The Reservoir.
+  exits:
+  - dir: out
+    to: P_RESERVOIR_UNDERRAIL
+    len: 2
+    state: sealed
+    gate: gate.underrail.entry
+  - dir: in
+    to: R_UR_PLATFORM_01
+    len: 1
+- id: P_UNDERRAIL_SKYBRIDGE
+  name: Skybridge Transfer
+  cluster: CL_UNDERRAIL_PLATFORM
+  tags:
+  - portal.P_UNDERRAIL_SKYBRIDGE
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies Skybridge.
+  exits:
+  - dir: out
+    to: P_SKYBRIDGE_UNDERRAIL
+    len: 3
+    state: sealed
+    gate: gate.skybridge.entry
+  - dir: in
+    to: R_UR_PLATFORM_01
+    len: 1
+- id: R_UR_PLATFORM_01
+  name: The Underrail Anchor
+  cluster: CL_UNDERRAIL_PLATFORM
+  tags:
+  - HUB_UNDERRAIL_PLATFORM
+  - portal.P_UNDERRAIL_FACTORY
+  - portal.P_UNDERRAIL_RESERVOIR
+  - portal.P_UNDERRAIL_SKYBRIDGE
+  - safe_pocket
+  desc: |-
+    A platform carved into a buried transit spine with signs that still insist trains exist.
+    This is a safe pocket: regroup here and choose which beacon run to attempt next.
+  exits:
+  - dir: factory
+    to: P_UNDERRAIL_FACTORY
+    len: 1
+  - dir: reservoir
+    to: P_UNDERRAIL_RESERVOIR
+    len: 1
+  - dir: skybridge
+    to: P_UNDERRAIL_SKYBRIDGE
+    len: 1
+  - dir: north
+    to: R_UR_TUNNEL_01
+    len: 1
+  - dir: west
+    to: R_UR_TUNNEL_02
+    len: 1
+  - dir: east
+    to: R_UR_TUNNEL_03
+    len: 1
+  - dir: south
+    to: R_UR_SWITCH_01
+    len: 1
+  - dir: wander_platform
+    to: R_UR_PLATFORM_02
+    len: 1
+- id: R_UR_TUNNEL_01
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags: []
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: south
+    to: R_UR_PLATFORM_01
+    len: 1
+  - dir: north
+    to: R_UR_BEACON1_01
+    len: 1
+- id: R_UR_SWITCH_01
+  name: Track Split
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags: []
+  desc: |-
+    A long loop of trackwork and blinking lights.
+    Patrols feel like clockwork.
+  exits:
+  - dir: north
+    to: R_UR_PLATFORM_01
+    len: 1
+  - dir: south
+    to: R_UR_BEACON4_01
+    len: 1
+  - dir: crawl
+    to: R_UR_MAINT_CRAWL_01
+    len: 1
+  - dir: wander_switchyard
+    to: R_UR_SWITCHYARD_01
+    len: 1
+- id: R_UR_WARDEN_01
+  name: Signal Tunnel
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - setpiece.q9.platform_warden_arena
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: north
+    to: R_UR_REWARD_01
+    len: 1
+  - dir: south
+    to: R_UR_WARDEN_GATE_01
+    len: 1
+  - dir: wander_arena
+    to: R_UR_ARENA_01
+    len: 1
+- id: R_UR_BEACON1_01
+  name: Beacon One
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - setpiece.q9.beacon_1
+  desc: |-
+    A beacon housing with scorched paint and a silent charge coil.
+    The interface is simple: start the charge, hold the room, finish the cycle.
+  exits:
+  - dir: south
+    to: R_UR_TUNNEL_01
+    len: 1
+- id: R_UR_BEACON2_01
+  name: Beacon Two
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - setpiece.q9.beacon_2
+  desc: |-
+    A beacon chamber near an active patrol lane.
+    Starting a charge at the wrong time feels like ringing a bell.
+  exits:
+  - dir: east
+    to: R_UR_TUNNEL_02
+    len: 1
+- id: R_UR_BEACON3_01
+  name: Beacon Three
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - setpiece.q9.beacon_3
+  desc: |-
+    A beacon cage in a tight bend.
+    The room is not hard; the approach is the tax.
+  exits:
+  - dir: west
+    to: R_UR_TUNNEL_03
+    len: 1
+- id: R_UR_BEACON4_01
+  name: Beacon Four
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - setpiece.q9.beacon_4
+  desc: |-
+    A switchyard beacon framed by signal lights and timing marks.
+    The safe square is painted like a promise.
+  exits:
+  - dir: back
+    to: R_UR_SWITCH_01
+    len: 1
+  - dir: north
+    to: R_UR_WARDEN_GATE_01
+    len: 1
+- id: R_UR_WARDEN_GATE_01
+  name: Warden Gate
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags: []
+  desc: |-
+    A gate mechanism acknowledges beacon state with stubborn clarity.
+    It will not open for half measures.
+  exits:
+  - dir: north
+    to: R_UR_BEACON4_01
+    len: 1
+  - dir: south
+    to: R_UR_WARDEN_01
+    len: 1
+    state: sealed
+    gate: q.q9_beacon_protocol.beacons_lit>=4
+- id: R_UR_REWARD_01
+  name: Platform Ledger
+  cluster: CL_UNDERRAIL_PLATFORM
+  tags: []
+  desc: |-
+    A battered authorization station that still believes in paperwork.
+    A route token prints with one word stamped across it: SKYBRIDGE.
+  exits:
+  - dir: south
+    to: R_UR_PLATFORM_01
+    len: 1
+- id: R_UR_MAINT_CRAWL_01
+  name: Maintenance Crawl
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags: []
+  desc: |-
+    A cramped crawlspace that smells like ozone and old grease.
+    It bypasses the worst patrol overlap if you know it exists.
+  exits:
+  - dir: north
+    to: R_UR_TUNNEL_02
+    len: 1
+  - dir: south
+    to: R_UR_SWITCH_01
+    len: 1
+- id: R_UR_PLATFORM_02
+  name: Stairwell
+  cluster: CL_UNDERRAIL_PLATFORM
+  tags:
+  - landmark.underrail.platform
+  desc: |-
+    Cold air and distant vibrations.
+    This is a hub for deep travel, not a safe home.
+  exits:
+  - dir: back
+    to: R_UR_PLATFORM_01
+    len: 1
+  - dir: ahead
+    to: R_UR_PLATFORM_03
+    len: 1
+- id: R_UR_PLATFORM_03
+  name: Platform Edge
+  cluster: CL_UNDERRAIL_PLATFORM
+  tags:
+  - landmark.underrail.platform
+  desc: |-
+    A platform carved into a buried transit spine.
+    Old signs still insist trains exist.
+  exits:
+  - dir: back
+    to: R_UR_PLATFORM_02
+    len: 1
+  - dir: ahead
+    to: R_UR_PLATFORM_04
+    len: 1
+- id: R_UR_PLATFORM_04
+  name: Platform Edge
+  cluster: CL_UNDERRAIL_PLATFORM
+  tags:
+  - landmark.underrail.platform
+  desc: |-
+    A platform carved into a buried transit spine.
+    Old signs still insist trains exist.
+  exits:
+  - dir: back
+    to: R_UR_PLATFORM_03
+    len: 1
+  - dir: ahead
+    to: R_UR_PLATFORM_05
+    len: 1
+- id: R_UR_PLATFORM_05
+  name: Arrival Deck
+  cluster: CL_UNDERRAIL_PLATFORM
+  tags:
+  - landmark.underrail.platform
+  desc: |-
+    Cold air and distant vibrations.
+    This is a hub for deep travel, not a safe home.
+  exits:
+  - dir: back
+    to: R_UR_PLATFORM_04
+    len: 1
+  - dir: ahead
+    to: R_UR_PLATFORM_06
+    len: 1
+- id: R_UR_PLATFORM_06
+  name: Platform Edge
+  cluster: CL_UNDERRAIL_PLATFORM
+  tags:
+  - landmark.underrail.platform
+  desc: |-
+    A platform carved into a buried transit spine.
+    Old signs still insist trains exist.
+  exits:
+  - dir: back
+    to: R_UR_PLATFORM_05
+    len: 1
+  - dir: ahead
+    to: R_UR_PLATFORM_07
+    len: 1
+- id: R_UR_PLATFORM_07
+  name: Platform Edge
+  cluster: CL_UNDERRAIL_PLATFORM
+  tags:
+  - landmark.underrail.platform
+  desc: |-
+    A platform carved into a buried transit spine.
+    Old signs still insist trains exist.
+  exits:
+  - dir: back
+    to: R_UR_PLATFORM_06
+    len: 1
+  - dir: ahead
+    to: R_UR_PLATFORM_08
+    len: 1
+- id: R_UR_PLATFORM_08
+  name: Platform Edge
+  cluster: CL_UNDERRAIL_PLATFORM
+  tags:
+  - landmark.underrail.platform
+  desc: |-
+    A platform carved into a buried transit spine.
+    Old signs still insist trains exist.
+  exits:
+  - dir: back
+    to: R_UR_PLATFORM_07
+    len: 1
+  - dir: ahead
+    to: R_UR_PLATFORM_09
+    len: 1
+- id: R_UR_PLATFORM_09
+  name: Arrival Deck
+  cluster: CL_UNDERRAIL_PLATFORM
+  tags:
+  - landmark.underrail.platform
+  desc: |-
+    Cold air and distant vibrations.
+    This is a hub for deep travel, not a safe home.
+  exits:
+  - dir: back
+    to: R_UR_PLATFORM_08
+    len: 1
+  - dir: ahead
+    to: R_UR_PLATFORM_10
+    len: 1
+- id: R_UR_PLATFORM_10
+  name: Stairwell
+  cluster: CL_UNDERRAIL_PLATFORM
+  tags:
+  - landmark.underrail.platform
+  desc: |-
+    Cold air and distant vibrations.
+    This is a hub for deep travel, not a safe home.
+  exits:
+  - dir: back
+    to: R_UR_PLATFORM_09
+    len: 1
+  - dir: ahead
+    to: R_UR_PLATFORM_11
+    len: 1
+- id: R_UR_PLATFORM_11
+  name: Stairwell
+  cluster: CL_UNDERRAIL_PLATFORM
+  tags:
+  - landmark.underrail.platform
+  desc: |-
+    Cold air and distant vibrations.
+    This is a hub for deep travel, not a safe home.
+  exits:
+  - dir: back
+    to: R_UR_PLATFORM_10
+    len: 1
+  - dir: ahead
+    to: R_UR_PLATFORM_12
+    len: 1
+- id: R_UR_PLATFORM_12
+  name: Arrival Deck
+  cluster: CL_UNDERRAIL_PLATFORM
+  tags:
+  - landmark.underrail.platform
+  desc: |-
+    Cold air and distant vibrations.
+    This is a hub for deep travel, not a safe home.
+  exits:
+  - dir: back
+    to: R_UR_PLATFORM_11
+    len: 1
+  - dir: ahead
+    to: R_UR_PLATFORM_01
+    len: 1
+- id: R_UR_SWITCHYARD_01
+  name: Track Split
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    A long loop of trackwork and blinking lights.
+    Patrols feel like clockwork.
+  exits:
+  - dir: back
+    to: R_UR_SWITCH_01
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_02
+    len: 1
+- id: R_UR_SWITCHYARD_02
+  name: Signal Cross
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    Rails and signals crisscross in the dark.
+    Timing and route choice matter more than raw damage.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_01
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_03
+    len: 1
+- id: R_UR_SWITCHYARD_03
+  name: Signal Cross
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    Rails and signals crisscross in the dark.
+    Timing and route choice matter more than raw damage.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_02
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_04
+    len: 1
+- id: R_UR_SWITCHYARD_04
+  name: Track Split
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    A long loop of trackwork and blinking lights.
+    Patrols feel like clockwork.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_03
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_05
+    len: 1
+- id: R_UR_SWITCHYARD_05
+  name: Switchyard
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    Rails and signals crisscross in the dark.
+    Timing and route choice matter more than raw damage.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_04
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_06
+    len: 1
+- id: R_UR_SWITCHYARD_06
+  name: Signal Cross
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    Rails and signals crisscross in the dark.
+    Timing and route choice matter more than raw damage.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_05
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_07
+    len: 1
+- id: R_UR_SWITCHYARD_07
+  name: Signal Cross
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    Rails and signals crisscross in the dark.
+    Timing and route choice matter more than raw damage.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_06
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_08
+    len: 1
+- id: R_UR_SWITCHYARD_08
+  name: Signal Cross
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    Rails and signals crisscross in the dark.
+    Timing and route choice matter more than raw damage.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_07
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_09
+    len: 1
+- id: R_UR_SWITCHYARD_09
+  name: Track Split
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    A long loop of trackwork and blinking lights.
+    Patrols feel like clockwork.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_08
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_10
+    len: 1
+- id: R_UR_SWITCHYARD_10
+  name: Switchyard
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    Rails and signals crisscross in the dark.
+    Timing and route choice matter more than raw damage.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_09
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_11
+    len: 1
+- id: R_UR_SWITCHYARD_11
+  name: Switchyard
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    Rails and signals crisscross in the dark.
+    Timing and route choice matter more than raw damage.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_10
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_12
+    len: 1
+- id: R_UR_SWITCHYARD_12
+  name: Maintenance Bay
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    A long loop of trackwork and blinking lights.
+    Patrols feel like clockwork.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_11
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_13
+    len: 1
+- id: R_UR_SWITCHYARD_13
+  name: Maintenance Bay
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    A long loop of trackwork and blinking lights.
+    Patrols feel like clockwork.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_12
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_14
+    len: 1
+- id: R_UR_SWITCHYARD_14
+  name: Track Split
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    A long loop of trackwork and blinking lights.
+    Patrols feel like clockwork.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_13
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_15
+    len: 1
+- id: R_UR_SWITCHYARD_15
+  name: Switchyard
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    Rails and signals crisscross in the dark.
+    Timing and route choice matter more than raw damage.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_14
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_16
+    len: 1
+- id: R_UR_SWITCHYARD_16
+  name: Signal Cross
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    Rails and signals crisscross in the dark.
+    Timing and route choice matter more than raw damage.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_15
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_17
+    len: 1
+- id: R_UR_SWITCHYARD_17
+  name: Signal Cross
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    Rails and signals crisscross in the dark.
+    Timing and route choice matter more than raw damage.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_16
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_18
+    len: 1
+- id: R_UR_SWITCHYARD_18
+  name: Signal Cross
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    Rails and signals crisscross in the dark.
+    Timing and route choice matter more than raw damage.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_17
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_19
+    len: 1
+- id: R_UR_SWITCHYARD_19
+  name: Track Split
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    A long loop of trackwork and blinking lights.
+    Patrols feel like clockwork.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_18
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_20
+    len: 1
+- id: R_UR_SWITCHYARD_20
+  name: Signal Cross
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    Rails and signals crisscross in the dark.
+    Timing and route choice matter more than raw damage.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_19
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_21
+    len: 1
+- id: R_UR_SWITCHYARD_21
+  name: Switchyard
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    Rails and signals crisscross in the dark.
+    Timing and route choice matter more than raw damage.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_20
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_22
+    len: 1
+- id: R_UR_SWITCHYARD_22
+  name: Signal Cross
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    Rails and signals crisscross in the dark.
+    Timing and route choice matter more than raw damage.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_21
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_23
+    len: 1
+- id: R_UR_SWITCHYARD_23
+  name: Track Split
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    A long loop of trackwork and blinking lights.
+    Patrols feel like clockwork.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_22
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_24
+    len: 1
+- id: R_UR_SWITCHYARD_24
+  name: Signal Cross
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    Rails and signals crisscross in the dark.
+    Timing and route choice matter more than raw damage.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_23
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_25
+    len: 1
+- id: R_UR_SWITCHYARD_25
+  name: Maintenance Bay
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    A long loop of trackwork and blinking lights.
+    Patrols feel like clockwork.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_24
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_26
+    len: 1
+- id: R_UR_SWITCHYARD_26
+  name: Maintenance Bay
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    A long loop of trackwork and blinking lights.
+    Patrols feel like clockwork.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_25
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_27
+    len: 1
+- id: R_UR_SWITCHYARD_27
+  name: Switchyard
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    Rails and signals crisscross in the dark.
+    Timing and route choice matter more than raw damage.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_26
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_28
+    len: 1
+- id: R_UR_SWITCHYARD_28
+  name: Maintenance Bay
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    A long loop of trackwork and blinking lights.
+    Patrols feel like clockwork.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_27
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCHYARD_29
+    len: 1
+- id: R_UR_SWITCHYARD_29
+  name: Switchyard
+  cluster: CL_UNDERRAIL_SWITCHYARD
+  tags:
+  - landmark.underrail.switchyard
+  desc: |-
+    Rails and signals crisscross in the dark.
+    Timing and route choice matter more than raw damage.
+  exits:
+  - dir: back
+    to: R_UR_SWITCHYARD_28
+    len: 1
+  - dir: ahead
+    to: R_UR_SWITCH_01
+    len: 1
+- id: R_UR_TUNNEL_02
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags: []
+  desc: |-
+    A tunnel with signal lights that make timing feel learnable.
+    Patrol overlap is real here; waiting in bends is a mistake.
+  exits:
+  - dir: east
+    to: R_UR_PLATFORM_01
+    len: 1
+  - dir: west
+    to: R_UR_BEACON2_01
+    len: 1
+  - dir: secret
+    to: R_UR_MAINT_CRAWL_01
+    len: 1
+- id: R_UR_TUNNEL_03
+  name: Low Passage
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags: []
+  desc: |-
+    A tight passage with loud audio cues before anything nasty happens.
+    It tries to bait you into stopping in the wrong place.
+  exits:
+  - dir: west
+    to: R_UR_PLATFORM_01
+    len: 1
+  - dir: east
+    to: R_UR_BEACON3_01
+    len: 1
+  - dir: wander_tunnel
+    to: R_UR_TUNNEL_04
+    len: 1
+- id: R_UR_TUNNEL_04
+  name: Low Passage
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_03
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_05
+    len: 1
+- id: R_UR_TUNNEL_05
+  name: Signal Tunnel
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_04
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_06
+    len: 1
+- id: R_UR_TUNNEL_06
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_05
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_07
+    len: 1
+- id: R_UR_TUNNEL_07
+  name: Cable Run
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_06
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_08
+    len: 1
+- id: R_UR_TUNNEL_08
+  name: Signal Tunnel
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_07
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_09
+    len: 1
+- id: R_UR_TUNNEL_09
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_08
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_10
+    len: 1
+- id: R_UR_TUNNEL_10
+  name: Low Passage
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_09
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_11
+    len: 1
+- id: R_UR_TUNNEL_11
+  name: Cable Run
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_10
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_12
+    len: 1
+- id: R_UR_TUNNEL_12
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_11
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_13
+    len: 1
+- id: R_UR_TUNNEL_13
+  name: Low Passage
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_12
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_14
+    len: 1
+- id: R_UR_TUNNEL_14
+  name: Signal Tunnel
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_13
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_15
+    len: 1
+- id: R_UR_TUNNEL_15
+  name: Signal Tunnel
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_14
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_16
+    len: 1
+- id: R_UR_TUNNEL_16
+  name: Low Passage
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_15
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_17
+    len: 1
+- id: R_UR_TUNNEL_17
+  name: Cable Run
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_16
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_18
+    len: 1
+- id: R_UR_TUNNEL_18
+  name: Signal Tunnel
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_17
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_19
+    len: 1
+- id: R_UR_TUNNEL_19
+  name: Low Passage
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_18
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_20
+    len: 1
+- id: R_UR_TUNNEL_20
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_19
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_21
+    len: 1
+- id: R_UR_TUNNEL_21
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_20
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_22
+    len: 1
+- id: R_UR_TUNNEL_22
+  name: Low Passage
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_21
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_23
+    len: 1
+- id: R_UR_TUNNEL_23
+  name: Cable Run
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_22
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_24
+    len: 1
+- id: R_UR_TUNNEL_24
+  name: Cable Run
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_23
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_25
+    len: 1
+- id: R_UR_TUNNEL_25
+  name: Low Passage
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_24
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_26
+    len: 1
+- id: R_UR_TUNNEL_26
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_25
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_27
+    len: 1
+- id: R_UR_TUNNEL_27
+  name: Low Passage
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_26
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_28
+    len: 1
+- id: R_UR_TUNNEL_28
+  name: Low Passage
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_27
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_29
+    len: 1
+- id: R_UR_TUNNEL_29
+  name: Low Passage
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_28
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_30
+    len: 1
+- id: R_UR_TUNNEL_30
+  name: Cable Run
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_29
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_31
+    len: 1
+- id: R_UR_TUNNEL_31
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_30
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_32
+    len: 1
+- id: R_UR_TUNNEL_32
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_31
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_33
+    len: 1
+- id: R_UR_TUNNEL_33
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_32
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_34
+    len: 1
+- id: R_UR_TUNNEL_34
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_33
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_35
+    len: 1
+- id: R_UR_TUNNEL_35
+  name: Signal Tunnel
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_34
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_36
+    len: 1
+- id: R_UR_TUNNEL_36
+  name: Low Passage
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_35
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_37
+    len: 1
+- id: R_UR_TUNNEL_37
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_36
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_38
+    len: 1
+- id: R_UR_TUNNEL_38
+  name: Cable Run
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_37
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_39
+    len: 1
+- id: R_UR_TUNNEL_39
+  name: Signal Tunnel
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_38
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_40
+    len: 1
+- id: R_UR_TUNNEL_40
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_39
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_41
+    len: 1
+- id: R_UR_TUNNEL_41
+  name: Signal Tunnel
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_40
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_42
+    len: 1
+- id: R_UR_TUNNEL_42
+  name: Low Passage
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_41
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_43
+    len: 1
+- id: R_UR_TUNNEL_43
+  name: Low Passage
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_42
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_44
+    len: 1
+- id: R_UR_TUNNEL_44
+  name: Cable Run
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_43
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_45
+    len: 1
+- id: R_UR_TUNNEL_45
+  name: Low Passage
+  cluster: CL_UNDERRAIL_TUNNELS
+  tags:
+  - landmark.underrail.tunnels
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_TUNNEL_44
+    len: 1
+  - dir: ahead
+    to: R_UR_TUNNEL_01
+    len: 1
+- id: R_UR_ARENA_01
+  name: Cable Run
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_WARDEN_01
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_02
+    len: 1
+- id: R_UR_ARENA_02
+  name: Cable Run
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_01
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_03
+    len: 1
+- id: R_UR_ARENA_03
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_02
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_04
+    len: 1
+- id: R_UR_ARENA_04
+  name: Signal Tunnel
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_03
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_05
+    len: 1
+- id: R_UR_ARENA_05
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_04
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_06
+    len: 1
+- id: R_UR_ARENA_06
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_05
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_07
+    len: 1
+- id: R_UR_ARENA_07
+  name: Low Passage
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_06
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_08
+    len: 1
+- id: R_UR_ARENA_08
+  name: Low Passage
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_07
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_09
+    len: 1
+- id: R_UR_ARENA_09
+  name: Signal Tunnel
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_08
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_10
+    len: 1
+- id: R_UR_ARENA_10
+  name: Cable Run
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_09
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_11
+    len: 1
+- id: R_UR_ARENA_11
+  name: Cable Run
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_10
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_12
+    len: 1
+- id: R_UR_ARENA_12
+  name: Signal Tunnel
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_11
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_13
+    len: 1
+- id: R_UR_ARENA_13
+  name: Signal Tunnel
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_12
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_14
+    len: 1
+- id: R_UR_ARENA_14
+  name: Cable Run
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_13
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_15
+    len: 1
+- id: R_UR_ARENA_15
+  name: Signal Tunnel
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_14
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_16
+    len: 1
+- id: R_UR_ARENA_16
+  name: Signal Tunnel
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_15
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_17
+    len: 1
+- id: R_UR_ARENA_17
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_16
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_18
+    len: 1
+- id: R_UR_ARENA_18
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_17
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_19
+    len: 1
+- id: R_UR_ARENA_19
+  name: Cable Run
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_18
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_20
+    len: 1
+- id: R_UR_ARENA_20
+  name: Low Passage
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_19
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_21
+    len: 1
+- id: R_UR_ARENA_21
+  name: Low Passage
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_20
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_22
+    len: 1
+- id: R_UR_ARENA_22
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_21
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_23
+    len: 1
+- id: R_UR_ARENA_23
+  name: Signal Tunnel
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_22
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_24
+    len: 1
+- id: R_UR_ARENA_24
+  name: Low Passage
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_23
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_25
+    len: 1
+- id: R_UR_ARENA_25
+  name: Low Passage
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_24
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_26
+    len: 1
+- id: R_UR_ARENA_26
+  name: Cable Run
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_25
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_27
+    len: 1
+- id: R_UR_ARENA_27
+  name: Signal Tunnel
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A tunnel lined with cables and old signal boxes.
+    The dark here feels planned, not accidental.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_26
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_28
+    len: 1
+- id: R_UR_ARENA_28
+  name: Marker Alcove
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_27
+    len: 1
+  - dir: ahead
+    to: R_UR_ARENA_29
+    len: 1
+- id: R_UR_ARENA_29
+  name: Cable Run
+  cluster: CL_UNDERRAIL_WARDEN_ARENA
+  tags:
+  - landmark.underrail.warden_arena
+  desc: |-
+    A narrow run with harsh acoustics.
+    If you hear steps, assume they're not yours.
+  exits:
+  - dir: back
+    to: R_UR_ARENA_28
+    len: 1
+  - dir: ahead
+    to: R_UR_WARDEN_01
+    len: 1

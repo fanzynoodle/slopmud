@@ -98,6 +98,54 @@ if [[ -n "${SLOPMUD_OIDC_TOKEN_URL:-}" ]]; then
   } >>"$tmp_unit"
 fi
 
+# Optional: Google SSO handoff (slopmud broker + slopmud_web share a directory).
+if [[ -n "${SLOPMUD_GOOGLE_OAUTH_DIR:-}" ]]; then
+  echo "Environment=SLOPMUD_GOOGLE_OAUTH_DIR=${SLOPMUD_GOOGLE_OAUTH_DIR}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_GOOGLE_AUTH_BASE_URL:-}" ]]; then
+  echo "Environment=SLOPMUD_GOOGLE_AUTH_BASE_URL=${SLOPMUD_GOOGLE_AUTH_BASE_URL}" >>"$tmp_unit"
+fi
+
+# Optional: runtime config.
+if [[ -n "${SLOPMUD_ACCOUNTS_PATH:-}" ]]; then
+  echo "Environment=SLOPMUD_ACCOUNTS_PATH=${SLOPMUD_ACCOUNTS_PATH}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_LOCALE:-}" ]]; then
+  echo "Environment=SLOPMUD_LOCALE=${SLOPMUD_LOCALE}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_ADMIN_BIND:-}" ]]; then
+  echo "Environment=SLOPMUD_ADMIN_BIND=${SLOPMUD_ADMIN_BIND}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_BANS_PATH:-}" ]]; then
+  echo "Environment=SLOPMUD_BANS_PATH=${SLOPMUD_BANS_PATH}" >>"$tmp_unit"
+fi
+
+# Optional: eventlog archival (spool-to-disk + S3 upload).
+if [[ -n "${SLOPMUD_EVENTLOG_ENABLED:-}" ]]; then
+  echo "Environment=SLOPMUD_EVENTLOG_ENABLED=${SLOPMUD_EVENTLOG_ENABLED}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_EVENTLOG_SPOOL_DIR:-}" ]]; then
+  echo "Environment=SLOPMUD_EVENTLOG_SPOOL_DIR=${SLOPMUD_EVENTLOG_SPOOL_DIR}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_EVENTLOG_FLUSH_INTERVAL_S:-}" ]]; then
+  echo "Environment=SLOPMUD_EVENTLOG_FLUSH_INTERVAL_S=${SLOPMUD_EVENTLOG_FLUSH_INTERVAL_S}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_EVENTLOG_S3_BUCKET:-}" ]]; then
+  echo "Environment=SLOPMUD_EVENTLOG_S3_BUCKET=${SLOPMUD_EVENTLOG_S3_BUCKET}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_EVENTLOG_S3_PREFIX:-}" ]]; then
+  echo "Environment=SLOPMUD_EVENTLOG_S3_PREFIX=${SLOPMUD_EVENTLOG_S3_PREFIX}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_EVENTLOG_UPLOAD_ENABLED:-}" ]]; then
+  echo "Environment=SLOPMUD_EVENTLOG_UPLOAD_ENABLED=${SLOPMUD_EVENTLOG_UPLOAD_ENABLED}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_EVENTLOG_UPLOAD_DELETE_LOCAL:-}" ]]; then
+  echo "Environment=SLOPMUD_EVENTLOG_UPLOAD_DELETE_LOCAL=${SLOPMUD_EVENTLOG_UPLOAD_DELETE_LOCAL}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_EVENTLOG_UPLOAD_SCAN_INTERVAL_S:-}" ]]; then
+  echo "Environment=SLOPMUD_EVENTLOG_UPLOAD_SCAN_INTERVAL_S=${SLOPMUD_EVENTLOG_UPLOAD_SCAN_INTERVAL_S}" >>"$tmp_unit"
+fi
+
 cat >>"$tmp_unit" <<EOF
 ExecStart=${SLOPMUD_REMOTE_BIN}
 Restart=always

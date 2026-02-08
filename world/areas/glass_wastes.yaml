@@ -1,0 +1,2475 @@
+version: 1
+zone_id: glass_wastes
+zone_name: Glass Wastes
+area_id: A01
+level_band:
+- 12
+- 15
+start_room: P_WASTES_SKYBRIDGE
+rooms:
+- id: P_WASTES_GARDENS
+  name: Crater Gardens Transfer
+  cluster: CL_WASTES_OUTPOST
+  tags:
+  - portal.P_WASTES_GARDENS
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies Crater Gardens.
+  exits:
+  - dir: out
+    to: P_GARDENS_WASTES
+    len: 3
+    state: sealed
+    gate: gate.crater_gardens.entry
+  - dir: in
+    to: R_WASTES_OUTPOST_01
+    len: 1
+- id: P_WASTES_SKYBRIDGE
+  name: Skybridge Transfer
+  cluster: CL_WASTES_OUTPOST
+  tags:
+  - portal.P_WASTES_SKYBRIDGE
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies Skybridge.
+  exits:
+  - dir: out
+    to: P_SKYBRIDGE_WASTES
+    len: 3
+    state: sealed
+    gate: gate.glass_wastes.entry
+  - dir: in
+    to: R_WASTES_OUTPOST_01
+    len: 1
+- id: R_WASTES_OUTPOST_01
+  name: Glass Wastes Anchor
+  cluster: CL_WASTES_OUTPOST
+  tags:
+  - HUB_WASTES_OUTPOST
+  - portal.P_WASTES_SKYBRIDGE
+  - portal.P_WASTES_GARDENS
+  - safe_pocket
+  desc: |-
+    Glass-scarred boards and patched fabric walls.
+    The outpost is a checkpoint you can believe in.
+  exits:
+  - dir: to_P_WASTES_GARDENS
+    to: P_WASTES_GARDENS
+    len: 1
+  - dir: to_P_WASTES_SKYBRIDGE
+    to: P_WASTES_SKYBRIDGE
+    len: 1
+  - dir: to_R_WASTES_DUNE_01
+    to: R_WASTES_DUNE_01
+    len: 1
+  - dir: to_R_WASTES_GLASS_01
+    to: R_WASTES_GLASS_01
+    len: 1
+  - dir: wander_outpost
+    to: R_WASTES_OUTPOST_02
+    len: 1
+- id: R_WASTES_DUNE_01
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags: []
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: hub
+    to: R_WASTES_OUTPOST_01
+    len: 1
+  - dir: wander_dune
+    to: R_WASTES_DUNE_02
+    len: 1
+- id: R_WASTES_GLASS_01
+  name: Mirror Patch
+  cluster: CL_WASTES_GLASSFIELDS
+  tags: []
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: hub
+    to: R_WASTES_OUTPOST_01
+    len: 1
+  - dir: to_R_WASTES_GLASS_02
+    to: R_WASTES_GLASS_02
+    len: 1
+  - dir: wander_glassfield
+    to: R_WASTES_GLASSFIELD_01
+    len: 1
+- id: R_WASTES_GLASS_02
+  name: Shelter Pocket
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - safe_pocket
+  desc: |-
+    A low pocket of cover where the glare dulls for a moment.
+    Marker stones and scratched arrows suggest this is the place to regroup.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASS_01
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_01
+    len: 1
+- id: R_WASTES_EYE_01
+  name: Storm Eye Approach
+  cluster: CL_WASTES_STORM_EYE
+  tags: []
+  desc: |-
+    The wind changes pitch. Visibility drops in a rhythm you can learn.
+    If you panic-run, you will earn the consequences.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASS_02
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_02
+    len: 1
+- id: R_WASTES_EYE_02
+  name: Static Pocket
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - setpiece.q11.storm_eye_event
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_01
+    len: 1
+  - dir: wander_eye
+    to: R_WASTES_EYE_03
+    len: 1
+- id: R_WASTES_DUNE_02
+  name: Sand Cut
+  cluster: CL_WASTES_DUNES
+  tags: []
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_01
+    len: 1
+  - dir: to_R_WASTES_SHELTER_01
+    to: R_WASTES_SHELTER_01
+    len: 1
+  - dir: to_R_WASTES_GLASS_01
+    to: R_WASTES_GLASS_01
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_03
+    len: 1
+- id: R_WASTES_SHELTER_01
+  name: Guaranteed Shelter
+  cluster: CL_WASTES_DUNES
+  tags:
+  - safe_pocket
+  desc: |-
+    A half-buried shelter with a consistent marker language: cairns, glyphs, and a warning stripe.
+    The air inside is stale, but safe enough to reset your rhythm.
+  exits:
+  - dir: south
+    to: R_WASTES_DUNE_02
+    len: 1
+  - dir: north
+    to: R_WASTES_GLASS_01
+    len: 1
+- id: R_WASTES_DUNE_03
+  name: Heat Ripple
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_02
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_04
+    len: 1
+- id: R_WASTES_DUNE_04
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_03
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_05
+    len: 1
+- id: R_WASTES_DUNE_05
+  name: Dune Run
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_04
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_06
+    len: 1
+- id: R_WASTES_DUNE_06
+  name: Heat Ripple
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_05
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_07
+    len: 1
+- id: R_WASTES_DUNE_07
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_06
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_08
+    len: 1
+- id: R_WASTES_DUNE_08
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_07
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_09
+    len: 1
+- id: R_WASTES_DUNE_09
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_08
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_10
+    len: 1
+- id: R_WASTES_DUNE_10
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_09
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_11
+    len: 1
+- id: R_WASTES_DUNE_11
+  name: Sand Cut
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_10
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_12
+    len: 1
+- id: R_WASTES_DUNE_12
+  name: Dune Run
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_11
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_13
+    len: 1
+- id: R_WASTES_DUNE_13
+  name: Heat Ripple
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_12
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_14
+    len: 1
+- id: R_WASTES_DUNE_14
+  name: Dune Run
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_13
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_15
+    len: 1
+- id: R_WASTES_DUNE_15
+  name: Sand Cut
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_14
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_16
+    len: 1
+- id: R_WASTES_DUNE_16
+  name: Sand Cut
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_15
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_17
+    len: 1
+- id: R_WASTES_DUNE_17
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_16
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_18
+    len: 1
+- id: R_WASTES_DUNE_18
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_17
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_19
+    len: 1
+- id: R_WASTES_DUNE_19
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_18
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_20
+    len: 1
+- id: R_WASTES_DUNE_20
+  name: Dune Run
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_19
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_21
+    len: 1
+- id: R_WASTES_DUNE_21
+  name: Dune Run
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_20
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_22
+    len: 1
+- id: R_WASTES_DUNE_22
+  name: Dune Run
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_21
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_23
+    len: 1
+- id: R_WASTES_DUNE_23
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_22
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_24
+    len: 1
+- id: R_WASTES_DUNE_24
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_23
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_25
+    len: 1
+- id: R_WASTES_DUNE_25
+  name: Sand Cut
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_24
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_26
+    len: 1
+- id: R_WASTES_DUNE_26
+  name: Dune Run
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_25
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_27
+    len: 1
+- id: R_WASTES_DUNE_27
+  name: Dune Run
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_26
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_28
+    len: 1
+- id: R_WASTES_DUNE_28
+  name: Sand Cut
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_27
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_29
+    len: 1
+- id: R_WASTES_DUNE_29
+  name: Dune Run
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_28
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_30
+    len: 1
+- id: R_WASTES_DUNE_30
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_29
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_31
+    len: 1
+- id: R_WASTES_DUNE_31
+  name: Dune Run
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_30
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_32
+    len: 1
+- id: R_WASTES_DUNE_32
+  name: Sand Cut
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_31
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_33
+    len: 1
+- id: R_WASTES_DUNE_33
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_32
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_34
+    len: 1
+- id: R_WASTES_DUNE_34
+  name: Sand Cut
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_33
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_35
+    len: 1
+- id: R_WASTES_DUNE_35
+  name: Sand Cut
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_34
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_36
+    len: 1
+- id: R_WASTES_DUNE_36
+  name: Dune Run
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_35
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_37
+    len: 1
+- id: R_WASTES_DUNE_37
+  name: Heat Ripple
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_36
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_38
+    len: 1
+- id: R_WASTES_DUNE_38
+  name: Sand Cut
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_37
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_39
+    len: 1
+- id: R_WASTES_DUNE_39
+  name: Heat Ripple
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_38
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_40
+    len: 1
+- id: R_WASTES_DUNE_40
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_39
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_41
+    len: 1
+- id: R_WASTES_DUNE_41
+  name: Heat Ripple
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_40
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_42
+    len: 1
+- id: R_WASTES_DUNE_42
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_41
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_43
+    len: 1
+- id: R_WASTES_DUNE_43
+  name: Heat Ripple
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_42
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_44
+    len: 1
+- id: R_WASTES_DUNE_44
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_43
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_45
+    len: 1
+- id: R_WASTES_DUNE_45
+  name: Sand Cut
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_44
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_46
+    len: 1
+- id: R_WASTES_DUNE_46
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_45
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_47
+    len: 1
+- id: R_WASTES_DUNE_47
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_46
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_48
+    len: 1
+- id: R_WASTES_DUNE_48
+  name: Dune Run
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_47
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_49
+    len: 1
+- id: R_WASTES_DUNE_49
+  name: Heat Ripple
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_48
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_50
+    len: 1
+- id: R_WASTES_DUNE_50
+  name: Sand Cut
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_49
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_51
+    len: 1
+- id: R_WASTES_DUNE_51
+  name: Heat Ripple
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_50
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_52
+    len: 1
+- id: R_WASTES_DUNE_52
+  name: Heat Ripple
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_51
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_53
+    len: 1
+- id: R_WASTES_DUNE_53
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_52
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_54
+    len: 1
+- id: R_WASTES_DUNE_54
+  name: Dune Run
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_53
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_55
+    len: 1
+- id: R_WASTES_DUNE_55
+  name: Sand Cut
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_54
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_56
+    len: 1
+- id: R_WASTES_DUNE_56
+  name: Dune Run
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_55
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_57
+    len: 1
+- id: R_WASTES_DUNE_57
+  name: Sand Cut
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_56
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_58
+    len: 1
+- id: R_WASTES_DUNE_58
+  name: Sand Cut
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_57
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_59
+    len: 1
+- id: R_WASTES_DUNE_59
+  name: Heat Ripple
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Heat haze makes distance feel fake.
+    If you lose your bearing, head for shelter.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_58
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_60
+    len: 1
+- id: R_WASTES_DUNE_60
+  name: Leeward Hollow
+  cluster: CL_WASTES_DUNES
+  tags:
+  - landmark.glass_wastes.dunes
+  desc: |-
+    Wind-carved dunes shift underfoot.
+    Landmarks are rare; pick a line and commit.
+  exits:
+  - dir: back
+    to: R_WASTES_DUNE_59
+    len: 1
+  - dir: ahead
+    to: R_WASTES_DUNE_01
+    len: 1
+- id: R_WASTES_GLASSFIELD_01
+  name: Shardfield
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASS_01
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_02
+    len: 1
+- id: R_WASTES_GLASSFIELD_02
+  name: Crackled Ground
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_01
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_03
+    len: 1
+- id: R_WASTES_GLASSFIELD_03
+  name: Shardfield
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_02
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_04
+    len: 1
+- id: R_WASTES_GLASSFIELD_04
+  name: Glassed Flat
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_03
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_05
+    len: 1
+- id: R_WASTES_GLASSFIELD_05
+  name: Shardfield
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_04
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_06
+    len: 1
+- id: R_WASTES_GLASSFIELD_06
+  name: Crackled Ground
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_05
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_07
+    len: 1
+- id: R_WASTES_GLASSFIELD_07
+  name: Shardfield
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_06
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_08
+    len: 1
+- id: R_WASTES_GLASSFIELD_08
+  name: Mirror Patch
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_07
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_09
+    len: 1
+- id: R_WASTES_GLASSFIELD_09
+  name: Mirror Patch
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_08
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_10
+    len: 1
+- id: R_WASTES_GLASSFIELD_10
+  name: Glassed Flat
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_09
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_11
+    len: 1
+- id: R_WASTES_GLASSFIELD_11
+  name: Glassed Flat
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_10
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_12
+    len: 1
+- id: R_WASTES_GLASSFIELD_12
+  name: Glassed Flat
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_11
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_13
+    len: 1
+- id: R_WASTES_GLASSFIELD_13
+  name: Shardfield
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_12
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_14
+    len: 1
+- id: R_WASTES_GLASSFIELD_14
+  name: Mirror Patch
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_13
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_15
+    len: 1
+- id: R_WASTES_GLASSFIELD_15
+  name: Mirror Patch
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_14
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_16
+    len: 1
+- id: R_WASTES_GLASSFIELD_16
+  name: Glassed Flat
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_15
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_17
+    len: 1
+- id: R_WASTES_GLASSFIELD_17
+  name: Glassed Flat
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_16
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_18
+    len: 1
+- id: R_WASTES_GLASSFIELD_18
+  name: Mirror Patch
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_17
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_19
+    len: 1
+- id: R_WASTES_GLASSFIELD_19
+  name: Shardfield
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_18
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_20
+    len: 1
+- id: R_WASTES_GLASSFIELD_20
+  name: Glassed Flat
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_19
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_21
+    len: 1
+- id: R_WASTES_GLASSFIELD_21
+  name: Shardfield
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_20
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_22
+    len: 1
+- id: R_WASTES_GLASSFIELD_22
+  name: Shardfield
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_21
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_23
+    len: 1
+- id: R_WASTES_GLASSFIELD_23
+  name: Shardfield
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_22
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_24
+    len: 1
+- id: R_WASTES_GLASSFIELD_24
+  name: Crackled Ground
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_23
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_25
+    len: 1
+- id: R_WASTES_GLASSFIELD_25
+  name: Glassed Flat
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_24
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_26
+    len: 1
+- id: R_WASTES_GLASSFIELD_26
+  name: Crackled Ground
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_25
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_27
+    len: 1
+- id: R_WASTES_GLASSFIELD_27
+  name: Crackled Ground
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_26
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_28
+    len: 1
+- id: R_WASTES_GLASSFIELD_28
+  name: Shardfield
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_27
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_29
+    len: 1
+- id: R_WASTES_GLASSFIELD_29
+  name: Glassed Flat
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_28
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_30
+    len: 1
+- id: R_WASTES_GLASSFIELD_30
+  name: Glassed Flat
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_29
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_31
+    len: 1
+- id: R_WASTES_GLASSFIELD_31
+  name: Shardfield
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_30
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_32
+    len: 1
+- id: R_WASTES_GLASSFIELD_32
+  name: Glassed Flat
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_31
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_33
+    len: 1
+- id: R_WASTES_GLASSFIELD_33
+  name: Crackled Ground
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_32
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_34
+    len: 1
+- id: R_WASTES_GLASSFIELD_34
+  name: Mirror Patch
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_33
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_35
+    len: 1
+- id: R_WASTES_GLASSFIELD_35
+  name: Shardfield
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_34
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_36
+    len: 1
+- id: R_WASTES_GLASSFIELD_36
+  name: Shardfield
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_35
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_37
+    len: 1
+- id: R_WASTES_GLASSFIELD_37
+  name: Mirror Patch
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_36
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_38
+    len: 1
+- id: R_WASTES_GLASSFIELD_38
+  name: Glassed Flat
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_37
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_39
+    len: 1
+- id: R_WASTES_GLASSFIELD_39
+  name: Mirror Patch
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_38
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_40
+    len: 1
+- id: R_WASTES_GLASSFIELD_40
+  name: Crackled Ground
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_39
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_41
+    len: 1
+- id: R_WASTES_GLASSFIELD_41
+  name: Shardfield
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_40
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_42
+    len: 1
+- id: R_WASTES_GLASSFIELD_42
+  name: Shardfield
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_41
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_43
+    len: 1
+- id: R_WASTES_GLASSFIELD_43
+  name: Glassed Flat
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_42
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_44
+    len: 1
+- id: R_WASTES_GLASSFIELD_44
+  name: Shardfield
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_43
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_45
+    len: 1
+- id: R_WASTES_GLASSFIELD_45
+  name: Shardfield
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_44
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_46
+    len: 1
+- id: R_WASTES_GLASSFIELD_46
+  name: Shardfield
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_45
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_47
+    len: 1
+- id: R_WASTES_GLASSFIELD_47
+  name: Glassed Flat
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_46
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_48
+    len: 1
+- id: R_WASTES_GLASSFIELD_48
+  name: Shardfield
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    A field of fused sand and sharp edges.
+    Storms turn this place into a weapon.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_47
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASSFIELD_49
+    len: 1
+- id: R_WASTES_GLASSFIELD_49
+  name: Glassed Flat
+  cluster: CL_WASTES_GLASSFIELDS
+  tags:
+  - landmark.glass_wastes.glassfields
+  desc: |-
+    Glassed ground crunches like thin ice.
+    Every step wants to cut, chip, or give you away.
+  exits:
+  - dir: back
+    to: R_WASTES_GLASSFIELD_48
+    len: 1
+  - dir: ahead
+    to: R_WASTES_GLASS_01
+    len: 1
+- id: R_WASTES_OUTPOST_02
+  name: Outpost Yard
+  cluster: CL_WASTES_OUTPOST
+  tags:
+  - landmark.glass_wastes.outpost
+  desc: |-
+    A low outpost built to survive storms, not enemies.
+    Shelter feels like progress here.
+  exits:
+  - dir: back
+    to: R_WASTES_OUTPOST_01
+    len: 1
+  - dir: ahead
+    to: R_WASTES_OUTPOST_03
+    len: 1
+- id: R_WASTES_OUTPOST_03
+  name: Outpost Yard
+  cluster: CL_WASTES_OUTPOST
+  tags:
+  - landmark.glass_wastes.outpost
+  desc: |-
+    A low outpost built to survive storms, not enemies.
+    Shelter feels like progress here.
+  exits:
+  - dir: back
+    to: R_WASTES_OUTPOST_02
+    len: 1
+  - dir: ahead
+    to: R_WASTES_OUTPOST_04
+    len: 1
+- id: R_WASTES_OUTPOST_04
+  name: Outpost Yard
+  cluster: CL_WASTES_OUTPOST
+  tags:
+  - landmark.glass_wastes.outpost
+  desc: |-
+    A low outpost built to survive storms, not enemies.
+    Shelter feels like progress here.
+  exits:
+  - dir: back
+    to: R_WASTES_OUTPOST_03
+    len: 1
+  - dir: ahead
+    to: R_WASTES_OUTPOST_05
+    len: 1
+- id: R_WASTES_OUTPOST_05
+  name: Shelter Wall
+  cluster: CL_WASTES_OUTPOST
+  tags:
+  - landmark.glass_wastes.outpost
+  desc: |-
+    Glass-scarred boards and patched fabric walls.
+    The outpost is a checkpoint you can believe in.
+  exits:
+  - dir: back
+    to: R_WASTES_OUTPOST_04
+    len: 1
+  - dir: ahead
+    to: R_WASTES_OUTPOST_06
+    len: 1
+- id: R_WASTES_OUTPOST_06
+  name: Outpost Yard
+  cluster: CL_WASTES_OUTPOST
+  tags:
+  - landmark.glass_wastes.outpost
+  desc: |-
+    A low outpost built to survive storms, not enemies.
+    Shelter feels like progress here.
+  exits:
+  - dir: back
+    to: R_WASTES_OUTPOST_05
+    len: 1
+  - dir: ahead
+    to: R_WASTES_OUTPOST_07
+    len: 1
+- id: R_WASTES_OUTPOST_07
+  name: Outpost Yard
+  cluster: CL_WASTES_OUTPOST
+  tags:
+  - landmark.glass_wastes.outpost
+  desc: |-
+    A low outpost built to survive storms, not enemies.
+    Shelter feels like progress here.
+  exits:
+  - dir: back
+    to: R_WASTES_OUTPOST_06
+    len: 1
+  - dir: ahead
+    to: R_WASTES_OUTPOST_08
+    len: 1
+- id: R_WASTES_OUTPOST_08
+  name: Shelter Wall
+  cluster: CL_WASTES_OUTPOST
+  tags:
+  - landmark.glass_wastes.outpost
+  desc: |-
+    Glass-scarred boards and patched fabric walls.
+    The outpost is a checkpoint you can believe in.
+  exits:
+  - dir: back
+    to: R_WASTES_OUTPOST_07
+    len: 1
+  - dir: ahead
+    to: R_WASTES_OUTPOST_01
+    len: 1
+- id: R_WASTES_EYE_03
+  name: Static Pocket
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_02
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_04
+    len: 1
+- id: R_WASTES_EYE_04
+  name: Calm Ring
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    The storm changes pitch, then holds its breath.
+    This calm feels like a trap and a promise.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_03
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_05
+    len: 1
+- id: R_WASTES_EYE_05
+  name: Calm Ring
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    The storm changes pitch, then holds its breath.
+    This calm feels like a trap and a promise.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_04
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_06
+    len: 1
+- id: R_WASTES_EYE_06
+  name: Pressure Drop
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_05
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_07
+    len: 1
+- id: R_WASTES_EYE_07
+  name: Pressure Drop
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_06
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_08
+    len: 1
+- id: R_WASTES_EYE_08
+  name: Storm Eye
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    The storm changes pitch, then holds its breath.
+    This calm feels like a trap and a promise.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_07
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_09
+    len: 1
+- id: R_WASTES_EYE_09
+  name: Pressure Drop
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_08
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_10
+    len: 1
+- id: R_WASTES_EYE_10
+  name: Storm Eye
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    The storm changes pitch, then holds its breath.
+    This calm feels like a trap and a promise.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_09
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_11
+    len: 1
+- id: R_WASTES_EYE_11
+  name: Pressure Drop
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_10
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_12
+    len: 1
+- id: R_WASTES_EYE_12
+  name: Pressure Drop
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_11
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_13
+    len: 1
+- id: R_WASTES_EYE_13
+  name: Calm Ring
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    The storm changes pitch, then holds its breath.
+    This calm feels like a trap and a promise.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_12
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_14
+    len: 1
+- id: R_WASTES_EYE_14
+  name: Static Pocket
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_13
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_15
+    len: 1
+- id: R_WASTES_EYE_15
+  name: Static Pocket
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_14
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_16
+    len: 1
+- id: R_WASTES_EYE_16
+  name: Pressure Drop
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_15
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_17
+    len: 1
+- id: R_WASTES_EYE_17
+  name: Calm Ring
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    The storm changes pitch, then holds its breath.
+    This calm feels like a trap and a promise.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_16
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_18
+    len: 1
+- id: R_WASTES_EYE_18
+  name: Static Pocket
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_17
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_19
+    len: 1
+- id: R_WASTES_EYE_19
+  name: Static Pocket
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_18
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_20
+    len: 1
+- id: R_WASTES_EYE_20
+  name: Pressure Drop
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_19
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_21
+    len: 1
+- id: R_WASTES_EYE_21
+  name: Pressure Drop
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_20
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_22
+    len: 1
+- id: R_WASTES_EYE_22
+  name: Static Pocket
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_21
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_23
+    len: 1
+- id: R_WASTES_EYE_23
+  name: Storm Eye
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    The storm changes pitch, then holds its breath.
+    This calm feels like a trap and a promise.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_22
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_24
+    len: 1
+- id: R_WASTES_EYE_24
+  name: Pressure Drop
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_23
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_25
+    len: 1
+- id: R_WASTES_EYE_25
+  name: Storm Eye
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    The storm changes pitch, then holds its breath.
+    This calm feels like a trap and a promise.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_24
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_26
+    len: 1
+- id: R_WASTES_EYE_26
+  name: Static Pocket
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_25
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_27
+    len: 1
+- id: R_WASTES_EYE_27
+  name: Pressure Drop
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_26
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_28
+    len: 1
+- id: R_WASTES_EYE_28
+  name: Calm Ring
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    The storm changes pitch, then holds its breath.
+    This calm feels like a trap and a promise.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_27
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_29
+    len: 1
+- id: R_WASTES_EYE_29
+  name: Static Pocket
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_28
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_30
+    len: 1
+- id: R_WASTES_EYE_30
+  name: Pressure Drop
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_29
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_31
+    len: 1
+- id: R_WASTES_EYE_31
+  name: Calm Ring
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    The storm changes pitch, then holds its breath.
+    This calm feels like a trap and a promise.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_30
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_32
+    len: 1
+- id: R_WASTES_EYE_32
+  name: Storm Eye
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    The storm changes pitch, then holds its breath.
+    This calm feels like a trap and a promise.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_31
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_33
+    len: 1
+- id: R_WASTES_EYE_33
+  name: Pressure Drop
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_32
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_34
+    len: 1
+- id: R_WASTES_EYE_34
+  name: Calm Ring
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    The storm changes pitch, then holds its breath.
+    This calm feels like a trap and a promise.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_33
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_35
+    len: 1
+- id: R_WASTES_EYE_35
+  name: Storm Eye
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    The storm changes pitch, then holds its breath.
+    This calm feels like a trap and a promise.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_34
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_36
+    len: 1
+- id: R_WASTES_EYE_36
+  name: Static Pocket
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_35
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_37
+    len: 1
+- id: R_WASTES_EYE_37
+  name: Pressure Drop
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_36
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_38
+    len: 1
+- id: R_WASTES_EYE_38
+  name: Pressure Drop
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_37
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_39
+    len: 1
+- id: R_WASTES_EYE_39
+  name: Static Pocket
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    A strange pocket of stillness inside the wind.
+    If an event triggers, it will be here.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_38
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_40
+    len: 1
+- id: R_WASTES_EYE_40
+  name: Storm Eye
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    The storm changes pitch, then holds its breath.
+    This calm feels like a trap and a promise.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_39
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_41
+    len: 1
+- id: R_WASTES_EYE_41
+  name: Storm Eye
+  cluster: CL_WASTES_STORM_EYE
+  tags:
+  - landmark.glass_wastes.storm_eye
+  desc: |-
+    The storm changes pitch, then holds its breath.
+    This calm feels like a trap and a promise.
+  exits:
+  - dir: back
+    to: R_WASTES_EYE_40
+    len: 1
+  - dir: ahead
+    to: R_WASTES_EYE_02
+    len: 1

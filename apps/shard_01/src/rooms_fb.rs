@@ -764,10 +764,8 @@ pub fn build_world_buffer() -> Vec<u8> {
             to: Some(room_portal_ns_town_id),
         },
     );
-    let exits_portal_town_ns = fbb.create_vector(&[
-        exit_portal_town_ns_north,
-        exit_portal_town_ns_south,
-    ]);
+    let exits_portal_town_ns =
+        fbb.create_vector(&[exit_portal_town_ns_north, exit_portal_town_ns_south]);
 
     // Tavern exits.
     let exit_tavern_back = create_exit(
@@ -1017,8 +1015,10 @@ pub fn build_world_buffer() -> Vec<u8> {
             to: Some(room_sewers_junction_id),
         },
     );
-    let exits_sewers_from_orchard =
-        fbb.create_vector(&[exit_sewers_from_orchard_up, exit_sewers_from_orchard_junction]);
+    let exits_sewers_from_orchard = fbb.create_vector(&[
+        exit_sewers_from_orchard_up,
+        exit_sewers_from_orchard_junction,
+    ]);
 
     // Sewers: junction hub.
     let exit_sewers_junction_town = create_exit(
@@ -1229,8 +1229,10 @@ pub fn build_world_buffer() -> Vec<u8> {
             to: Some(room_sewers_grease_arena_id),
         },
     );
-    let exits_sewers_grease_approach =
-        fbb.create_vector(&[exit_sewers_grease_approach_junction, exit_sewers_grease_approach_arena]);
+    let exits_sewers_grease_approach = fbb.create_vector(&[
+        exit_sewers_grease_approach_junction,
+        exit_sewers_grease_approach_arena,
+    ]);
 
     let exit_sewers_grease_arena_back = create_exit(
         &mut fbb,

@@ -115,3 +115,64 @@ variable "assets_bucket_force_destroy" {
   description = "Whether to allow destroying the assets bucket even if it contains objects."
   default     = false
 }
+
+variable "ssm_read_parameter_names" {
+  type        = list(string)
+  description = "Optional list of SSM Parameter Store names that the instance role may read (useful for app secrets like OAuth client secrets). Example: /slopmud/prd/google_oauth_client_secret"
+  default     = []
+}
+
+variable "extra_cname_record_names" {
+  type        = list(string)
+  description = "Optional additional CNAME record names (relative to zone_name) pointing at cname_target (or the instance public DNS if enable_compute=true). Example: [\"prd-gaia\", \"stg-gaia\", \"dev-gaia\"]."
+  default     = []
+}
+
+variable "compliance_portal_config_json_ssm_name" {
+  type        = string
+  description = "Optional: create an SSM SecureString parameter with the compliance portal config JSON at this name (e.g. /slopmud/prd/compliance_portal_config_json). Value is supplied via compliance_portal_config_json_ssm_value."
+  default     = ""
+}
+
+variable "compliance_portal_config_json_ssm_value" {
+  type        = string
+  description = "Value for compliance_portal_config_json_ssm_name. Keep this out of git; pass via TF_VAR_... at apply time."
+  default     = ""
+  sensitive   = true
+}
+
+variable "ses_send_enabled" {
+  type        = bool
+  description = "Whether to allow the instance IAM role to send email via Amazon SES (used by the compliance portal access-key email sender)."
+  default     = true
+}
+
+variable "sbc_enable_dns_record_name" {
+  type        = string
+  description = "Optional DNS record name (relative to zone) used as the SBC enforcement enable switch (e.g. sbc-anti-lockout-prd)."
+  default     = ""
+}
+
+variable "sbc_enable_dns_record_enabled" {
+  type        = bool
+  description = "Whether the SBC enforcement enable DNS record should be in the enabled state. The record is created whenever sbc_enable_dns_record_name is non-empty; this flag toggles the A-record value to avoid NXDOMAIN negative-caching delays."
+  default     = false
+}
+
+variable "sbc_enable_dns_record_ttl" {
+  type        = number
+  description = "TTL for the SBC enforcement enable DNS record."
+  default     = 60
+}
+
+variable "sbc_enable_dns_record_ip" {
+  type        = string
+  description = "Enabled-state IP value for the SBC enable A record (use a documentation/reserved IP by default)."
+  default     = "192.0.2.1"
+}
+
+variable "sbc_enable_dns_record_disabled_ip" {
+  type        = string
+  description = "Disabled-state IP value for the SBC enable A record (use a documentation/reserved IP by default)."
+  default     = "192.0.2.2"
+}

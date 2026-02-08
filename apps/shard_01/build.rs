@@ -1,5 +1,5 @@
-use std::process::Command;
 use std::path::PathBuf;
+use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn git(args: &[&str]) -> Option<String> {
@@ -26,12 +26,11 @@ fn main() {
     if let Ok(out) = Command::new("date")
         .args(["-u", "+%Y-%m-%dT%H:%M:%SZ"])
         .output()
+        && out.status.success()
     {
-        if out.status.success() {
-            let ts = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if !ts.is_empty() {
-                println!("cargo:rustc-env=SLOPMUD_BUILD_UTC={ts}");
-            }
+        let ts = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !ts.is_empty() {
+            println!("cargo:rustc-env=SLOPMUD_BUILD_UTC={ts}");
         }
     }
 
@@ -89,9 +88,7 @@ fn main() {
             .and_then(|s| s.to_str())
             .unwrap_or("unknown.yaml");
         let abs = p.to_string_lossy();
-        out.push_str(&format!(
-            "  (r#\"{name}\"#, include_str!(r#\"{abs}\"#)),\n"
-        ));
+        out.push_str(&format!("  (r#\"{name}\"#, include_str!(r#\"{abs}\"#)),\n"));
     }
     out.push_str("];\n");
     std::fs::write(out_path, out).expect("write world_areas.rs");

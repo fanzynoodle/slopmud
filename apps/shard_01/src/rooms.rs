@@ -14,6 +14,8 @@ mod embedded_areas {
 pub struct ExitDef {
     pub dir: String,
     pub to: String,
+    pub sealed: bool,
+    pub gate: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -24,11 +26,20 @@ pub struct RoomDef {
     pub exits: Vec<ExitDef>,
 }
 
+#[derive(Clone, Debug)]
+pub struct AreaSummary {
+    pub zone_id: String,
+    pub zone_name: String,
+    pub start_room: Option<String>,
+    pub room_count: usize,
+}
+
 #[derive(Clone)]
 pub struct Rooms {
     rooms: HashMap<String, RoomDef>,
     dyn_rooms: HashMap<String, RoomDef>,
     start_room: String,
+    areas: Vec<AreaSummary>,
 }
 
 impl Rooms {
@@ -58,7 +69,12 @@ impl Rooms {
                             let dir = exit.dir().unwrap_or("").to_string();
                             let to = exit.to().unwrap_or("").to_string();
                             if !dir.is_empty() && !to.is_empty() {
-                                exits.push(ExitDef { dir, to });
+                                exits.push(ExitDef {
+                                    dir,
+                                    to,
+                                    sealed: false,
+                                    gate: None,
+                                });
                             }
                         }
                     }
@@ -87,13 +103,18 @@ impl Rooms {
         // These are embedded at compile time from `world/areas/*.yaml`, so deploy stays binary-only.
         // The FlatBuffers blob remains as a fallback/default world while we migrate zones to YAML.
         let mut preferred_start_room: Option<String> = None;
+        let mut areas: Vec<AreaSummary> = Vec::new();
         for (fname, s) in embedded_areas::WORLD_AREAS_YAML {
             let a = serde_yaml::from_str::<AreaFile>(s)
                 .with_context(|| format!("parse embedded area yaml: {fname}"))?;
-            let area_name = a
-                .zone_name
-                .clone()
-                .unwrap_or_else(|| a.zone_id.clone());
+            let room_count = a.rooms.len();
+            let area_name = a.zone_name.clone().unwrap_or_else(|| a.zone_id.clone());
+            areas.push(AreaSummary {
+                zone_id: a.zone_id.clone(),
+                zone_name: area_name.clone(),
+                start_room: a.start_room.clone(),
+                room_count,
+            });
             for r in a.rooms {
                 let mut exits = Vec::new();
                 if let Some(xs) = r.exits {
@@ -101,7 +122,18 @@ impl Rooms {
                         let dir = e.dir.trim().to_string();
                         let to = e.to.trim().to_string();
                         if !dir.is_empty() && !to.is_empty() {
-                            exits.push(ExitDef { dir, to });
+                            let gate = e
+                                .gate
+                                .as_deref()
+                                .map(str::trim)
+                                .filter(|s| !s.is_empty())
+                                .map(|s| s.to_string());
+                            exits.push(ExitDef {
+                                dir,
+                                to,
+                                sealed: e.state.as_deref() == Some("sealed"),
+                                gate,
+                            });
                         }
                     }
                 }
@@ -132,15 +164,56 @@ impl Rooms {
         } else if rooms.contains_key("newbie_school.orientation") {
             start_room = "newbie_school.orientation".to_string();
         }
+
+        areas.sort_by(|a, b| a.zone_id.cmp(&b.zone_id));
         Ok(Self {
             rooms,
             dyn_rooms: HashMap::new(),
             start_room,
+            areas,
         })
     }
 
     pub fn start_room(&self) -> &str {
         &self.start_room
+    }
+
+    pub fn render_areas(&self) -> String {
+        if self.areas.is_empty() {
+            // Fallback: list unique area names derived from room defs.
+            let mut xs = self
+                .rooms
+                .values()
+                .map(|r| r.area_name.as_str())
+                .collect::<Vec<_>>();
+            xs.sort_unstable();
+            xs.dedup();
+
+            let mut s = String::new();
+            s.push_str(&format!("areas: {}\\r\\n", xs.len()));
+            for name in xs {
+                s.push_str(" - ");
+                s.push_str(name);
+                s.push_str("\\r\\n");
+            }
+            return s;
+        }
+
+        let mut s = String::new();
+        s.push_str(&format!("areas: {}\\r\\n", self.areas.len()));
+        for a in &self.areas {
+            s.push_str(" - ");
+            s.push_str(&a.zone_id);
+            s.push_str(" (");
+            s.push_str(&a.zone_name);
+            s.push_str(")");
+            s.push_str(&format!(
+                " rooms={} start={}\\r\\n",
+                a.room_count,
+                a.start_room.as_deref().unwrap_or("-")
+            ));
+        }
+        s
     }
 
     pub fn has_room(&self, room_id: &str) -> bool {
@@ -242,7 +315,10 @@ impl Rooms {
         };
 
         let mut s = String::new();
-        s.push_str(&format!("== {} ({}) ==\r\n", room.name, room.area_name));
+        s.push_str(&format!(
+            "== {} ({}) [{}] ==\r\n",
+            room.name, room.area_name, room_id
+        ));
         if !room.description.is_empty() {
             s.push_str(&room.description);
             s.push_str("\r\n");
@@ -298,6 +374,7 @@ struct AreaExit {
     state: Option<String>,
     #[allow(dead_code)]
     opens_area: Option<String>,
+    gate: Option<String>,
 }
 
 fn normalize_dir_token(line: &str) -> Option<&'static str> {

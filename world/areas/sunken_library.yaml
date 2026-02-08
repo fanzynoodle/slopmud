@@ -1,0 +1,1732 @@
+version: 1
+zone_id: sunken_library
+zone_name: Sunken Library
+area_id: A01
+level_band:
+- 6
+- 9
+start_room: P_LIB_RUSTWOOD
+rooms:
+- id: P_LIB_FACTORY
+  name: Factory District (Outskirts) Transfer
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - portal.P_LIB_FACTORY
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies Factory District (Outskirts).
+  exits:
+  - dir: out
+    to: P_FACTORY_LIBRARY
+    len: 2
+    state: sealed
+    gate: gate.factory.entry
+  - dir: in
+    to: R_LIB_CHOICE_01
+    len: 1
+- id: P_LIB_RESERVOIR
+  name: The Reservoir Transfer
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - portal.P_LIB_RESERVOIR
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies The Reservoir.
+  exits:
+  - dir: out
+    to: P_RESERVOIR_LIBRARY
+    len: 2
+    state: sealed
+    gate: gate.reservoir.entry
+  - dir: in
+    to: R_LIB_CHOICE_01
+    len: 1
+- id: P_LIB_RUSTWOOD
+  name: Rustwood Transfer
+  cluster: CL_LIB_ANTECHAMBER
+  tags:
+  - portal.P_LIB_RUSTWOOD
+  desc: |-
+    A marked boundary with a clear way out.
+    Beyond lies Rustwood.
+  exits:
+  - dir: out
+    to: P_RUSTWOOD_LIBRARY
+    len: 2
+  - dir: in
+    to: R_LIB_ANTE_01
+    len: 1
+- id: R_LIB_ANTE_01
+  name: Sunken Library Anchor
+  cluster: CL_LIB_ANTECHAMBER
+  tags:
+  - HUB_LIB_ANTECHAMBER
+  - portal.P_LIB_RUSTWOOD
+  - safe_pocket
+  desc: |-
+    A dry stone threshold above the waterline where the air tastes like wet dust.
+    This is a safe reset: the dry stone clears water exposure, but shrine progress persists.
+  exits:
+  - dir: west
+    to: P_LIB_RUSTWOOD
+    len: 1
+  - dir: east
+    to: R_LIB_STACKS_01
+    len: 1
+  - dir: safe
+    to: R_LIB_SAFE_01
+    len: 1
+  - dir: wander_antechamber
+    to: R_LIB_ANTECHAMBER_01
+    len: 1
+- id: R_LIB_STACKS_01
+  name: Index Nook
+  cluster: CL_LIB_STACKS
+  tags: []
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_ANTE_01
+    len: 1
+  - dir: north
+    to: R_LIB_PLATE_01
+    len: 1
+  - dir: east
+    to: R_LIB_PLATE_02
+    len: 1
+  - dir: south
+    to: R_LIB_PLATE_03
+    len: 1
+  - dir: west
+    to: R_LIB_PLATE_04
+    len: 1
+  - dir: decode
+    to: R_LIB_DECODER_01
+    len: 1
+    state: sealed
+    gate: q.q5_sunken_index.plates>=4
+  - dir: down
+    to: R_LIB_LORE_01
+    len: 1
+  - dir: up
+    to: R_LIB_LORE_02
+    len: 1
+  - dir: wander_plate
+    to: R_LIB_PLATE_05
+    len: 1
+- id: R_LIB_PLATE_01
+  name: Index Nook
+  cluster: CL_LIB_STACKS
+  tags:
+  - setpiece.q5.plate_shrine_1
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: south
+    to: R_LIB_STACKS_01
+    len: 1
+- id: R_LIB_PLATE_02
+  name: Archive Aisle
+  cluster: CL_LIB_STACKS
+  tags:
+  - setpiece.q5.plate_shrine_2
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: west
+    to: R_LIB_STACKS_01
+    len: 1
+- id: R_LIB_PLATE_03
+  name: Index Nook
+  cluster: CL_LIB_STACKS
+  tags:
+  - setpiece.q5.plate_shrine_3
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: north
+    to: R_LIB_STACKS_01
+    len: 1
+- id: R_LIB_PLATE_04
+  name: Archive Aisle
+  cluster: CL_LIB_STACKS
+  tags:
+  - setpiece.q5.plate_shrine_4
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: east
+    to: R_LIB_STACKS_01
+    len: 1
+- id: R_LIB_DECODER_01
+  name: Control Lectern
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - setpiece.q5.decoder_chamber
+  - portal.P_LIB_FACTORY
+  - portal.P_LIB_RESERVOIR
+  desc: |-
+    Metal plates and engraved sockets wait for missing pieces.
+    The air tastes like ozone and wet stone.
+  exits:
+  - dir: back
+    to: R_LIB_STACKS_01
+    len: 1
+  - dir: west
+    to: R_LIB_CHOICE_01
+    len: 1
+  - dir: wander_chamber
+    to: R_LIB_CHAMBER_01
+    len: 1
+- id: R_LIB_CHOICE_01
+  name: Index Choice Doorway
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags: []
+  desc: |-
+    Two sealed doors face each other across a strip of dry stone.
+    One is stamped FACTORY. The other reads RESERVOIR.
+  exits:
+  - dir: east
+    to: R_LIB_DECODER_01
+    len: 1
+  - dir: west
+    to: R_LIB_ANTE_01
+    len: 1
+  - dir: factory
+    to: P_LIB_FACTORY
+    len: 1
+    state: sealed
+    gate: gate.factory.entry
+  - dir: reservoir
+    to: P_LIB_RESERVOIR
+    len: 1
+    state: sealed
+    gate: gate.reservoir.entry
+- id: R_LIB_LORE_01
+  name: Index Folklore Nook
+  cluster: CL_LIB_STACKS
+  tags: []
+  desc: |-
+    A half-collapsed reading nook above the waterline.
+    A single page is pinned to stone: routes you cannot see yet.
+  exits:
+  - dir: up
+    to: R_LIB_STACKS_01
+    len: 1
+- id: R_LIB_LORE_02
+  name: Broken Index Balcony
+  cluster: CL_LIB_STACKS
+  tags: []
+  desc: |-
+    A dry balcony with a snapped placard that once mapped the stacks.
+    The placard keeps repeating one phrase: "unlock, then return."
+  exits:
+  - dir: down
+    to: R_LIB_STACKS_01
+    len: 1
+- id: R_LIB_SAFE_01
+  name: Dry Side Alcove
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - safe_pocket
+  desc: |-
+    A dry alcove above the waterline with a cracked bench and a stash of rags.
+    This is a safe pocket: waiting here is explicitly safe, even when the flooded wing feels impatient.
+  exits:
+  - dir: hub
+    to: R_LIB_ANTE_01
+    len: 1
+  - dir: wander_flooded
+    to: R_LIB_FLOODED_01
+    len: 1
+- id: R_LIB_ANTECHAMBER_01
+  name: Broken Reading Room
+  cluster: CL_LIB_ANTECHAMBER
+  tags:
+  - landmark.lib.antechamber
+  desc: |-
+    A flooded archive where light goes to die.
+    Knowledge is a key here, not a flavor.
+  exits:
+  - dir: back
+    to: R_LIB_ANTE_01
+    len: 1
+  - dir: ahead
+    to: R_LIB_ANTECHAMBER_02
+    len: 1
+- id: R_LIB_ANTECHAMBER_02
+  name: Antechamber
+  cluster: CL_LIB_ANTECHAMBER
+  tags:
+  - landmark.lib.antechamber
+  desc: |-
+    Stone and shelving frame a cold, damp hush.
+    Even empty rooms feel watched.
+  exits:
+  - dir: back
+    to: R_LIB_ANTECHAMBER_01
+    len: 1
+  - dir: ahead
+    to: R_LIB_ANTECHAMBER_03
+    len: 1
+- id: R_LIB_ANTECHAMBER_03
+  name: Broken Reading Room
+  cluster: CL_LIB_ANTECHAMBER
+  tags:
+  - landmark.lib.antechamber
+  desc: |-
+    A flooded archive where light goes to die.
+    Knowledge is a key here, not a flavor.
+  exits:
+  - dir: back
+    to: R_LIB_ANTECHAMBER_02
+    len: 1
+  - dir: ahead
+    to: R_LIB_ANTECHAMBER_04
+    len: 1
+- id: R_LIB_ANTECHAMBER_04
+  name: Antechamber
+  cluster: CL_LIB_ANTECHAMBER
+  tags:
+  - landmark.lib.antechamber
+  desc: |-
+    Stone and shelving frame a cold, damp hush.
+    Even empty rooms feel watched.
+  exits:
+  - dir: back
+    to: R_LIB_ANTECHAMBER_03
+    len: 1
+  - dir: ahead
+    to: R_LIB_ANTECHAMBER_05
+    len: 1
+- id: R_LIB_ANTECHAMBER_05
+  name: Dusty Vestibule
+  cluster: CL_LIB_ANTECHAMBER
+  tags:
+  - landmark.lib.antechamber
+  desc: |-
+    Stone and shelving frame a cold, damp hush.
+    Even empty rooms feel watched.
+  exits:
+  - dir: back
+    to: R_LIB_ANTECHAMBER_04
+    len: 1
+  - dir: ahead
+    to: R_LIB_ANTECHAMBER_06
+    len: 1
+- id: R_LIB_ANTECHAMBER_06
+  name: Library Hall
+  cluster: CL_LIB_ANTECHAMBER
+  tags:
+  - landmark.lib.antechamber
+  desc: |-
+    A flooded archive where light goes to die.
+    Knowledge is a key here, not a flavor.
+  exits:
+  - dir: back
+    to: R_LIB_ANTECHAMBER_05
+    len: 1
+  - dir: ahead
+    to: R_LIB_ANTECHAMBER_07
+    len: 1
+- id: R_LIB_ANTECHAMBER_07
+  name: Antechamber
+  cluster: CL_LIB_ANTECHAMBER
+  tags:
+  - landmark.lib.antechamber
+  desc: |-
+    Stone and shelving frame a cold, damp hush.
+    Even empty rooms feel watched.
+  exits:
+  - dir: back
+    to: R_LIB_ANTECHAMBER_06
+    len: 1
+  - dir: ahead
+    to: R_LIB_ANTECHAMBER_08
+    len: 1
+- id: R_LIB_ANTECHAMBER_08
+  name: Library Hall
+  cluster: CL_LIB_ANTECHAMBER
+  tags:
+  - landmark.lib.antechamber
+  desc: |-
+    A flooded archive where light goes to die.
+    Knowledge is a key here, not a flavor.
+  exits:
+  - dir: back
+    to: R_LIB_ANTECHAMBER_07
+    len: 1
+  - dir: ahead
+    to: R_LIB_ANTE_01
+    len: 1
+- id: R_LIB_CHAMBER_01
+  name: Cipher Door
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    Metal plates and engraved sockets wait for missing pieces.
+    The air tastes like ozone and wet stone.
+  exits:
+  - dir: back
+    to: R_LIB_DECODER_01
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_02
+    len: 1
+- id: R_LIB_CHAMBER_02
+  name: Plate Socket
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    An old chamber built around a stubborn machine.
+    It feels like the kind of puzzle that only opens for effort.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_01
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_03
+    len: 1
+- id: R_LIB_CHAMBER_03
+  name: Decoder Chamber
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    An old chamber built around a stubborn machine.
+    It feels like the kind of puzzle that only opens for effort.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_02
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_04
+    len: 1
+- id: R_LIB_CHAMBER_04
+  name: Control Lectern
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    Metal plates and engraved sockets wait for missing pieces.
+    The air tastes like ozone and wet stone.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_03
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_05
+    len: 1
+- id: R_LIB_CHAMBER_05
+  name: Plate Socket
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    An old chamber built around a stubborn machine.
+    It feels like the kind of puzzle that only opens for effort.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_04
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_06
+    len: 1
+- id: R_LIB_CHAMBER_06
+  name: Plate Socket
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    An old chamber built around a stubborn machine.
+    It feels like the kind of puzzle that only opens for effort.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_05
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_07
+    len: 1
+- id: R_LIB_CHAMBER_07
+  name: Control Lectern
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    Metal plates and engraved sockets wait for missing pieces.
+    The air tastes like ozone and wet stone.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_06
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_08
+    len: 1
+- id: R_LIB_CHAMBER_08
+  name: Control Lectern
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    Metal plates and engraved sockets wait for missing pieces.
+    The air tastes like ozone and wet stone.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_07
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_09
+    len: 1
+- id: R_LIB_CHAMBER_09
+  name: Cipher Door
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    Metal plates and engraved sockets wait for missing pieces.
+    The air tastes like ozone and wet stone.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_08
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_10
+    len: 1
+- id: R_LIB_CHAMBER_10
+  name: Plate Socket
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    An old chamber built around a stubborn machine.
+    It feels like the kind of puzzle that only opens for effort.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_09
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_11
+    len: 1
+- id: R_LIB_CHAMBER_11
+  name: Cipher Door
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    Metal plates and engraved sockets wait for missing pieces.
+    The air tastes like ozone and wet stone.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_10
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_12
+    len: 1
+- id: R_LIB_CHAMBER_12
+  name: Decoder Chamber
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    An old chamber built around a stubborn machine.
+    It feels like the kind of puzzle that only opens for effort.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_11
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_13
+    len: 1
+- id: R_LIB_CHAMBER_13
+  name: Cipher Door
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    Metal plates and engraved sockets wait for missing pieces.
+    The air tastes like ozone and wet stone.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_12
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_14
+    len: 1
+- id: R_LIB_CHAMBER_14
+  name: Control Lectern
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    Metal plates and engraved sockets wait for missing pieces.
+    The air tastes like ozone and wet stone.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_13
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_15
+    len: 1
+- id: R_LIB_CHAMBER_15
+  name: Control Lectern
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    Metal plates and engraved sockets wait for missing pieces.
+    The air tastes like ozone and wet stone.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_14
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_16
+    len: 1
+- id: R_LIB_CHAMBER_16
+  name: Control Lectern
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    Metal plates and engraved sockets wait for missing pieces.
+    The air tastes like ozone and wet stone.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_15
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_17
+    len: 1
+- id: R_LIB_CHAMBER_17
+  name: Cipher Door
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    Metal plates and engraved sockets wait for missing pieces.
+    The air tastes like ozone and wet stone.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_16
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_18
+    len: 1
+- id: R_LIB_CHAMBER_18
+  name: Plate Socket
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    An old chamber built around a stubborn machine.
+    It feels like the kind of puzzle that only opens for effort.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_17
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_19
+    len: 1
+- id: R_LIB_CHAMBER_19
+  name: Control Lectern
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    Metal plates and engraved sockets wait for missing pieces.
+    The air tastes like ozone and wet stone.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_18
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_20
+    len: 1
+- id: R_LIB_CHAMBER_20
+  name: Cipher Door
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    Metal plates and engraved sockets wait for missing pieces.
+    The air tastes like ozone and wet stone.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_19
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_21
+    len: 1
+- id: R_LIB_CHAMBER_21
+  name: Decoder Chamber
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    An old chamber built around a stubborn machine.
+    It feels like the kind of puzzle that only opens for effort.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_20
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_22
+    len: 1
+- id: R_LIB_CHAMBER_22
+  name: Control Lectern
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    Metal plates and engraved sockets wait for missing pieces.
+    The air tastes like ozone and wet stone.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_21
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_23
+    len: 1
+- id: R_LIB_CHAMBER_23
+  name: Decoder Chamber
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    An old chamber built around a stubborn machine.
+    It feels like the kind of puzzle that only opens for effort.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_22
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_24
+    len: 1
+- id: R_LIB_CHAMBER_24
+  name: Cipher Door
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    Metal plates and engraved sockets wait for missing pieces.
+    The air tastes like ozone and wet stone.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_23
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_25
+    len: 1
+- id: R_LIB_CHAMBER_25
+  name: Cipher Door
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    Metal plates and engraved sockets wait for missing pieces.
+    The air tastes like ozone and wet stone.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_24
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_26
+    len: 1
+- id: R_LIB_CHAMBER_26
+  name: Control Lectern
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    Metal plates and engraved sockets wait for missing pieces.
+    The air tastes like ozone and wet stone.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_25
+    len: 1
+  - dir: ahead
+    to: R_LIB_CHAMBER_27
+    len: 1
+- id: R_LIB_CHAMBER_27
+  name: Control Lectern
+  cluster: CL_LIB_DECODER_CHAMBER
+  tags:
+  - landmark.lib.decoder_chamber
+  desc: |-
+    Metal plates and engraved sockets wait for missing pieces.
+    The air tastes like ozone and wet stone.
+  exits:
+  - dir: back
+    to: R_LIB_CHAMBER_26
+    len: 1
+  - dir: ahead
+    to: R_LIB_DECODER_01
+    len: 1
+- id: R_LIB_FLOODED_01
+  name: Waterlogged Hall
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    A wing claimed by damp and mold.
+    Visibility is worse, and so are your choices.
+  exits:
+  - dir: back
+    to: R_LIB_SAFE_01
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_02
+    len: 1
+- id: R_LIB_FLOODED_02
+  name: Flooded Wing
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    Cold water pools around broken tiles.
+    Every step risks noise and slow movement.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_01
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_03
+    len: 1
+- id: R_LIB_FLOODED_03
+  name: Slick Step
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    Cold water pools around broken tiles.
+    Every step risks noise and slow movement.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_02
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_04
+    len: 1
+- id: R_LIB_FLOODED_04
+  name: Slick Step
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    Cold water pools around broken tiles.
+    Every step risks noise and slow movement.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_03
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_05
+    len: 1
+- id: R_LIB_FLOODED_05
+  name: Slick Step
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    Cold water pools around broken tiles.
+    Every step risks noise and slow movement.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_04
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_06
+    len: 1
+- id: R_LIB_FLOODED_06
+  name: Flooded Wing
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    Cold water pools around broken tiles.
+    Every step risks noise and slow movement.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_05
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_07
+    len: 1
+- id: R_LIB_FLOODED_07
+  name: Flooded Wing
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    Cold water pools around broken tiles.
+    Every step risks noise and slow movement.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_06
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_08
+    len: 1
+- id: R_LIB_FLOODED_08
+  name: Slick Step
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    Cold water pools around broken tiles.
+    Every step risks noise and slow movement.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_07
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_09
+    len: 1
+- id: R_LIB_FLOODED_09
+  name: Waterlogged Hall
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    A wing claimed by damp and mold.
+    Visibility is worse, and so are your choices.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_08
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_10
+    len: 1
+- id: R_LIB_FLOODED_10
+  name: Slick Step
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    Cold water pools around broken tiles.
+    Every step risks noise and slow movement.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_09
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_11
+    len: 1
+- id: R_LIB_FLOODED_11
+  name: Slick Step
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    Cold water pools around broken tiles.
+    Every step risks noise and slow movement.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_10
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_12
+    len: 1
+- id: R_LIB_FLOODED_12
+  name: Waterlogged Hall
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    A wing claimed by damp and mold.
+    Visibility is worse, and so are your choices.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_11
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_13
+    len: 1
+- id: R_LIB_FLOODED_13
+  name: Drowned Alcove
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    A wing claimed by damp and mold.
+    Visibility is worse, and so are your choices.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_12
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_14
+    len: 1
+- id: R_LIB_FLOODED_14
+  name: Waterlogged Hall
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    A wing claimed by damp and mold.
+    Visibility is worse, and so are your choices.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_13
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_15
+    len: 1
+- id: R_LIB_FLOODED_15
+  name: Drowned Alcove
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    A wing claimed by damp and mold.
+    Visibility is worse, and so are your choices.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_14
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_16
+    len: 1
+- id: R_LIB_FLOODED_16
+  name: Waterlogged Hall
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    A wing claimed by damp and mold.
+    Visibility is worse, and so are your choices.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_15
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_17
+    len: 1
+- id: R_LIB_FLOODED_17
+  name: Flooded Wing
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    Cold water pools around broken tiles.
+    Every step risks noise and slow movement.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_16
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_18
+    len: 1
+- id: R_LIB_FLOODED_18
+  name: Waterlogged Hall
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    A wing claimed by damp and mold.
+    Visibility is worse, and so are your choices.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_17
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_19
+    len: 1
+- id: R_LIB_FLOODED_19
+  name: Slick Step
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    Cold water pools around broken tiles.
+    Every step risks noise and slow movement.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_18
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_20
+    len: 1
+- id: R_LIB_FLOODED_20
+  name: Drowned Alcove
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    A wing claimed by damp and mold.
+    Visibility is worse, and so are your choices.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_19
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_21
+    len: 1
+- id: R_LIB_FLOODED_21
+  name: Drowned Alcove
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    A wing claimed by damp and mold.
+    Visibility is worse, and so are your choices.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_20
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_22
+    len: 1
+- id: R_LIB_FLOODED_22
+  name: Drowned Alcove
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    A wing claimed by damp and mold.
+    Visibility is worse, and so are your choices.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_21
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_23
+    len: 1
+- id: R_LIB_FLOODED_23
+  name: Drowned Alcove
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    A wing claimed by damp and mold.
+    Visibility is worse, and so are your choices.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_22
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_24
+    len: 1
+- id: R_LIB_FLOODED_24
+  name: Slick Step
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    Cold water pools around broken tiles.
+    Every step risks noise and slow movement.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_23
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_25
+    len: 1
+- id: R_LIB_FLOODED_25
+  name: Drowned Alcove
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    A wing claimed by damp and mold.
+    Visibility is worse, and so are your choices.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_24
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_26
+    len: 1
+- id: R_LIB_FLOODED_26
+  name: Drowned Alcove
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    A wing claimed by damp and mold.
+    Visibility is worse, and so are your choices.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_25
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_27
+    len: 1
+- id: R_LIB_FLOODED_27
+  name: Drowned Alcove
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    A wing claimed by damp and mold.
+    Visibility is worse, and so are your choices.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_26
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_28
+    len: 1
+- id: R_LIB_FLOODED_28
+  name: Waterlogged Hall
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    A wing claimed by damp and mold.
+    Visibility is worse, and so are your choices.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_27
+    len: 1
+  - dir: ahead
+    to: R_LIB_FLOODED_29
+    len: 1
+- id: R_LIB_FLOODED_29
+  name: Drowned Alcove
+  cluster: CL_LIB_FLOODED_WINGS
+  tags:
+  - landmark.lib.flooded_wings
+  desc: |-
+    A wing claimed by damp and mold.
+    Visibility is worse, and so are your choices.
+  exits:
+  - dir: back
+    to: R_LIB_FLOODED_28
+    len: 1
+  - dir: ahead
+    to: R_LIB_SAFE_01
+    len: 1
+- id: R_LIB_PLATE_05
+  name: Index Nook
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_STACKS_01
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_06
+    len: 1
+- id: R_LIB_PLATE_06
+  name: Index Nook
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_05
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_07
+    len: 1
+- id: R_LIB_PLATE_07
+  name: Archive Aisle
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_06
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_08
+    len: 1
+- id: R_LIB_PLATE_08
+  name: Stack Row
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    Tall shelves make a maze of quiet corridors.
+    Water damage turns paper into a smell you can taste.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_07
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_09
+    len: 1
+- id: R_LIB_PLATE_09
+  name: Shelf Canyon
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    Tall shelves make a maze of quiet corridors.
+    Water damage turns paper into a smell you can taste.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_08
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_10
+    len: 1
+- id: R_LIB_PLATE_10
+  name: Index Nook
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_09
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_11
+    len: 1
+- id: R_LIB_PLATE_11
+  name: Stack Row
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    Tall shelves make a maze of quiet corridors.
+    Water damage turns paper into a smell you can taste.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_10
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_12
+    len: 1
+- id: R_LIB_PLATE_12
+  name: Index Nook
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_11
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_13
+    len: 1
+- id: R_LIB_PLATE_13
+  name: Archive Aisle
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_12
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_14
+    len: 1
+- id: R_LIB_PLATE_14
+  name: Index Nook
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_13
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_15
+    len: 1
+- id: R_LIB_PLATE_15
+  name: Stack Row
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    Tall shelves make a maze of quiet corridors.
+    Water damage turns paper into a smell you can taste.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_14
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_16
+    len: 1
+- id: R_LIB_PLATE_16
+  name: Shelf Canyon
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    Tall shelves make a maze of quiet corridors.
+    Water damage turns paper into a smell you can taste.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_15
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_17
+    len: 1
+- id: R_LIB_PLATE_17
+  name: Index Nook
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_16
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_18
+    len: 1
+- id: R_LIB_PLATE_18
+  name: Archive Aisle
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_17
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_19
+    len: 1
+- id: R_LIB_PLATE_19
+  name: Archive Aisle
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_18
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_20
+    len: 1
+- id: R_LIB_PLATE_20
+  name: Shelf Canyon
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    Tall shelves make a maze of quiet corridors.
+    Water damage turns paper into a smell you can taste.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_19
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_21
+    len: 1
+- id: R_LIB_PLATE_21
+  name: Shelf Canyon
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    Tall shelves make a maze of quiet corridors.
+    Water damage turns paper into a smell you can taste.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_20
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_22
+    len: 1
+- id: R_LIB_PLATE_22
+  name: Stack Row
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    Tall shelves make a maze of quiet corridors.
+    Water damage turns paper into a smell you can taste.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_21
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_23
+    len: 1
+- id: R_LIB_PLATE_23
+  name: Archive Aisle
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_22
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_24
+    len: 1
+- id: R_LIB_PLATE_24
+  name: Stack Row
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    Tall shelves make a maze of quiet corridors.
+    Water damage turns paper into a smell you can taste.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_23
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_25
+    len: 1
+- id: R_LIB_PLATE_25
+  name: Archive Aisle
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_24
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_26
+    len: 1
+- id: R_LIB_PLATE_26
+  name: Index Nook
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_25
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_27
+    len: 1
+- id: R_LIB_PLATE_27
+  name: Index Nook
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_26
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_28
+    len: 1
+- id: R_LIB_PLATE_28
+  name: Stack Row
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    Tall shelves make a maze of quiet corridors.
+    Water damage turns paper into a smell you can taste.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_27
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_29
+    len: 1
+- id: R_LIB_PLATE_29
+  name: Archive Aisle
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_28
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_30
+    len: 1
+- id: R_LIB_PLATE_30
+  name: Archive Aisle
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_29
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_31
+    len: 1
+- id: R_LIB_PLATE_31
+  name: Index Nook
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_30
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_32
+    len: 1
+- id: R_LIB_PLATE_32
+  name: Shelf Canyon
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    Tall shelves make a maze of quiet corridors.
+    Water damage turns paper into a smell you can taste.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_31
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_33
+    len: 1
+- id: R_LIB_PLATE_33
+  name: Archive Aisle
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_32
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_34
+    len: 1
+- id: R_LIB_PLATE_34
+  name: Stack Row
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    Tall shelves make a maze of quiet corridors.
+    Water damage turns paper into a smell you can taste.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_33
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_35
+    len: 1
+- id: R_LIB_PLATE_35
+  name: Shelf Canyon
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    Tall shelves make a maze of quiet corridors.
+    Water damage turns paper into a smell you can taste.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_34
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_36
+    len: 1
+- id: R_LIB_PLATE_36
+  name: Index Nook
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_35
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_37
+    len: 1
+- id: R_LIB_PLATE_37
+  name: Archive Aisle
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_36
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_38
+    len: 1
+- id: R_LIB_PLATE_38
+  name: Archive Aisle
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    A cramped aisle between leaning stacks.
+    Sound travels strangely, like the room is listening.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_37
+    len: 1
+  - dir: ahead
+    to: R_LIB_PLATE_39
+    len: 1
+- id: R_LIB_PLATE_39
+  name: Shelf Canyon
+  cluster: CL_LIB_STACKS
+  tags:
+  - landmark.lib.stacks
+  desc: |-
+    Tall shelves make a maze of quiet corridors.
+    Water damage turns paper into a smell you can taste.
+  exits:
+  - dir: back
+    to: R_LIB_PLATE_38
+    len: 1
+  - dir: ahead
+    to: R_LIB_STACKS_01
+    len: 1

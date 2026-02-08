@@ -135,3 +135,23 @@ To see which adventures are missing run files (without relying on checkboxes), r
 To validate that protoadventure room graphs are structurally loadable (room headings + exits), run:
 
 - `python3 scripts/protoadventure_lint.py`
+
+## Next Stage: Area Files (Room Graphs)
+
+After a protoadventure is stable, translate it into an engine-facing room graph:
+
+- Spec + workflow: `docs/area_files.md`
+- Scoreboard: `docs/areas_todo.md`
+
+Quick loop:
+
+```bash
+zone_id="under_town_sewers"
+claimed_by="yourname"
+
+just area-lock "$zone_id" "$claimed_by" "translate protoadventure"
+${EDITOR:-vi} "world/areas/${zone_id}.yaml"
+just world-validate
+just area-files-validate
+just area-unlock "$zone_id" "$claimed_by"
+```

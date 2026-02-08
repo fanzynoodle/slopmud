@@ -52,3 +52,19 @@ SSH_ALLOWED_CIDR="1.2.3.4/32" terragrunt apply
 ```bash
 SSH_PUBKEY_PATH="$HOME/.ssh/id_ed25519.pub" terragrunt apply
 ```
+
+- If you want the instance role to be able to read SSM Parameter Store values (for app secrets like Google OAuth):
+  - Add `ssm_read_parameter_names` in `terraform/slopmud/us-east-1/mudbox/terragrunt.hcl`
+  - Create the parameters ad hoc:
+```bash
+aws ssm put-parameter --name "/slopmud/prd/google_oauth_client_id" --type SecureString --value "..." --overwrite
+aws ssm put-parameter --name "/slopmud/prd/google_oauth_client_secret" --type SecureString --value "..." --overwrite
+```
+
+Or use the helper script:
+```bash
+./scripts/google_oauth_ssm_put.sh prd
+```
+
+- Compliance portal config (domain allowlist) can be stored in SSM via Terraform variables:
+  - Set `compliance_portal_config_json_ssm_name` and pass `compliance_portal_config_json_ssm_value` via `TF_VAR_compliance_portal_config_json_ssm_value` (keep it out of git).

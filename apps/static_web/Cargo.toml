@@ -8,6 +8,7 @@ license = "MIT OR 0BSD"
 axum = { version = "0.7.9", features = ["ws"] }
 axum-server = { version = "0.7.1", features = ["tls-rustls"] }
 futures-util = { version = "0.3.31", features = ["sink"] }
+rustls = { version = "0.23", features = ["ring"] }
 slopio = { path = "../../crates/slopio" }
 tokio = { version = "1.43.0", features = ["full"] }
 tower-http = { version = "0.6.2", features = ["fs", "trace"] }

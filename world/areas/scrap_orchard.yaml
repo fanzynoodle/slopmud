@@ -1,0 +1,1379 @@
+version: 1
+zone_id: scrap_orchard
+zone_name: Scrap Orchard
+area_id: A01
+level_band:
+- 2
+- 3
+start_room: P_ORCHARD_TOWN
+rooms:
+- id: P_ORCHARD_TOWN
+  name: Town Orchard Gate
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - portal.P_ORCHARD_TOWN
+  desc: |
+    A narrow gate back to town, half-hidden by roots and old metal ribs.
+    The air smells like oil and wet leaves.
+  exits:
+  - dir: north
+    to: P_TOWN_ORCHARD
+    len: 1
+  - dir: south
+    to: R_ORCHARD_TRAIL_01
+    len: 1
+- id: R_ORCHARD_TRAIL_01
+  name: Rooted Trailhead
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - portal.P_ORCHARD_TOWN
+  desc: |
+    Tree roots and half-buried metal make the path feel narrow and readable.
+    A painted marker points back toward town for anyone who needs it.
+  exits:
+  - dir: town
+    to: P_ORCHARD_TOWN
+    len: 1
+  - dir: east
+    to: R_ORCHARD_TRAIL_02
+    len: 1
+  - dir: wander_grove
+    to: R_ORCHARD_GROVE_01
+    len: 1
+- id: R_ORCHARD_TRAIL_02
+  name: Tight Rootworks
+  cluster: CL_ORCHARD_ROOTWORKS
+  desc: |
+    Tight roots and cover pockets that teach line-of-sight breaks.
+    All-melee parties learn fast here: corners are a tool.
+  exits:
+  - dir: west
+    to: R_ORCHARD_TRAIL_01
+    len: 1
+  - dir: east
+    to: R_ORCHARD_NEST_01
+    len: 1
+  - dir: wander_rootwork
+    to: R_ORCHARD_ROOTWORK_01
+    len: 1
+- id: R_ORCHARD_NEST_01
+  name: Drone Nest
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - setpiece.q2.drone_casing_drop
+  desc: |
+    Ranged drones nest in the branches like lanterns.
+    The lesson is simple: break line-of-sight and focus fire.
+  exits:
+  - dir: west
+    to: R_ORCHARD_TRAIL_02
+    len: 1
+  - dir: east
+    to: R_ORCHARD_PIPE_01
+    len: 1
+  - dir: wander_nest
+    to: R_ORCHARD_NEST_02
+    len: 1
+- id: R_ORCHARD_PIPE_01
+  name: Pipeway Landmark
+  cluster: CL_ORCHARD_PIPEWAY
+  tags:
+  - portal.P_ORCHARD_SEWERS
+  desc: |
+    A pipeway hums under the roots. The air smells faintly of coolant and wet metal.
+    The path tilts down toward the town's underworks.
+  exits:
+  - dir: west
+    to: R_ORCHARD_NEST_01
+    len: 1
+  - dir: down
+    to: P_ORCHARD_SEWERS
+    len: 1
+    state: sealed
+    gate: gate.sewers.entry
+  - dir: wander_pipeway
+    to: R_ORCHARD_PIPEWAY_01
+    len: 1
+- id: P_ORCHARD_SEWERS
+  name: Pipeway Transfer
+  cluster: CL_ORCHARD_PIPEWAY
+  tags:
+  - portal.P_ORCHARD_SEWERS
+  desc: |
+    The pipeway drops into damp, echoing channels.
+    The warning paint is old and still legible.
+  exits:
+  - dir: up
+    to: R_ORCHARD_PIPE_01
+    len: 1
+  - dir: down
+    to: P_SEWERS_ORCHARD
+    len: 1
+    state: sealed
+    gate: gate.sewers.entry
+- id: R_ORCHARD_NEST_02
+  name: Wire Canopy
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.wire_canopy
+  desc: |-
+    Wires and branches weave together into a ceiling that clicks with faint motor whine.
+    Drones can see down the lanes. If you stand in the open, you pay for it.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_01
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_03
+    len: 1
+- id: R_ORCHARD_NEST_03
+  name: Lantern Perch
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.lantern_perch
+  desc: |-
+    Drones hang in the branches like cold lanterns, turning slowly as they scan.
+    The safe play is simple: hug cover and focus one target at a time.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_02
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_04
+    len: 1
+- id: R_ORCHARD_NEST_04
+  name: Snagged Branches
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.snagged_branches
+  desc: |-
+    Branches here are snagged with cable and torn leaf cloth, making an uneven curtain.
+    Break line-of-sight, reset, then re-peek on your terms.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_03
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_05
+    len: 1
+- id: R_ORCHARD_NEST_05
+  name: Fallen Rib Cover
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.cover
+  desc: |-
+    A fallen strip of metal ribbing makes a crooked barricade under the canopy.
+    If drones light up the lane, this is where you break their angles.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_04
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_06
+    len: 1
+- id: R_ORCHARD_NEST_06
+  name: Sightline Break
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.sightline_break
+  desc: |-
+    A wedge of roots and bent metal forms a hard corner.
+    If ranged pressure spikes, pull back to the corner to break their angles.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_05
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_07
+    len: 1
+- id: R_ORCHARD_NEST_07
+  name: Cold Lanterns
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.cold_lanterns
+  desc: |-
+    Lantern-like drones hover in a loose line, spacing themselves like they were trained.
+    The lane is long. Treat it like a firing line and use cover aggressively.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_06
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_08
+    len: 1
+- id: R_ORCHARD_NEST_08
+  name: Ribbed Canopy
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.ribbed_canopy
+  desc: |-
+    Metal ribs arc over the path, half-swallowed by bark.
+    It is a good sightline for drones and a bad one for anyone who refuses to move.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_07
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_09
+    len: 1
+- id: R_ORCHARD_NEST_09
+  name: Hanging Coil Line
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.hanging_coils
+  desc: |-
+    Coils of cable hang low enough to catch armor and snag backpacks.
+    The drones like this lane: it keeps you in the open while you fight the terrain.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_08
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_10
+    len: 1
+- id: R_ORCHARD_NEST_10
+  name: Rootwall Corner
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.rootwall_corner
+  desc: |-
+    A thick wall of roots makes a hard corner you can actually use.
+    Pull back here to break line-of-sight, then re-peek on your terms.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_09
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_11
+    len: 1
+- id: R_ORCHARD_NEST_11
+  name: Leaf-Tarp Curtain
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.leaf_tarp_curtain
+  desc: |-
+    Old leaf tarp and wire make a flapping curtain between trunks.
+    Sightlines flicker as it moves, which is either cover or a lie.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_10
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_12
+    len: 1
+- id: R_ORCHARD_NEST_12
+  name: Bark-Rib Walk
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.bark_rib_walk
+  desc: |-
+    Metal ribs have fused into bark, forming a narrow walk with a long view.
+    It feels like it was built for ranged fire, not for comfort.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_11
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_13
+    len: 1
+- id: R_ORCHARD_NEST_13
+  name: Branch Ladder
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.branch_ladder
+  desc: |-
+    Someone lashed scrap into a crude ladder and then abandoned it.
+    Drones still use the height like it is a privilege.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_12
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_14
+    len: 1
+- id: R_ORCHARD_NEST_14
+  name: Crossfire Bowl
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.crossfire_bowl
+  desc: |-
+    The path dips into a shallow bowl where every perch looks down at you.
+    If drones light it up, you have to move or get pinned.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_13
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_15
+    len: 1
+- id: R_ORCHARD_NEST_15
+  name: Hollow Trunk Cover
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.hollow_trunk
+  desc: |-
+    A hollow trunk has been chewed open and reinforced with scrap.
+    It is real cover: a place to stop without being punished immediately.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_14
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_16
+    len: 1
+- id: R_ORCHARD_NEST_16
+  name: Scanner Drift
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.scanner_drift
+  desc: |-
+    A slow sweep of light crosses the lane as drones pivot on their tethers.
+    The safest play is to move between sweeps, not during them.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_15
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_17
+    len: 1
+- id: R_ORCHARD_NEST_17
+  name: Bent Rib Choke
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.rib_choke
+  desc: |-
+    Bent metal ribs pinch the path into a choke with a single obvious corner.
+    Good for focus fire. Bad for overpulls.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_16
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_18
+    len: 1
+- id: R_ORCHARD_NEST_18
+  name: Cable Nest
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.cable_nest
+  desc: |-
+    A snarled nest of cable and leaves crackles when it shifts.
+    Something keeps feeding power into it, and you can feel it in your teeth.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_17
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_19
+    len: 1
+- id: R_ORCHARD_NEST_19
+  name: Cover Pocket
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.cover_pocket
+  desc: |-
+    A pocket behind roots and bent metal gives you a small place to regroup.
+    If the party gets split, this is where you stitch back together.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_18
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_20
+    len: 1
+- id: R_ORCHARD_NEST_20
+  name: Glinting Lane
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.glinting_lane
+  desc: |-
+    Scrap glints in the canopy and makes distance hard to judge.
+    Drones use the glare like camouflage.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_19
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_21
+    len: 1
+- id: R_ORCHARD_NEST_21
+  name: Perch Line
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.perch_line
+  desc: |-
+    Several tethers converge here, and the hovering lanterns hold a tight line.
+    If you break one drone fast, the rest hesitate.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_20
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_22
+    len: 1
+- id: R_ORCHARD_NEST_22
+  name: Marked Fallzone
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.marked_fallzone
+  desc: |-
+    Hazard paint marks a rough circle on the ground, like someone expected something to drop.
+    The canopy above it is louder than the rest.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_21
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_23
+    len: 1
+- id: R_ORCHARD_NEST_23
+  name: High Nest
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.scrap_orchard.drone_nests
+  desc: |-
+    Drones hang in the branches like cold lanterns.
+    Stay near cover and focus fire when you commit.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_22
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_24
+    len: 1
+- id: R_ORCHARD_NEST_24
+  name: Lantern Branches
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.scrap_orchard.drone_nests
+  desc: |-
+    Drones hang in the branches like cold lanterns.
+    Stay near cover and focus fire when you commit.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_23
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_25
+    len: 1
+- id: R_ORCHARD_NEST_25
+  name: High Nest
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.scrap_orchard.drone_nests
+  desc: |-
+    Drones hang in the branches like cold lanterns.
+    Stay near cover and focus fire when you commit.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_24
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_26
+    len: 1
+- id: R_ORCHARD_NEST_26
+  name: High Nest
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.scrap_orchard.drone_nests
+  desc: |-
+    A canopy thick with wires, leaves, and faint motor whine.
+    Ranged packs punish standing in the open.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_25
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_27
+    len: 1
+- id: R_ORCHARD_NEST_27
+  name: Drone Perch
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.scrap_orchard.drone_nests
+  desc: |-
+    A canopy thick with wires, leaves, and faint motor whine.
+    Ranged packs punish standing in the open.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_26
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_28
+    len: 1
+- id: R_ORCHARD_NEST_28
+  name: Drone Perch
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.scrap_orchard.drone_nests
+  desc: |-
+    Drones hang in the branches like cold lanterns.
+    Stay near cover and focus fire when you commit.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_27
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_29
+    len: 1
+- id: R_ORCHARD_NEST_29
+  name: Lantern Branches
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.scrap_orchard.drone_nests
+  desc: |-
+    A canopy thick with wires, leaves, and faint motor whine.
+    Ranged packs punish standing in the open.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_28
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_30
+    len: 1
+- id: R_ORCHARD_NEST_30
+  name: High Nest
+  cluster: CL_ORCHARD_DRONE_NESTS
+  tags:
+  - landmark.scrap_orchard.drone_nests
+  desc: |-
+    A canopy thick with wires, leaves, and faint motor whine.
+    Ranged packs punish standing in the open.
+  exits:
+  - dir: back
+    to: R_ORCHARD_NEST_29
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_NEST_01
+    len: 1
+- id: R_ORCHARD_GROVE_01
+  name: Salvage Bench
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - safe_pocket
+  desc: |-
+    Someone has bolted a warped sheet of metal to two stumps and called it a workbench.
+    The spot feels deliberately calm, like a place crews use to sort scrap and breathe.
+  exits:
+  - dir: back
+    to: R_ORCHARD_TRAIL_01
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_02
+    len: 1
+- id: R_ORCHARD_GROVE_02
+  name: Root Hollow
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    A quiet grove where metal and wood have grown together.
+    Everything here suggests salvage, not safety.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_01
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_03
+    len: 1
+- id: R_ORCHARD_GROVE_03
+  name: Root Hollow
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    A quiet grove where metal and wood have grown together.
+    Everything here suggests salvage, not safety.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_02
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_04
+    len: 1
+- id: R_ORCHARD_GROVE_04
+  name: Tin-Barked Trees
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    Roots knot around old metal ribs half-buried in leaf litter.
+    Scrap glints in the shade like it wants to be found.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_03
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_05
+    len: 1
+- id: R_ORCHARD_GROVE_05
+  name: Root Hollow
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    Roots knot around old metal ribs half-buried in leaf litter.
+    Scrap glints in the shade like it wants to be found.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_04
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_06
+    len: 1
+- id: R_ORCHARD_GROVE_06
+  name: Metal Rib Row
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    Roots knot around old metal ribs half-buried in leaf litter.
+    Scrap glints in the shade like it wants to be found.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_05
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_07
+    len: 1
+- id: R_ORCHARD_GROVE_07
+  name: Metal Rib Row
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    Roots knot around old metal ribs half-buried in leaf litter.
+    Scrap glints in the shade like it wants to be found.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_06
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_08
+    len: 1
+- id: R_ORCHARD_GROVE_08
+  name: Rustleaf Stand
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    Roots knot around old metal ribs half-buried in leaf litter.
+    Scrap glints in the shade like it wants to be found.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_07
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_09
+    len: 1
+- id: R_ORCHARD_GROVE_09
+  name: Rustleaf Stand
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    A quiet grove where metal and wood have grown together.
+    Everything here suggests salvage, not safety.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_08
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_10
+    len: 1
+- id: R_ORCHARD_GROVE_10
+  name: Scrap Grove
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    A quiet grove where metal and wood have grown together.
+    Everything here suggests salvage, not safety.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_09
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_11
+    len: 1
+- id: R_ORCHARD_GROVE_11
+  name: Metal Rib Row
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    Roots knot around old metal ribs half-buried in leaf litter.
+    Scrap glints in the shade like it wants to be found.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_10
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_12
+    len: 1
+- id: R_ORCHARD_GROVE_12
+  name: Metal Rib Row
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    Roots knot around old metal ribs half-buried in leaf litter.
+    Scrap glints in the shade like it wants to be found.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_11
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_13
+    len: 1
+- id: R_ORCHARD_GROVE_13
+  name: Rustleaf Stand
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    A quiet grove where metal and wood have grown together.
+    Everything here suggests salvage, not safety.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_12
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_14
+    len: 1
+- id: R_ORCHARD_GROVE_14
+  name: Root Hollow
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    Roots knot around old metal ribs half-buried in leaf litter.
+    Scrap glints in the shade like it wants to be found.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_13
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_15
+    len: 1
+- id: R_ORCHARD_GROVE_15
+  name: Metal Rib Row
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    A quiet grove where metal and wood have grown together.
+    Everything here suggests salvage, not safety.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_14
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_16
+    len: 1
+- id: R_ORCHARD_GROVE_16
+  name: Rustleaf Stand
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    Roots knot around old metal ribs half-buried in leaf litter.
+    Scrap glints in the shade like it wants to be found.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_15
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_17
+    len: 1
+- id: R_ORCHARD_GROVE_17
+  name: Root Hollow
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    A quiet grove where metal and wood have grown together.
+    Everything here suggests salvage, not safety.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_16
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_18
+    len: 1
+- id: R_ORCHARD_GROVE_18
+  name: Rustleaf Stand
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    A quiet grove where metal and wood have grown together.
+    Everything here suggests salvage, not safety.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_17
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_19
+    len: 1
+- id: R_ORCHARD_GROVE_19
+  name: Scrap Grove
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    A quiet grove where metal and wood have grown together.
+    Everything here suggests salvage, not safety.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_18
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_20
+    len: 1
+- id: R_ORCHARD_GROVE_20
+  name: Scrap Grove
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    Roots knot around old metal ribs half-buried in leaf litter.
+    Scrap glints in the shade like it wants to be found.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_19
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_21
+    len: 1
+- id: R_ORCHARD_GROVE_21
+  name: Rustleaf Stand
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    A quiet grove where metal and wood have grown together.
+    Everything here suggests salvage, not safety.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_20
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_22
+    len: 1
+- id: R_ORCHARD_GROVE_22
+  name: Root Hollow
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    Roots knot around old metal ribs half-buried in leaf litter.
+    Scrap glints in the shade like it wants to be found.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_21
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_23
+    len: 1
+- id: R_ORCHARD_GROVE_23
+  name: Root Hollow
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    Roots knot around old metal ribs half-buried in leaf litter.
+    Scrap glints in the shade like it wants to be found.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_22
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_24
+    len: 1
+- id: R_ORCHARD_GROVE_24
+  name: Scrap Grove
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    A quiet grove where metal and wood have grown together.
+    Everything here suggests salvage, not safety.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_23
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_25
+    len: 1
+- id: R_ORCHARD_GROVE_25
+  name: Metal Rib Row
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    A quiet grove where metal and wood have grown together.
+    Everything here suggests salvage, not safety.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_24
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_26
+    len: 1
+- id: R_ORCHARD_GROVE_26
+  name: Metal Rib Row
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    Roots knot around old metal ribs half-buried in leaf litter.
+    Scrap glints in the shade like it wants to be found.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_25
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_27
+    len: 1
+- id: R_ORCHARD_GROVE_27
+  name: Rustleaf Stand
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    A quiet grove where metal and wood have grown together.
+    Everything here suggests salvage, not safety.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_26
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_GROVE_28
+    len: 1
+- id: R_ORCHARD_GROVE_28
+  name: Rustleaf Stand
+  cluster: CL_ORCHARD_GROVE
+  tags:
+  - landmark.scrap_orchard.grove
+  desc: |-
+    Roots knot around old metal ribs half-buried in leaf litter.
+    Scrap glints in the shade like it wants to be found.
+  exits:
+  - dir: back
+    to: R_ORCHARD_GROVE_27
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_TRAIL_01
+    len: 1
+- id: R_ORCHARD_PIPEWAY_01
+  name: Pipeway Underroots
+  cluster: CL_ORCHARD_PIPEWAY
+  tags:
+  - landmark.pipeway_underroots
+  desc: |-
+    A service pipeway hums under the roots, cold air bleeding from hairline cracks.
+    The sound carries in a way that makes every footstep feel like company.
+  exits:
+  - dir: back
+    to: R_ORCHARD_PIPE_01
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_PIPEWAY_02
+    len: 1
+- id: R_ORCHARD_PIPEWAY_02
+  name: Coolant Seep
+  cluster: CL_ORCHARD_PIPEWAY
+  tags:
+  - landmark.coolant_seep
+  desc: |-
+    A slow seep of coolant stains the metal and makes the air taste sharp.
+    The slope down feels like an invitation and a warning at the same time.
+  exits:
+  - dir: back
+    to: R_ORCHARD_PIPEWAY_01
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_PIPEWAY_03
+    len: 1
+- id: R_ORCHARD_PIPEWAY_03
+  name: Hidden Vent Drop
+  cluster: CL_ORCHARD_PIPEWAY
+  tags:
+  - secret.shortcut
+  desc: |-
+    A service vent above the conduit has been pried open and left hanging.
+    The air here is colder, and the echo makes every footstep sound like company.
+  exits:
+  - dir: back
+    to: R_ORCHARD_PIPEWAY_02
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_PIPEWAY_04
+    len: 1
+  - dir: vent
+    to: R_ORCHARD_ROOTWORK_05
+    len: 1
+- id: R_ORCHARD_PIPEWAY_04
+  name: Bowed Pipe
+  cluster: CL_ORCHARD_PIPEWAY
+  tags:
+  - landmark.bowed_pipe
+  desc: |-
+    A bowed section of pipe has been braced with scrap straps and stubborn optimism.
+    The metal vibrates under your feet like a held breath.
+  exits:
+  - dir: back
+    to: R_ORCHARD_PIPEWAY_03
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_PIPEWAY_05
+    len: 1
+- id: R_ORCHARD_PIPEWAY_05
+  name: Tagged Salvage Cache
+  cluster: CL_ORCHARD_PIPEWAY
+  tags:
+  - setpiece.orchard.salvage_cache
+  desc: |-
+    A stash of bundled scrap has been tucked behind a conduit brace and marked with bright paint.
+    It looks like someone meant to come back with a cart and never did.
+  exits:
+  - dir: back
+    to: R_ORCHARD_PIPEWAY_04
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_PIPEWAY_06
+    len: 1
+- id: R_ORCHARD_PIPEWAY_06
+  name: Coolant Drip
+  cluster: CL_ORCHARD_PIPEWAY
+  tags:
+  - landmark.scrap_orchard.pipeway
+  desc: |-
+    Metal ribs turn into a narrow conduit.
+    The slope down feels like an invitation and a warning.
+  exits:
+  - dir: back
+    to: R_ORCHARD_PIPEWAY_05
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_PIPEWAY_07
+    len: 1
+- id: R_ORCHARD_PIPEWAY_07
+  name: Pipeway Run
+  cluster: CL_ORCHARD_PIPEWAY
+  tags:
+  - landmark.scrap_orchard.pipeway
+  desc: |-
+    A service pipeway hums under the roots.
+    Cool air spills from cracks where the orchard meets the underworks.
+  exits:
+  - dir: back
+    to: R_ORCHARD_PIPEWAY_06
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_PIPEWAY_08
+    len: 1
+- id: R_ORCHARD_PIPEWAY_08
+  name: Pipeway Run
+  cluster: CL_ORCHARD_PIPEWAY
+  tags:
+  - landmark.scrap_orchard.pipeway
+  desc: |-
+    A service pipeway hums under the roots.
+    Cool air spills from cracks where the orchard meets the underworks.
+  exits:
+  - dir: back
+    to: R_ORCHARD_PIPEWAY_07
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_PIPE_01
+    len: 1
+- id: R_ORCHARD_ROOTWORK_01
+  name: Buried Rib
+  cluster: CL_ORCHARD_ROOTWORKS
+  tags:
+  - landmark.scrap_orchard.rootworks
+  desc: |-
+    The path tightens into roots and cover pockets.
+    Corners are tools here: break line-of-sight and regroup.
+  exits:
+  - dir: back
+    to: R_ORCHARD_TRAIL_02
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_ROOTWORK_02
+    len: 1
+- id: R_ORCHARD_ROOTWORK_02
+  name: Tight Turn
+  cluster: CL_ORCHARD_ROOTWORKS
+  tags:
+  - landmark.scrap_orchard.rootworks
+  desc: |-
+    A cramped run under twisted roots.
+    If ranged drones show up, use the turns to cut their angles.
+  exits:
+  - dir: back
+    to: R_ORCHARD_ROOTWORK_01
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_ROOTWORK_03
+    len: 1
+- id: R_ORCHARD_ROOTWORK_03
+  name: Tangle Corridor
+  cluster: CL_ORCHARD_ROOTWORKS
+  tags:
+  - landmark.scrap_orchard.rootworks
+  desc: |-
+    The path tightens into roots and cover pockets.
+    Corners are tools here: break line-of-sight and regroup.
+  exits:
+  - dir: back
+    to: R_ORCHARD_ROOTWORK_02
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_ROOTWORK_04
+    len: 1
+- id: R_ORCHARD_ROOTWORK_04
+  name: Rootworks Squeeze
+  cluster: CL_ORCHARD_ROOTWORKS
+  tags:
+  - landmark.scrap_orchard.rootworks
+  desc: |-
+    A cramped run under twisted roots.
+    If ranged drones show up, use the turns to cut their angles.
+  exits:
+  - dir: back
+    to: R_ORCHARD_ROOTWORK_03
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_ROOTWORK_05
+    len: 1
+- id: R_ORCHARD_ROOTWORK_05
+  name: Vent-Cut Hollow
+  cluster: CL_ORCHARD_ROOTWORKS
+  tags:
+  - secret.shortcut
+  desc: |-
+    A hollow under twisted roots hides a torn maintenance grate.
+    Cold air leaks up from the pipeway below, carrying the smell of wet metal.
+  exits:
+  - dir: back
+    to: R_ORCHARD_ROOTWORK_04
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_ROOTWORK_06
+    len: 1
+  - dir: vent
+    to: R_ORCHARD_PIPEWAY_03
+    len: 1
+- id: R_ORCHARD_ROOTWORK_06
+  name: Buried Rib
+  cluster: CL_ORCHARD_ROOTWORKS
+  tags:
+  - landmark.scrap_orchard.rootworks
+  desc: |-
+    A cramped run under twisted roots.
+    If ranged drones show up, use the turns to cut their angles.
+  exits:
+  - dir: back
+    to: R_ORCHARD_ROOTWORK_05
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_ROOTWORK_07
+    len: 1
+- id: R_ORCHARD_ROOTWORK_07
+  name: Tight Turn
+  cluster: CL_ORCHARD_ROOTWORKS
+  tags:
+  - landmark.scrap_orchard.rootworks
+  desc: |-
+    A cramped run under twisted roots.
+    If ranged drones show up, use the turns to cut their angles.
+  exits:
+  - dir: back
+    to: R_ORCHARD_ROOTWORK_06
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_ROOTWORK_08
+    len: 1
+- id: R_ORCHARD_ROOTWORK_08
+  name: Tangle Corridor
+  cluster: CL_ORCHARD_ROOTWORKS
+  tags:
+  - landmark.scrap_orchard.rootworks
+  desc: |-
+    The path tightens into roots and cover pockets.
+    Corners are tools here: break line-of-sight and regroup.
+  exits:
+  - dir: back
+    to: R_ORCHARD_ROOTWORK_07
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_ROOTWORK_09
+    len: 1
+- id: R_ORCHARD_ROOTWORK_09
+  name: Tangle Corridor
+  cluster: CL_ORCHARD_ROOTWORKS
+  tags:
+  - landmark.scrap_orchard.rootworks
+  desc: |-
+    A cramped run under twisted roots.
+    If ranged drones show up, use the turns to cut their angles.
+  exits:
+  - dir: back
+    to: R_ORCHARD_ROOTWORK_08
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_ROOTWORK_10
+    len: 1
+- id: R_ORCHARD_ROOTWORK_10
+  name: Tangle Corridor
+  cluster: CL_ORCHARD_ROOTWORKS
+  tags:
+  - landmark.scrap_orchard.rootworks
+  desc: |-
+    The path tightens into roots and cover pockets.
+    Corners are tools here: break line-of-sight and regroup.
+  exits:
+  - dir: back
+    to: R_ORCHARD_ROOTWORK_09
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_ROOTWORK_11
+    len: 1
+- id: R_ORCHARD_ROOTWORK_11
+  name: Tangle Corridor
+  cluster: CL_ORCHARD_ROOTWORKS
+  tags:
+  - landmark.scrap_orchard.rootworks
+  desc: |-
+    The path tightens into roots and cover pockets.
+    Corners are tools here: break line-of-sight and regroup.
+  exits:
+  - dir: back
+    to: R_ORCHARD_ROOTWORK_10
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_ROOTWORK_12
+    len: 1
+- id: R_ORCHARD_ROOTWORK_12
+  name: Rootworks Squeeze
+  cluster: CL_ORCHARD_ROOTWORKS
+  tags:
+  - landmark.scrap_orchard.rootworks
+  desc: |-
+    The path tightens into roots and cover pockets.
+    Corners are tools here: break line-of-sight and regroup.
+  exits:
+  - dir: back
+    to: R_ORCHARD_ROOTWORK_11
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_ROOTWORK_13
+    len: 1
+- id: R_ORCHARD_ROOTWORK_13
+  name: Tangle Corridor
+  cluster: CL_ORCHARD_ROOTWORKS
+  tags:
+  - landmark.scrap_orchard.rootworks
+  desc: |-
+    The path tightens into roots and cover pockets.
+    Corners are tools here: break line-of-sight and regroup.
+  exits:
+  - dir: back
+    to: R_ORCHARD_ROOTWORK_12
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_ROOTWORK_14
+    len: 1
+- id: R_ORCHARD_ROOTWORK_14
+  name: Hollowed Trunk
+  cluster: CL_ORCHARD_ROOTWORKS
+  tags:
+  - landmark.scrap_orchard.rootworks
+  desc: |-
+    A cramped run under twisted roots.
+    If ranged drones show up, use the turns to cut their angles.
+  exits:
+  - dir: back
+    to: R_ORCHARD_ROOTWORK_13
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_ROOTWORK_15
+    len: 1
+- id: R_ORCHARD_ROOTWORK_15
+  name: Rootworks Squeeze
+  cluster: CL_ORCHARD_ROOTWORKS
+  tags:
+  - landmark.scrap_orchard.rootworks
+  desc: |-
+    The path tightens into roots and cover pockets.
+    Corners are tools here: break line-of-sight and regroup.
+  exits:
+  - dir: back
+    to: R_ORCHARD_ROOTWORK_14
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_ROOTWORK_16
+    len: 1
+- id: R_ORCHARD_ROOTWORK_16
+  name: Buried Rib
+  cluster: CL_ORCHARD_ROOTWORKS
+  tags:
+  - landmark.scrap_orchard.rootworks
+  desc: |-
+    The path tightens into roots and cover pockets.
+    Corners are tools here: break line-of-sight and regroup.
+  exits:
+  - dir: back
+    to: R_ORCHARD_ROOTWORK_15
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_ROOTWORK_17
+    len: 1
+- id: R_ORCHARD_ROOTWORK_17
+  name: Tight Turn
+  cluster: CL_ORCHARD_ROOTWORKS
+  tags:
+  - landmark.scrap_orchard.rootworks
+  desc: |-
+    The path tightens into roots and cover pockets.
+    Corners are tools here: break line-of-sight and regroup.
+  exits:
+  - dir: back
+    to: R_ORCHARD_ROOTWORK_16
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_ROOTWORK_18
+    len: 1
+- id: R_ORCHARD_ROOTWORK_18
+  name: Tangle Corridor
+  cluster: CL_ORCHARD_ROOTWORKS
+  tags:
+  - landmark.scrap_orchard.rootworks
+  desc: |-
+    A cramped run under twisted roots.
+    If ranged drones show up, use the turns to cut their angles.
+  exits:
+  - dir: back
+    to: R_ORCHARD_ROOTWORK_17
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_ROOTWORK_19
+    len: 1
+- id: R_ORCHARD_ROOTWORK_19
+  name: Buried Rib
+  cluster: CL_ORCHARD_ROOTWORKS
+  tags:
+  - landmark.scrap_orchard.rootworks
+  desc: |-
+    The path tightens into roots and cover pockets.
+    Corners are tools here: break line-of-sight and regroup.
+  exits:
+  - dir: back
+    to: R_ORCHARD_ROOTWORK_18
+    len: 1
+  - dir: ahead
+    to: R_ORCHARD_TRAIL_02
+    len: 1

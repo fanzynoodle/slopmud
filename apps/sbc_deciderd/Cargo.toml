@@ -1,0 +1,16 @@
+[package]
+name = "sbc_deciderd"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR 0BSD"
+
+[dependencies]
+anyhow = "1.0.96"
+reqwest = { version = "0.12.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1.0.218", features = ["derive"] }
+serde_json = "1.0.140"
+sbc_core = { path = "../../crates/sbc_core" }
+tokio = { version = "1.43.0", features = ["full"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+
