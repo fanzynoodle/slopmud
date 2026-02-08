@@ -29,3 +29,15 @@ output "hosted_zone_name_servers" {
 output "mud_fqdn" {
   value = var.create_hosted_zone && length(aws_route53_record.mud_cname) > 0 ? aws_route53_record.mud_cname[0].fqdn : null
 }
+
+output "www_fqdn" {
+  value = var.create_hosted_zone && length(aws_route53_record.www_cname) > 0 ? aws_route53_record.www_cname[0].fqdn : null
+}
+
+output "assets_bucket_name" {
+  value = try(aws_s3_bucket.assets[0].bucket, null)
+}
+
+output "assets_bucket_arn" {
+  value = try(aws_s3_bucket.assets[0].arn, null)
+}

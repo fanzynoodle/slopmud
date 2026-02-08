@@ -2,6 +2,9 @@
 /target/
 **/target/
 
+# CI/CD artifacts (not committed)
+/assets/
+
 # Terraform / Terragrunt
 **/.terraform/
 **/.terragrunt-cache/
@@ -17,5 +20,11 @@
 .DS_Store
 .env
 
+# Python
+**/__pycache__/
+
 # Local vendored references (not committed)
 /reference/
+
+# Local coordination (not committed)
+/locks/**/*.lock

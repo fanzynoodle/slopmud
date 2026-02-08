@@ -1,0 +1,173 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+USAGE:
+  slopmud-shuttle-assets --env <dev|stg|prd> --from-s3 s3://BUCKET/KEY
+  slopmud-shuttle-assets --env <dev|stg|prd> --from-file /path/to/artifact.tgz
+
+This script:
+- copies the asset tarball into /opt/slopmud/assets/<env>/<sha>/
+- extracts it
+- installs the slopmud binary into /opt/slopmud/bin/slopmud-<env>
+- (re)writes the systemd unit and restarts it
+
+NOTE:
+  Must run as root (use sudo). Intended to be callable by the GitHub Actions runner user
+  via a narrow sudoers rule.
+EOF
+  exit 2
+}
+
+if [[ "${EUID:-$(id -u)}" != "0" ]]; then
+  echo "ERROR: must run as root (use sudo)" >&2
+  exit 2
+fi
+
+env_name=""
+from_s3=""
+from_file=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --env)
+      env_name="${2:-}"; shift 2 ;;
+    --from-s3)
+      from_s3="${2:-}"; shift 2 ;;
+    --from-file)
+      from_file="${2:-}"; shift 2 ;;
+    -h|--help)
+      usage ;;
+    *)
+      echo "ERROR: unknown arg: $1" >&2
+      usage ;;
+  esac
+done
+
+if [[ -z "$env_name" ]]; then
+  echo "ERROR: --env is required" >&2
+  usage
+fi
+
+if [[ -n "$from_s3" && -n "$from_file" ]]; then
+  echo "ERROR: choose only one of --from-s3 or --from-file" >&2
+  usage
+fi
+if [[ -z "$from_s3" && -z "$from_file" ]]; then
+  echo "ERROR: one of --from-s3 or --from-file is required" >&2
+  usage
+fi
+
+case "$env_name" in
+  dev)
+    service_name="slopmud-dev"
+    node_id="2"
+    bind="0.0.0.0:4000"
+    bin_dst="/opt/slopmud/bin/slopmud-dev"
+    ;;
+  stg)
+    service_name="slopmud-stg"
+    node_id="3"
+    bind="0.0.0.0:4023"
+    bin_dst="/opt/slopmud/bin/slopmud-stg"
+    ;;
+  prd)
+    service_name="slopmud-prd"
+    node_id="1"
+    bind="0.0.0.0:23"
+    bin_dst="/opt/slopmud/bin/slopmud-prd"
+    ;;
+  *)
+    echo "ERROR: invalid --env: $env_name (expected dev|stg|prd)" >&2
+    exit 2
+    ;;
+esac
+
+sha="unknown"
+if [[ -n "$from_s3" ]]; then
+  if [[ "$from_s3" != s3://*/* ]]; then
+    echo "ERROR: invalid s3 uri: $from_s3" >&2
+    exit 2
+  fi
+  tmp="${from_s3#s3://}"
+  bucket="${tmp%%/*}"
+  key="${tmp#${bucket}/}"
+  sha="$(basename "$(dirname "$key")")"
+else
+  # Best-effort: use parent dir name if it looks like a sha, else timestamp.
+  sha="$(basename "$(dirname "$from_file")")"
+  if [[ "$sha" == "." || "$sha" == "/" || -z "$sha" ]]; then
+    sha="unknown"
+  fi
+fi
+
+assets_dir="/opt/slopmud/assets/${env_name}/${sha}"
+mkdir -p "$assets_dir"
+
+artifact_dst="${assets_dir}/artifact.tgz"
+if [[ -n "$from_s3" ]]; then
+  echo "Downloading asset: ${from_s3} -> ${artifact_dst}"
+  aws s3 cp "$from_s3" "$artifact_dst"
+else
+  echo "Copying asset: ${from_file} -> ${artifact_dst}"
+  install -m 0644 "$from_file" "$artifact_dst"
+fi
+
+echo "Extracting asset into ${assets_dir}"
+tar -xzf "$artifact_dst" -C "$assets_dir"
+
+bin_src="${assets_dir}/bin/slopmud"
+if [[ ! -x "$bin_src" ]]; then
+  echo "ERROR: expected executable at ${bin_src}" >&2
+  exit 2
+fi
+
+if ! id -u slopmud >/dev/null 2>&1; then
+  echo "Creating system user: slopmud"
+  useradd --system --home /opt/slopmud --create-home --shell /usr/sbin/nologin slopmud
+fi
+
+install -d -m 0755 /opt/slopmud /opt/slopmud/bin
+chown -R slopmud:slopmud /opt/slopmud
+
+echo "Installing binary -> ${bin_dst}"
+install -m 0755 -o root -g root "$bin_src" "$bin_dst"
+
+unit_path="/etc/systemd/system/${service_name}.service"
+cat >"$unit_path" <<EOF
+[Unit]
+Description=slopmud service (env: ${env_name}, sha: ${sha})
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=slopmud
+Group=slopmud
+WorkingDirectory=/opt/slopmud
+Environment=RUST_LOG=slopmud=info
+Environment=NODE_ID=${node_id}
+Environment=SLOPMUD_BIND=${bind}
+Environment=SHARD_ADDR=127.0.0.1:5000
+ExecStart=${bin_dst}
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+echo "Restarting systemd unit: ${service_name}"
+systemctl daemon-reload
+systemctl enable --now "${service_name}"
+systemctl restart "${service_name}"
+
+port="${bind##*:}"
+echo "Listening check (port ${port})"
+ss -lnt | grep -qE ":${port}\\b" || { echo "not listening on ${port}" >&2; exit 1; }
+
+echo "OK: ${service_name} deployed (sha=${sha})"

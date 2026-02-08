@@ -1,0 +1,204 @@
+name: Enterprise CI/CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      track:
+        description: "Deployment track"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - test
+  push:
+    # Intentionally *not* main: avoid accidentally deploying whatever is on main until branches are in place.
+    branches:
+      - dev
+      - test
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enterprise-cicd-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: us-east-1
+  ASSETS_ROOT: assets
+
+jobs:
+  build:
+    name: Build + Store Asset
+    runs-on: [self-hosted, Linux]
+    timeout-minutes: 60
+
+    outputs:
+      track: ${{ steps.meta.outputs.track }}
+      sha: ${{ steps.meta.outputs.sha }}
+      artifact_path: ${{ steps.meta.outputs.artifact_path }}
+      bucket: ${{ steps.s3.outputs.bucket }}
+      key: ${{ steps.s3.outputs.key }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Keep build output/cargo target dirs on the runner for speed.
+          clean: false
+
+      - name: Meta
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sha="${GITHUB_SHA}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            track="${{ inputs.track }}"
+          else
+            track="${GITHUB_REF_NAME}"
+          fi
+
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "track=$track" >> "$GITHUB_OUTPUT"
+
+      - name: Assert Runner Build Deps
+        shell: bash
+        run: |
+          set -euo pipefail
+          for c in gcc make pkg-config; do
+            command -v "$c" >/dev/null 2>&1 || {
+              echo "missing build dependency: $c" >&2
+              echo "bootstrap the runner once (as admin on the host) using scripts/cicd/bootstrap_runner.sh" >&2
+              exit 2
+            }
+          done
+
+      - name: Rust Toolchain On PATH
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          cargo --version
+          rustc --version
+
+      - name: Build Asset (non-cleanroom)
+        id: build_asset
+        shell: bash
+        env:
+          TRACK: ${{ steps.meta.outputs.track }}
+          # Clean rebuild only on the test branch/track.
+          CLEAN_BUILD: ${{ steps.meta.outputs.track == 'test' && '1' || '0' }}
+        run: |
+          set -euo pipefail
+          artifact_path="$(./scripts/cicd/build_assets.sh)"
+          echo "artifact_path=$artifact_path" >> "$GITHUB_OUTPUT"
+
+      - name: Upload To S3
+        id: s3
+        shell: bash
+        env:
+          TRACK: ${{ steps.meta.outputs.track }}
+          SHA: ${{ steps.meta.outputs.sha }}
+          ARTIFACT_PATH: ${{ steps.build_asset.outputs.artifact_path }}
+        run: |
+          set -euo pipefail
+          account_id="$(aws sts get-caller-identity --query Account --output text)"
+          bucket="slopmud-assets-${account_id}-${AWS_REGION}"
+          key="${TRACK}/${SHA}/artifact.tgz"
+
+          aws s3 cp "$ARTIFACT_PATH" "s3://${bucket}/${key}"
+
+          echo "bucket=$bucket" >> "$GITHUB_OUTPUT"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+
+  deploy_testing:
+    name: Deploy To Testing
+    runs-on: [self-hosted, Linux]
+    timeout-minutes: 20
+    needs: build
+
+    steps:
+      - name: Assert Deploy Hook Installed
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null
+
+      - name: Deploy
+        shell: bash
+        env:
+          TRACK: ${{ needs.build.outputs.track }}
+          BUCKET: ${{ needs.build.outputs.bucket }}
+          KEY: ${{ needs.build.outputs.key }}
+        run: |
+          set -euo pipefail
+
+          case "$TRACK" in
+            dev) env_name="dev" ;;
+            test) env_name="stg" ;;
+            *) echo "unknown track: $TRACK" >&2; exit 2 ;;
+          esac
+
+          sudo -n /usr/local/bin/slopmud-shuttle-assets \
+            --env "$env_name" \
+            --from-s3 "s3://${BUCKET}/${KEY}"
+
+      - name: Smoke Test
+        shell: bash
+        env:
+          TRACK: ${{ needs.build.outputs.track }}
+        run: |
+          set -euo pipefail
+
+          case "$TRACK" in
+            dev) port="4000" ;;
+            test) port="4023" ;;
+            *) echo "unknown track: $TRACK" >&2; exit 2 ;;
+          esac
+
+          python3 ./scripts/cicd/smoke_telnet.py --host 127.0.0.1 --port "$port"
+
+  promote_prod:
+    name: Promote To Prod
+    runs-on: [self-hosted, Linux]
+    timeout-minutes: 30
+    needs: [build, deploy_testing]
+    if: needs.build.outputs.track == 'test'
+
+    steps:
+      - name: Assert Deploy Hook Installed
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null
+
+      - name: Copy Tested Asset -> prod/
+        shell: bash
+        env:
+          BUCKET: ${{ needs.build.outputs.bucket }}
+          SHA: ${{ needs.build.outputs.sha }}
+        run: |
+          set -euo pipefail
+          aws s3 cp \
+            "s3://${BUCKET}/test/${SHA}/artifact.tgz" \
+            "s3://${BUCKET}/prod/${SHA}/artifact.tgz"
+
+      - name: Deploy Prod
+        shell: bash
+        env:
+          BUCKET: ${{ needs.build.outputs.bucket }}
+          SHA: ${{ needs.build.outputs.sha }}
+        run: |
+          set -euo pipefail
+          sudo -n /usr/local/bin/slopmud-shuttle-assets \
+            --env prd \
+            --from-s3 "s3://${BUCKET}/prod/${SHA}/artifact.tgz"
+
+      - name: Smoke Test (Prod)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ./scripts/cicd/smoke_telnet.py --host 127.0.0.1 --port 23

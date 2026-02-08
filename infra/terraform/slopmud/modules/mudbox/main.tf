@@ -42,6 +42,7 @@ data "aws_ssm_parameter" "al2023_ami" {
 locals {
   subnet_ids = sort(data.aws_subnets.default.ids)
   ami_id     = var.os == "al2023" ? data.aws_ssm_parameter.al2023_ami[0].value : data.aws_ami.debian12[0].id
+  assets_bucket_name = var.assets_bucket_name != "" ? var.assets_bucket_name : "slopmud-assets-${data.aws_caller_identity.current.account_id}-${var.region}"
   tags = {
     ManagedBy = "terraform"
     Stack     = var.name_prefix
@@ -114,9 +115,9 @@ resource "aws_iam_role" "ssm" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Service = "ec2.amazonaws.com" }
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
 
@@ -127,6 +128,159 @@ resource "aws_iam_role_policy_attachment" "ssm_core" {
   count      = var.enable_compute ? 1 : 0
   role       = aws_iam_role.ssm[0].name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+locals {
+  # Zone ID to grant admin privileges over (for DNS-01 challenges, etc.).
+  dns_admin_zone_id = var.create_hosted_zone ? aws_route53_zone.this[0].zone_id : var.dns_admin_zone_id
+}
+
+data "aws_iam_policy_document" "dns_admin" {
+  count = var.enable_compute && var.dns_admin_enabled && (var.create_hosted_zone || var.dns_admin_zone_id != "") ? 1 : 0
+
+  statement {
+    sid    = "Route53ZoneAdmin"
+    effect = "Allow"
+    actions = [
+      "route53:ChangeResourceRecordSets",
+      "route53:GetHostedZone",
+      "route53:ListResourceRecordSets",
+      "route53:ListTagsForResource",
+    ]
+    resources = ["arn:aws:route53:::hostedzone/${local.dns_admin_zone_id}"]
+  }
+
+  statement {
+    sid       = "Route53ChangeRead"
+    effect    = "Allow"
+    actions   = ["route53:GetChange"]
+    resources = ["arn:aws:route53:::change/*"]
+  }
+
+  # List* APIs generally require '*' resources.
+  statement {
+    sid    = "Route53List"
+    effect = "Allow"
+    actions = [
+      "route53:ListHostedZones",
+      "route53:ListHostedZonesByName",
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_policy" "dns_admin" {
+  count = var.enable_compute && var.dns_admin_enabled && (var.create_hosted_zone || var.dns_admin_zone_id != "") ? 1 : 0
+
+  name_prefix = "${var.name_prefix}-dnsadmin-"
+  description = "Allow administering Route53 records in the hosted zone (for certbot DNS-01, etc.)."
+  policy      = data.aws_iam_policy_document.dns_admin[0].json
+
+  tags = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "dns_admin" {
+  count      = var.enable_compute && var.dns_admin_enabled && (var.create_hosted_zone || var.dns_admin_zone_id != "") ? 1 : 0
+  role       = aws_iam_role.ssm[0].name
+  policy_arn = aws_iam_policy.dns_admin[0].arn
+}
+
+resource "aws_s3_bucket" "assets" {
+  count = var.enable_compute && var.assets_bucket_enabled ? 1 : 0
+
+  bucket        = local.assets_bucket_name
+  force_destroy = var.assets_bucket_force_destroy
+
+  tags = merge(local.tags, { Name = local.assets_bucket_name })
+}
+
+resource "aws_s3_bucket_public_access_block" "assets" {
+  count = var.enable_compute && var.assets_bucket_enabled ? 1 : 0
+
+  bucket = aws_s3_bucket.assets[0].id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_ownership_controls" "assets" {
+  count = var.enable_compute && var.assets_bucket_enabled ? 1 : 0
+
+  bucket = aws_s3_bucket.assets[0].id
+
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "assets" {
+  count = var.enable_compute && var.assets_bucket_enabled ? 1 : 0
+
+  bucket = aws_s3_bucket.assets[0].id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_versioning" "assets" {
+  count = var.enable_compute && var.assets_bucket_enabled ? 1 : 0
+
+  bucket = aws_s3_bucket.assets[0].id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+data "aws_iam_policy_document" "cicd_assets" {
+  count = var.enable_compute && var.assets_bucket_enabled ? 1 : 0
+
+  statement {
+    sid    = "ListAssetsBucket"
+    effect = "Allow"
+    actions = [
+      "s3:ListBucket",
+      "s3:ListBucketMultipartUploads",
+    ]
+    resources = [aws_s3_bucket.assets[0].arn]
+  }
+
+  statement {
+    sid    = "ReadWriteAssetsObjects"
+    effect = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject",
+      "s3:AbortMultipartUpload",
+      "s3:ListMultipartUploadParts",
+      "s3:CreateMultipartUpload",
+      "s3:UploadPart",
+      "s3:CompleteMultipartUpload",
+    ]
+    resources = ["${aws_s3_bucket.assets[0].arn}/*"]
+  }
+}
+
+resource "aws_iam_policy" "cicd_assets" {
+  count = var.enable_compute && var.assets_bucket_enabled ? 1 : 0
+
+  name_prefix = "${var.name_prefix}-cicd-assets-"
+  description = "Allow CI/CD on the instance to read/write build assets in the S3 bucket."
+  policy      = data.aws_iam_policy_document.cicd_assets[0].json
+
+  tags = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "cicd_assets" {
+  count      = var.enable_compute && var.assets_bucket_enabled ? 1 : 0
+  role       = aws_iam_role.ssm[0].name
+  policy_arn = aws_iam_policy.cicd_assets[0].arn
 }
 
 resource "aws_iam_instance_profile" "ssm" {
@@ -204,4 +358,28 @@ resource "aws_route53_record" "mud_cname" {
   type    = "CNAME"
   ttl     = 60
   records = [var.cname_target != "" ? var.cname_target : aws_instance.this[0].public_dns]
+}
+
+resource "aws_route53_record" "www_cname" {
+  # Count cannot depend on resource attributes. If compute is enabled, we create the record
+  # and let the target resolve to the instance's public DNS after apply.
+  count = var.create_hosted_zone && (var.enable_compute || var.cname_target != "" || var.www_cname_target != "") ? 1 : 0
+
+  zone_id = local.hosted_zone_id
+  name    = "www.${trim(var.zone_name, ".")}"
+  type    = "CNAME"
+  ttl     = 60
+  records = [
+    var.www_cname_target != "" ? var.www_cname_target : (var.cname_target != "" ? var.cname_target : aws_instance.this[0].public_dns),
+  ]
+}
+
+resource "aws_route53_record" "apex_a" {
+  count = var.create_hosted_zone && var.enable_compute ? 1 : 0
+
+  zone_id = local.hosted_zone_id
+  name    = trim(var.zone_name, ".")
+  type    = "A"
+  ttl     = 60
+  records = [aws_instance.this[0].public_ip]
 }
