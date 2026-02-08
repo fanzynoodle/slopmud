@@ -302,6 +302,76 @@ web-sso-run-local:
     cargo run -p slopmud_web -- --bind 127.0.0.1:4942 --dir web_homepage --session-tcp-addr "${SESSION_TCP_ADDR}"; \
   '
 
+# --- Local dev: multi-agent helpers (git worktree + per-agent env/ports) ---
+
+# Create/update an env file with an isolated port block for an agent.
+agent-env NAME="" BASE_PORT="5040" OUT="env/agent.env":
+  bash -ceu ' \
+    if [ -z "{{NAME}}" ]; then echo "missing: NAME"; exit 2; fi; \
+    ./scripts/mk_agent_env.sh "{{NAME}}" "{{BASE_PORT}}" "{{OUT}}"; \
+  '
+
+# One-shot: create a dedicated git worktree + write env/agent.env inside it.
+agent-worktree dir name base_port="5040" branch="":
+  bash -ceu ' \
+    if [ -z "{{dir}}" ] || [ -z "{{name}}" ]; then echo "usage: just agent-worktree /tmp/a a 5040"; exit 2; fi; \
+    br="{{branch}}"; if [ -z "$br" ]; then br="agent-{{name}}"; fi; \
+    git worktree add "{{dir}}" -b "$br"; \
+    chmod +x ./scripts/mk_agent_env.sh; \
+    ./scripts/mk_agent_env.sh "{{name}}" "{{base_port}}" "{{dir}}/env/agent.env"; \
+  '
+
+# Run shard + broker for an arbitrary env file.
+local-run env_file="env/dev.env":
+  bash -ceu ' \
+    set -o pipefail; \
+    set -a; source "{{env_file}}"; set +a; \
+    cargo run -p shard_01 & \
+    shard_pid=$!; \
+    trap "kill $shard_pid 2>/dev/null || true" EXIT; \
+    cargo run -p slopmud; \
+  '
+
+# Run static_web for an arbitrary env file (web UI + /ws -> broker).
+local-web env_file="env/dev.env":
+  bash -ceu ' \
+    set -a; source "{{env_file}}"; set +a; \
+    if [ -z "${STATIC_WEB_BIND:-}" ]; then \
+      p="${SLOPMUD_BIND##*:}"; \
+      STATIC_WEB_BIND="127.0.0.1:$((p + 3))"; \
+    fi; \
+    cargo run -p static_web -- --bind "${STATIC_WEB_BIND}" --dir web_homepage --session-tcp-addr "${SESSION_TCP_ADDR}"; \
+  '
+
+# Run slopmud_web for an arbitrary env file (auth endpoints + oauth callback + /ws -> broker).
+local-web-sso env_file="env/dev.env":
+  bash -ceu ' \
+    set -a; source "{{env_file}}"; set +a; \
+    if [ -z "${OAUTH_WEB_BIND:-}" ]; then \
+      p="${SLOPMUD_BIND##*:}"; \
+      OAUTH_WEB_BIND="127.0.0.1:$((p + 2))"; \
+    fi; \
+    cargo run -p slopmud_web -- --bind "${OAUTH_WEB_BIND}" --dir web_homepage --session-tcp-addr "${SESSION_TCP_ADDR}"; \
+  '
+
+# Run shard + broker in background, and static_web in the foreground (Ctrl+C to stop).
+local-all env_file="env/dev.env":
+  bash -ceu ' \
+    set -o pipefail; \
+    set -a; source "{{env_file}}"; set +a; \
+    if [ -z "${STATIC_WEB_BIND:-}" ]; then \
+      p="${SLOPMUD_BIND##*:}"; \
+      STATIC_WEB_BIND="127.0.0.1:$((p + 3))"; \
+    fi; \
+    cargo run -p shard_01 & shard_pid=$!; \
+    trap "kill $shard_pid 2>/dev/null || true" EXIT; \
+    sleep 0.6; \
+    cargo run -p slopmud & broker_pid=$!; \
+    trap "kill $broker_pid 2>/dev/null || true; kill $shard_pid 2>/dev/null || true" EXIT; \
+    sleep 0.6; \
+    cargo run -p static_web -- --bind "${STATIC_WEB_BIND}" --dir web_homepage --session-tcp-addr "${SESSION_TCP_ADDR}"; \
+  '
+
 # --- Local dev: slopmud server ---
 
 slopmud-build:

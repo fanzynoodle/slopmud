@@ -82,6 +82,42 @@ just e2e-party
 just e2e-web-local  # selenium: web client creates account + logs in again
 ```
 
+## Multi-Agent Local Dev (Dedicated Working Trees)
+
+If you have multiple agents working in parallel, each agent should run from a dedicated working tree
+and use a dedicated port block.
+
+Rules:
+
+1. Each agent uses its own working tree directory (example: `/tmp/a`, `/tmp/b`).
+2. Each agent picks a `base_port` that is `100` away from other agents' base ports (example: `4940`, `5040`, `5140`).
+3. Each agent generates an env file (`env/agent.env`) from that base port.
+
+Automation:
+
+```bash
+# From the main repo:
+just agent-worktree /tmp/a a 5040
+just agent-worktree /tmp/b b 5140
+```
+
+In each agent working tree:
+
+```bash
+cd /tmp/a
+just local-all env_file=env/agent.env
+```
+
+Then open:
+
+- `http://127.0.0.1:5043/play.html`
+
+Or run the selenium check (starts its own stack on a free 49xx port block):
+
+```bash
+just e2e-web-local
+```
+
 ## Secrets
 
 All secrets must live in files under `$SECRET_STORE` and be referenced by name (never committed).
