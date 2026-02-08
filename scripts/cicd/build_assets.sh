@@ -33,8 +33,9 @@ mkdir -p "${out_dir}/bin"
 
 export CARGO_TARGET_DIR="$repo_root/$target_dir"
 
-echo "Building (track=${track}, clean=${clean_build}, sha=${sha})"
-cargo build -p slopmud --release
+echo "Building (track=${track}, clean=${clean_build}, sha=${sha})" >&2
+# Keep stdout clean so callers can safely capture the artifact path.
+cargo build -p slopmud --release 1>&2
 
 bin_src="${CARGO_TARGET_DIR}/release/slopmud"
 if [[ ! -x "$bin_src" ]]; then
