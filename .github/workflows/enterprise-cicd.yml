@@ -125,7 +125,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null
+          sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null 2>&1
 
       - name: Deploy
         shell: bash
@@ -173,7 +173,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null
+          sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null 2>&1
 
       - name: Copy Tested Asset -> prod/
         shell: bash
