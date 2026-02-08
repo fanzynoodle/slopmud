@@ -5,6 +5,7 @@
 
   const btnConnect = document.getElementById("btn-connect");
   const btnDisconnect = document.getElementById("btn-disconnect");
+  const btnNewSession = document.getElementById("btn-new-session");
   const btnClear = document.getElementById("btn-clear");
 
   const optEcho = document.getElementById("opt-echo");
@@ -19,6 +20,8 @@
   let shouldReconnect = true;
   let reconnectTimer = null;
   let reconnectAttempts = 0;
+
+  const LS_RESUME_TOKEN = "slopmud_resume_token";
 
   function defaultWsUrl() {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -166,6 +169,20 @@
     connect();
   });
   btnDisconnect && btnDisconnect.addEventListener("click", disconnect);
+  btnNewSession &&
+    btnNewSession.addEventListener("click", () => {
+      const ok = window.confirm(
+        "Start a new session? This clears any saved resume token so you can choose a different account name."
+      );
+      if (!ok) return;
+      try {
+        localStorage.removeItem(LS_RESUME_TOKEN);
+      } catch {
+        // ignore
+      }
+      disconnect();
+      location.reload();
+    });
   btnClear && btnClear.addEventListener("click", () => {
     clear();
     lineEl && lineEl.focus();
