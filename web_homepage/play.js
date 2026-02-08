@@ -46,102 +46,7 @@
   let reconnectTimer = null;
   let reconnectAttempts = 0;
 
-  let ssoScanBuf = "";
-  let lastSsoUrl = "";
-
-  const LS_WS_URL = "slopmud_ws_url";
-  const LS_AUTOSCROLL = "slopmud_autoscroll";
   const LS_RESUME_TOKEN = "slopmud_resume_token";
-
-  function updateSsoUrl(url) {
-    const u = String(url || "").trim();
-    lastSsoUrl = u;
-    if (!ssoUrlEl) return;
-    if (!u) {
-      ssoUrlEl.textContent = "none";
-      ssoUrlEl.setAttribute("href", "#");
-      btnSsoOpen && (btnSsoOpen.disabled = true);
-      return;
-    }
-    ssoUrlEl.textContent = u;
-    ssoUrlEl.setAttribute("href", u);
-    btnSsoOpen && (btnSsoOpen.disabled = false);
-  }
-
-  function scanForSsoUrl(chunk) {
-    const s = String(chunk || "");
-    if (!s) return;
-
-    // Keep a rolling buffer to handle URLs split across frames.
-    ssoScanBuf = (ssoScanBuf + s).slice(-4096);
-
-    // Broker prints: "open this url in a browser to sign in:\r\n  https://.../auth/google?code=...\r\n"
-    const m = ssoScanBuf.match(/https?:\/\/[^\s]+\/auth\/google\?code=[A-Za-z0-9]+/);
-    if (m && m[0] && m[0] !== lastSsoUrl) updateSsoUrl(m[0]);
-  }
-
-  function isValidResumeToken(t) {
-    if (!t) return false;
-    const s = String(t).trim();
-    if (s.length < 16 || s.length > 128) return false;
-    return /^[A-Za-z0-9_-]+$/.test(s);
-  }
-
-  function hex(u8) {
-    const HEX = "0123456789abcdef";
-    let out = "";
-    for (let i = 0; i < u8.length; i++) {
-      const b = u8[i];
-      out += HEX[(b >> 4) & 0xf];
-      out += HEX[b & 0xf];
-    }
-    return out;
-  }
-
-  function newResumeToken() {
-    try {
-      const u8 = new Uint8Array(16);
-      crypto.getRandomValues(u8);
-      return hex(u8);
-    } catch {
-      // Extremely old browsers / restricted contexts.
-      return `r${Math.random().toString(16).slice(2)}${Date.now().toString(16)}`;
-    }
-  }
-
-  function getOrCreateResumeToken() {
-    const existing = localStorage.getItem(LS_RESUME_TOKEN);
-    if (isValidResumeToken(existing)) return existing.trim();
-    const t = newResumeToken();
-    localStorage.setItem(LS_RESUME_TOKEN, t);
-    return t;
-  }
-
-  function withResumeToken(url, token) {
-    try {
-      const u = new URL(url, defaultWsUrl());
-      if (u.protocol === "http:") u.protocol = "ws:";
-      if (u.protocol === "https:") u.protocol = "wss:";
-      u.searchParams.set("resume", token);
-      return u.toString();
-    } catch {
-      return url;
-    }
-  }
-
-  function redactResumeToken(url) {
-    try {
-      const u = new URL(url, defaultWsUrl());
-      if (u.protocol === "http:") u.protocol = "ws:";
-      if (u.protocol === "https:") u.protocol = "wss:";
-      if (u.searchParams.has("resume")) {
-        u.searchParams.set("resume", "<resume>");
-      }
-      return u.toString();
-    } catch {
-      return url;
-    }
-  }
 
   function defaultWsUrl() {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -410,40 +315,21 @@
     shouldReconnect = true;
     connect();
   });
-  btnDisconnect &&
-    btnDisconnect.addEventListener("click", async () => {
+  btnDisconnect && btnDisconnect.addEventListener("click", disconnect);
+  btnNewSession &&
+    btnNewSession.addEventListener("click", () => {
       const ok = window.confirm(
-        "Disconnect only? Click Cancel to log out (kill the resumable session) so a refresh starts fresh."
+        "Start a new session? This clears any saved resume token so you can choose a different account name."
       );
-      if (!ok) {
-        await logoutResumeSession();
-        try {
-          localStorage.removeItem(LS_RESUME_TOKEN);
-        } catch {
-          // ignore
-        }
-        disconnect();
-        location.reload();
-        return;
+      if (!ok) return;
+      try {
+        localStorage.removeItem(LS_RESUME_TOKEN);
+      } catch {
+        // ignore
       }
       disconnect();
+      location.reload();
     });
-
-  function handleNewSession() {
-    const ok = window.confirm(
-      "Start a new session? This clears the saved resume token so you can choose a different account name."
-    );
-    if (!ok) return;
-    logoutResumeSession();
-    try {
-      localStorage.removeItem(LS_RESUME_TOKEN);
-    } catch {
-      // ignore
-    }
-    location.reload();
-  }
-
-  btnNewSession && btnNewSession.addEventListener("click", handleNewSession);
   btnClear && btnClear.addEventListener("click", () => {
     clear();
     lineEl && lineEl.focus();
