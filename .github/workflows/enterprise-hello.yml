@@ -1,0 +1,38 @@
+name: Enterprise CI/CD (Hello World)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+# Keep the default token minimally scoped.
+permissions:
+  contents: read
+
+# Avoid piling up queued jobs on a single self-hosted runner.
+concurrency:
+  group: enterprise-hello-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hello:
+    name: Hello from self-hosted runner
+    # If this job queues forever, your runner labels don't match.
+    # Default self-hosted labels are typically: self-hosted, Linux, X64.
+    runs-on: [self-hosted, Linux]
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Hello
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "hello world"
+          echo "runner=$RUNNER_NAME os=$RUNNER_OS arch=$RUNNER_ARCH"
+          echo "actor=$GITHUB_ACTOR ref=$GITHUB_REF sha=$GITHUB_SHA"
+          echo "pwd=$(pwd)"
+          ls -la
