@@ -29,6 +29,8 @@ check:
 check-core:
   just fmt-check
   just py-check
+  RUSTFLAGS='-D warnings' cargo build -q -p bot_party
+  RUSTFLAGS='-D warnings' cargo build -q -p ws_gateway --bin e2e_ws
   cargo test -q
   just world-validate
   just proto-lint
@@ -503,7 +505,10 @@ area-lock-status zone_id="":
   '
 
 e2e-ws:
-  cargo build -q -p ws_gateway --bin e2e_ws
+  cargo build -q -p shard_01
+  cargo build -q -p ws_gateway
+  RUSTFLAGS='-D warnings' cargo build -q -p bot_party
+  RUSTFLAGS='-D warnings' cargo build -q -p ws_gateway --bin e2e_ws
   ./target/debug/e2e_ws
 
 # --- Local dev: shard ---

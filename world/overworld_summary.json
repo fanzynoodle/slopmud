@@ -1,6 +1,6 @@
 {
   "edge_count": 23,
-  "generated_at_utc": "2026-02-08T12:49:13+00:00",
+  "generated_at_utc": "2026-02-11T02:27:44+00:00",
   "portal_count": 46,
   "zones": [
     {
@@ -97,6 +97,11 @@
       "id": "the_seam",
       "name": "The Seam",
       "portal_count": 1
+    },
+    {
+      "id": "arena",
+      "name": "Arena",
+      "portal_count": 0
     }
   ]
 }

@@ -9,6 +9,7 @@ use tokio_tungstenite::tungstenite::protocol::Message;
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
+#[allow(dead_code)] // Protocol fields are matched by serde; test flow doesn't read every field.
 enum JsonOut {
     Hello { mode: String },
     Attached { session: String },

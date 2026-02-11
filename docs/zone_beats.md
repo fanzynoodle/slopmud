@@ -242,3 +242,11 @@ Primary quests: Q14.
 | CL_SEAM_RIFTS | 80 | rift runs (`setpiece.q14.rift_1..4`) |
 | CL_SEAM_MAZE | 60 | endgame loops; reality glitches |
 | CL_SEAM_STABILIZER_NEXUS | 45 | finale (`setpiece.q14.stabilizer_nexus`) |
+
+### Arena (L?, 2 rooms)
+
+Primary quests: none (sandbox).
+
+| Cluster ID | Rooms | Notes |
+| --- | ---:| --- |
+| CL_ARENA_PIT | 2 | isolated fight pit; no overworld portals yet |

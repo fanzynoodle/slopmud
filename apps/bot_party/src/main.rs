@@ -50,6 +50,7 @@ fn parse_args() -> Config {
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
+#[allow(dead_code)] // Protocol fields are matched by serde; the bot doesn't read every field.
 enum JsonOut {
     Hello { mode: String },
     Attached { session: String },
@@ -131,12 +132,24 @@ async fn bot_loop(ws_url: &str, bot_name: &str) -> anyhow::Result<()> {
                                 // Detect joins in our room:
                                 // "* Alice joined" or "* Alice joined (bot)"
                                 if let Some((name, is_bot)) = parse_join_line(&text) {
-                                    if name != bot_name && !is_bot {
-                                        if seen_humans.insert(name.to_string()) {
-                                            send_cmd(&mut sink, &format!("say hi {name}. i'm {bot_name} (bot). want a party buddy?")).await?;
-                                            send_cmd(&mut sink, &format!("party invite {name}")).await?;
-                                            send_cmd(&mut sink, "say type: party accept (then i'll follow you)").await?;
-                                        }
+                                    if name != bot_name
+                                        && !is_bot
+                                        && seen_humans.insert(name.to_string())
+                                    {
+                                        send_cmd(
+                                            &mut sink,
+                                            &format!(
+                                                "say hi {name}. i'm {bot_name} (bot). want a party buddy?"
+                                            ),
+                                        )
+                                        .await?;
+                                        send_cmd(&mut sink, &format!("party invite {name}"))
+                                            .await?;
+                                        send_cmd(
+                                            &mut sink,
+                                            "say type: party accept (then i'll follow you)",
+                                        )
+                                        .await?;
                                     }
                                 }
 

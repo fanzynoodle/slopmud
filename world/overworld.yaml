@@ -1,5 +1,5 @@
 version: 1
-generated_at_utc: "2026-02-08T12:49:13+00:00"
+generated_at_utc: "2026-02-11T02:27:44+00:00"
 generated_from: "docs/overworld_cartesian_layout.md"
 units:
   coord_unit: planning-grid
@@ -100,6 +100,11 @@ zones:
     anchor:
       x: 33
       y: 7
+  - id: arena
+    name: "Arena"
+    anchor:
+      x: 0
+      y: -4
 portals:
   - id: P_NS_TOWN
     zone_id: newbie_school
