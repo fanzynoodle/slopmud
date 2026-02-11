@@ -322,7 +322,11 @@ async fn handle_admin_conn(
                 let idx = s.next_index.saturating_sub(1);
                 let bans = s.bans.values().cloned().collect::<Vec<_>>();
                 let holds = s.holds.values().cloned().collect::<Vec<_>>();
-                let resp = AdminResp::OkState { index: idx, bans, holds };
+                let resp = AdminResp::OkState {
+                    index: idx,
+                    bans,
+                    holds,
+                };
                 (resp, None)
             }
         }

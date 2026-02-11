@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import os
 import signal
 import socket
@@ -190,10 +191,37 @@ def roam_until_worm(c: Client, max_moves=60):
         c.read_until("exits:", timeout_s=5.0)
 
 
+def _alloc_port_block(port_range: str, stride: int, offsets: str) -> int:
+    alloc = Path(__file__).with_name("alloc_port_block.py")
+    if not alloc.exists():
+        raise FileNotFoundError(f"missing allocator: {alloc}")
+    out = subprocess.check_output(
+        [
+            sys.executable,
+            str(alloc),
+            "--range",
+            port_range,
+            "--stride",
+            str(stride),
+            "--offsets",
+            offsets,
+        ],
+        text=True,
+    ).strip()
+    return int(out)
+
+
 def main():
-    # Dedicated ports so this is safe to run while you have a local dev session up.
-    shard_bind = "127.0.0.1:55011"
-    broker_bind = "127.0.0.1:54010"
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--base-port", type=int, default=0)
+    ap.add_argument("--port-range", default="4950-5990")
+    ap.add_argument("--stride", type=int, default=5)
+    args = ap.parse_args()
+
+    # Allocate a port block so this can run alongside other local stacks.
+    base = args.base_port or _alloc_port_block(args.port_range, args.stride, "0,1")
+    shard_bind = f"127.0.0.1:{base + 1}"
+    broker_bind = f"127.0.0.1:{base + 0}"
 
     run_id = str(time.time_ns())
 
@@ -248,8 +276,9 @@ def main():
     try:
         time.sleep(0.8)
 
-        a = connect_and_create("Alice", is_bot=False)
-        b = connect_and_create("Bob", is_bot=True)
+        broker_port = int(broker_bind.split(":")[-1])
+        a = connect_and_create("Alice", is_bot=False, port=broker_port)
+        b = connect_and_create("Bob", is_bot=True, port=broker_port)
         send_line(b.sock, "assist off")
         b.read_until("assist: off", timeout_s=3.0)
 

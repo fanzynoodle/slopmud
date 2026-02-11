@@ -25,5 +25,5 @@ argon2 = "0.5.3"
 password-hash = "0.5.0"
 sbc_core = { path = "../sbc_core" }
 
-aws-config = "1.5.13"
+aws-config = { version = "1.5.13", features = ["behavior-version-latest"] }
 aws-sdk-s3 = "1.74.0"

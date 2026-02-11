@@ -28,6 +28,6 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 urlencoding = "2.1.3"
 
-aws-config = "1.5.13"
+aws-config = { version = "1.5.13", features = ["behavior-version-latest"] }
 aws-sdk-s3 = "1.74.0"
 aws-sdk-sesv2 = "1.82.0"

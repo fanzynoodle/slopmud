@@ -243,15 +243,25 @@ pub enum AdminReq {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AdminResp {
-    Ok { index: u64 },
-    OkBan { index: u64, entry: BanEntry },
-    OkLegalHold { index: u64, entry: LegalHoldEntry },
+    Ok {
+        index: u64,
+    },
+    OkBan {
+        index: u64,
+        entry: BanEntry,
+    },
+    OkLegalHold {
+        index: u64,
+        entry: LegalHoldEntry,
+    },
     OkState {
         index: u64,
         bans: Vec<BanEntry>,
         holds: Vec<LegalHoldEntry>,
     },
-    Err { message: String },
+    Err {
+        message: String,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -261,12 +271,24 @@ pub enum Event {
         bans: Vec<BanEntry>,
         holds: Vec<LegalHoldEntry>,
     },
-    BanUpserted { entry: BanEntry },
-    BanDeleted { ban_id: String },
-    LegalHoldUpserted { entry: LegalHoldEntry },
-    LegalHoldDeleted { name_lc: String },
-    EnforcementStatus { status: EnforcementStatus },
-    BanApplyResult { report: BanApplyResult },
+    BanUpserted {
+        entry: BanEntry,
+    },
+    BanDeleted {
+        ban_id: String,
+    },
+    LegalHoldUpserted {
+        entry: LegalHoldEntry,
+    },
+    LegalHoldDeleted {
+        name_lc: String,
+    },
+    EnforcementStatus {
+        status: EnforcementStatus,
+    },
+    BanApplyResult {
+        report: BanApplyResult,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

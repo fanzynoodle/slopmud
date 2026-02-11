@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import os
 import signal
 import socket
@@ -129,9 +130,36 @@ def cargo_build_quiet(env, build_log: Path, pkg: str):
         raise subprocess.CalledProcessError(p.returncode, cmd)
 
 
+def _alloc_port_block(port_range: str, stride: int, offsets: str) -> int:
+    alloc = Path(__file__).with_name("alloc_port_block.py")
+    if not alloc.exists():
+        raise FileNotFoundError(f"missing allocator: {alloc}")
+    out = subprocess.check_output(
+        [
+            sys.executable,
+            str(alloc),
+            "--range",
+            port_range,
+            "--stride",
+            str(stride),
+            "--offsets",
+            offsets,
+        ],
+        text=True,
+    ).strip()
+    return int(out)
+
+
 def main():
-    shard_bind = "127.0.0.1:55021"
-    broker_bind = "127.0.0.1:54100"
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--base-port", type=int, default=0)
+    ap.add_argument("--port-range", default="4950-5990")
+    ap.add_argument("--stride", type=int, default=5)
+    args = ap.parse_args()
+
+    base = args.base_port or _alloc_port_block(args.port_range, args.stride, "0,1")
+    shard_bind = f"127.0.0.1:{base + 1}"
+    broker_bind = f"127.0.0.1:{base + 0}"
 
     run_id = str(time.time_ns())
 
@@ -176,8 +204,9 @@ def main():
     ok = False
     try:
         time.sleep(0.8)
-        a = connect_and_create("Alice", is_bot=False, port=54100)
-        b = connect_and_create("Bob", is_bot=True, port=54100)
+        broker_port = int(broker_bind.split(":")[-1])
+        a = connect_and_create("Alice", is_bot=False, port=broker_port)
+        b = connect_and_create("Bob", is_bot=True, port=broker_port)
 
         # Character setup (required for movement).
         send_line(a.sock, "wear tunic")

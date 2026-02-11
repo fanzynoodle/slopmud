@@ -997,7 +997,11 @@ async fn handle_report_command(
             } else {
                 target_text.clone()
             };
-            let note_log = if held { redact_pii(&note) } else { note.clone() };
+            let note_log = if held {
+                redact_pii(&note)
+            } else {
+                note.clone()
+            };
             let target_text_view = if held && source != "hot" {
                 target_text_log.clone()
             } else {
@@ -1012,7 +1016,11 @@ async fn handle_report_command(
 
             let mut ctx_s = String::new();
             for (cid, cts_ms, ctext) in &context_lines {
-                let ctext = if held { redact_pii(ctext) } else { ctext.clone() };
+                let ctext = if held {
+                    redact_pii(ctext)
+                } else {
+                    ctext.clone()
+                };
                 ctx_s.push_str(&format!(
                     "[{id} {ts}] {text}\n",
                     id = cid,
@@ -1102,9 +1110,9 @@ async fn sbc_send_admin_req(
     sock: &PathBuf,
     req: &sbc_core::AdminReq,
 ) -> anyhow::Result<sbc_core::AdminResp> {
-    let mut stream = UnixStream::connect(sock).await.map_err(|e| {
-        anyhow::anyhow!("connect sbc admin sock {}: {e}", sock.display())
-    })?;
+    let mut stream = UnixStream::connect(sock)
+        .await
+        .map_err(|e| anyhow::anyhow!("connect sbc admin sock {}: {e}", sock.display()))?;
     stream
         .write_all(serde_json::to_string(req)?.as_bytes())
         .await?;
@@ -2668,9 +2676,7 @@ async fn handle_conn(
                                 Ok(v) => v,
                                 Err(_) => {
                                     let _ = write_tx
-                                        .send(Bytes::from_static(
-                                            b"web_auth: bad json\r\nname: ",
-                                        ))
+                                        .send(Bytes::from_static(b"web_auth: bad json\r\nname: "))
                                         .await;
                                     continue;
                                 }
@@ -2730,11 +2736,14 @@ async fn handle_conn(
                                             .await;
                                         false
                                     } else {
-                                        let salt =
-                                            SaltString::generate(&mut password_hash::rand_core::OsRng);
+                                        let salt = SaltString::generate(
+                                            &mut password_hash::rand_core::OsRng,
+                                        );
                                         let hash = Argon2::default()
                                             .hash_password(pw, &salt)
-                                            .map_err(|e| anyhow::anyhow!("hash_password failed: {e}"))?
+                                            .map_err(|e| {
+                                                anyhow::anyhow!("hash_password failed: {e}")
+                                            })?
                                             .to_string();
 
                                         let now_unix = std::time::SystemTime::now()
@@ -2799,7 +2808,9 @@ async fn handle_conn(
                                             }
                                             Some(hash) => {
                                                 let ok = if let Ok(ph) = PasswordHash::new(hash) {
-                                                    Argon2::default().verify_password(pw, &ph).is_ok()
+                                                    Argon2::default()
+                                                        .verify_password(pw, &ph)
+                                                        .is_ok()
                                                 } else {
                                                     false
                                                 };
@@ -2868,8 +2879,10 @@ async fn handle_conn(
                                                         false
                                                     } else {
                                                         google_sub = Some(sub.to_string());
-                                                        google_email =
-                                                            r.google_email.clone().or(email.clone());
+                                                        google_email = r
+                                                            .google_email
+                                                            .clone()
+                                                            .or(email.clone());
                                                         auth_method = Some("google".to_string());
                                                         auth_blob = Some(make_shard_auth_blob(
                                                             &uname,
@@ -4398,9 +4411,6 @@ mod tests {
             redact_pii("call +1 (770) 235-3571 now"),
             "call [phone] now".to_string()
         );
-        assert_eq!(
-            redact_pii("no pii here"),
-            "no pii here".to_string()
-        );
+        assert_eq!(redact_pii("no pii here"), "no pii here".to_string());
     }
 }

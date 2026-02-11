@@ -7604,274 +7604,274 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
                         let room_msg = format!("* {} turns the valve wheel.", p.name);
                         let _ = world.broadcast_room(&mut fw, &p.room_id, &room_msg).await;
-	                    }
-	                    continue;
-	                }
+                        }
+                        continue;
+                    }
 
-	                if lc == "light" {
-	                    write_resp_async(&mut fw, RESP_OUTPUT, session, b"huh? (try: light pylon)\r\n")
-	                        .await?;
-	                    continue;
-	                }
-	                if let Some(rest) = lc.strip_prefix("light ") {
-	                    let target = rest.trim();
-	                    if target.is_empty() {
-	                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"huh? (try: light pylon)\r\n")
-	                            .await?;
-	                        continue;
-	                    }
+                    if lc == "light" {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"huh? (try: light pylon)\r\n")
+                            .await?;
+                        continue;
+                    }
+                    if let Some(rest) = lc.strip_prefix("light ") {
+                        let target = rest.trim();
+                        if target.is_empty() {
+                            write_resp_async(&mut fw, RESP_OUTPUT, session, b"huh? (try: light pylon)\r\n")
+                                .await?;
+                            continue;
+                        }
 
-	                    let pylon_ix = match p.room_id.as_str() {
-	                        "R_HILL_PYLON_01" => Some(1),
-	                        "R_HILL_PYLON_02" => Some(2),
-	                        "R_HILL_PYLON_03" => Some(3),
-	                        _ => None,
-	                    };
-	                    if pylon_ix.is_none() {
-	                        write_resp_async(
-	                            &mut fw,
-	                            RESP_OUTPUT,
-	                            session,
-	                            b"huh? (nothing to light here)\r\n",
-	                        )
-	                        .await?;
-	                        continue;
-	                    }
+                        let pylon_ix = match p.room_id.as_str() {
+                            "R_HILL_PYLON_01" => Some(1),
+                            "R_HILL_PYLON_02" => Some(2),
+                            "R_HILL_PYLON_03" => Some(3),
+                            _ => None,
+                        };
+                        if pylon_ix.is_none() {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"huh? (nothing to light here)\r\n",
+                            )
+                            .await?;
+                            continue;
+                        }
 
-	                    if target != "pylon" && target != "ward" && target != "tower" && target != "beacon" {
-	                        write_resp_async(
-	                            &mut fw,
-	                            RESP_OUTPUT,
-	                            session,
-	                            b"huh? (try: light pylon)\r\n",
-	                        )
-	                        .await?;
-	                        continue;
-	                    }
+                        if target != "pylon" && target != "ward" && target != "tower" && target != "beacon" {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"huh? (try: light pylon)\r\n",
+                            )
+                            .await?;
+                            continue;
+                        }
 
-	                    let key_done = format!("q.q6_hillfort_signal.pylon_{}", pylon_ix.unwrap());
-	                    let (lit, already) = {
-	                        let Some(c) = world.active_char_mut(session) else {
-	                            write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n").await?;
-	                            continue;
-	                        };
-	                        let already = c
-	                            .quest
-	                            .get(&key_done)
-	                            .map(|v| v.trim())
-	                            .is_some_and(|v| !v.is_empty() && v != "0" && v != "false");
+                        let key_done = format!("q.q6_hillfort_signal.pylon_{}", pylon_ix.unwrap());
+                        let (lit, already) = {
+                            let Some(c) = world.active_char_mut(session) else {
+                                write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n").await?;
+                                continue;
+                            };
+                            let already = c
+                                .quest
+                                .get(&key_done)
+                                .map(|v| v.trim())
+                                .is_some_and(|v| !v.is_empty() && v != "0" && v != "false");
 
-	                        if already {
-	                            let lit = c
-	                                .quest
-	                                .get("q.q6_hillfort_signal.pylons_lit")
-	                                .and_then(|v| v.trim().parse::<i64>().ok())
-	                                .unwrap_or(0)
-	                                .clamp(0, 3);
-	                            (lit, true)
-	                        } else {
-	                            c.quest.insert(key_done, "1".to_string());
-	                            let mut lit = c
-	                                .quest
-	                                .get("q.q6_hillfort_signal.pylons_lit")
-	                                .and_then(|v| v.trim().parse::<i64>().ok())
-	                                .unwrap_or(0)
-	                                .clamp(0, 3);
-	                            lit = (lit + 1).clamp(0, 3);
-	                            c.quest.insert(
-	                                "q.q6_hillfort_signal.pylons_lit".to_string(),
-	                                lit.to_string(),
-	                            );
-	                            (lit, false)
-	                        }
-	                    };
+                            if already {
+                                let lit = c
+                                    .quest
+                                    .get("q.q6_hillfort_signal.pylons_lit")
+                                    .and_then(|v| v.trim().parse::<i64>().ok())
+                                    .unwrap_or(0)
+                                    .clamp(0, 3);
+                                (lit, true)
+                            } else {
+                                c.quest.insert(key_done, "1".to_string());
+                                let mut lit = c
+                                    .quest
+                                    .get("q.q6_hillfort_signal.pylons_lit")
+                                    .and_then(|v| v.trim().parse::<i64>().ok())
+                                    .unwrap_or(0)
+                                    .clamp(0, 3);
+                                lit = (lit + 1).clamp(0, 3);
+                                c.quest.insert(
+                                    "q.q6_hillfort_signal.pylons_lit".to_string(),
+                                    lit.to_string(),
+                                );
+                                (lit, false)
+                            }
+                        };
 
-	                    if already {
-	                        let msg = format!("the pylon is already lit. (pylons lit: {lit}/3)\r\n");
-	                        write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
-	                    } else {
-	                        let mut msg = format!("you relight the ward pylon. (pylons lit: {lit}/3)\r\n");
-	                        if lit >= 3 {
-	                            msg.push_str("somewhere deeper in the fort, a gate finally agrees.\r\n");
-	                        }
-	                        write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
-	                        let room_msg = format!("* {} relights the ward pylon.", p.name);
-	                        let _ = world.broadcast_room(&mut fw, &p.room_id, &room_msg).await;
-	                    }
-	                    continue;
-	                }
+                        if already {
+                            let msg = format!("the pylon is already lit. (pylons lit: {lit}/3)\r\n");
+                            write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                        } else {
+                            let mut msg = format!("you relight the ward pylon. (pylons lit: {lit}/3)\r\n");
+                            if lit >= 3 {
+                                msg.push_str("somewhere deeper in the fort, a gate finally agrees.\r\n");
+                            }
+                            write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                            let room_msg = format!("* {} relights the ward pylon.", p.name);
+                            let _ = world.broadcast_room(&mut fw, &p.room_id, &room_msg).await;
+                        }
+                        continue;
+                    }
 
-	                if lc == "pull" {
-	                    write_resp_async(
-	                        &mut fw,
-	                        RESP_OUTPUT,
+                    if lc == "pull" {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
                         session,
                         b"huh? (try: pull lever)\r\n",
                     )
                     .await?;
                     continue;
                 }
-	                if let Some(rest) = lc.strip_prefix("pull ") {
-	                    let target = rest.trim();
-	                    if target.is_empty() {
-	                        write_resp_async(
-	                            &mut fw,
-	                            RESP_OUTPUT,
-	                            session,
-	                            b"huh? (try: pull lever)\r\n",
-	                        )
-	                        .await?;
-	                        continue;
-	                    }
+                    if let Some(rest) = lc.strip_prefix("pull ") {
+                        let target = rest.trim();
+                        if target.is_empty() {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"huh? (try: pull lever)\r\n",
+                            )
+                            .await?;
+                            continue;
+                        }
 
-	                    if target != "lever" && target != "bypass" && target != "switch" && target != "quarry" {
-	                        write_resp_async(
-	                            &mut fw,
-	                            RESP_OUTPUT,
+                        if target != "lever" && target != "bypass" && target != "switch" && target != "quarry" {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
                             session,
                             b"huh? (try: pull lever)\r\n",
                         )
-	                        .await?;
-	                        continue;
-	                    }
+                            .await?;
+                            continue;
+                        }
 
-	                    enum PullLeverKind {
-	                        SewersBypass,
-	                        RailSwitch1,
-	                        RailSwitch2,
-	                    }
-	                    let kind = match p.room_id.as_str() {
-	                        "R_SEW_REWARD_01" => Some(PullLeverKind::SewersBypass),
-	                        "R_RAIL_YARD_04" => Some(PullLeverKind::RailSwitch1),
-	                        "R_RAIL_YARD_08" => Some(PullLeverKind::RailSwitch2),
-	                        _ => None,
-	                    };
-	                    let Some(kind) = kind else {
-	                        write_resp_async(
-	                            &mut fw,
-	                            RESP_OUTPUT,
-	                            session,
-	                            b"huh? (nothing to pull here)\r\n",
-	                        )
-	                        .await?;
-	                        continue;
-	                    };
+                        enum PullLeverKind {
+                            SewersBypass,
+                            RailSwitch1,
+                            RailSwitch2,
+                        }
+                        let kind = match p.room_id.as_str() {
+                            "R_SEW_REWARD_01" => Some(PullLeverKind::SewersBypass),
+                            "R_RAIL_YARD_04" => Some(PullLeverKind::RailSwitch1),
+                            "R_RAIL_YARD_08" => Some(PullLeverKind::RailSwitch2),
+                            _ => None,
+                        };
+                        let Some(kind) = kind else {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"huh? (nothing to pull here)\r\n",
+                            )
+                            .await?;
+                            continue;
+                        };
 
-	                    match kind {
-	                        PullLeverKind::SewersBypass => {
-	                            let (valves_opened, already) = {
-	                                let Some(c) = world.active_char_mut(session) else {
-	                                    write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n")
-	                                        .await?;
-	                                    continue;
-	                                };
-	                                let valves_opened = c
-	                                    .quest
-	                                    .get("q.q3_sewer_valves.valves_opened")
-	                                    .and_then(|v| v.trim().parse::<i64>().ok())
-	                                    .unwrap_or(0)
-	                                    .clamp(0, 3);
+                        match kind {
+                            PullLeverKind::SewersBypass => {
+                                let (valves_opened, already) = {
+                                    let Some(c) = world.active_char_mut(session) else {
+                                        write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n")
+                                            .await?;
+                                        continue;
+                                    };
+                                    let valves_opened = c
+                                        .quest
+                                        .get("q.q3_sewer_valves.valves_opened")
+                                        .and_then(|v| v.trim().parse::<i64>().ok())
+                                        .unwrap_or(0)
+                                        .clamp(0, 3);
 
-	                                let already = eval_gate_expr(c, "gate.sewers.shortcut_to_quarry");
+                                    let already = eval_gate_expr(c, "gate.sewers.shortcut_to_quarry");
 
-	                                if !already && valves_opened >= 3 {
-	                                    c.quest.insert(
-	                                        "gate.sewers.shortcut_to_quarry".to_string(),
-	                                        "1".to_string(),
-	                                    );
-	                                }
+                                    if !already && valves_opened >= 3 {
+                                        c.quest.insert(
+                                            "gate.sewers.shortcut_to_quarry".to_string(),
+                                            "1".to_string(),
+                                        );
+                                    }
 
-	                                (valves_opened, already)
-	                            };
+                                    (valves_opened, already)
+                                };
 
-	                            if valves_opened < 3 {
-	                                write_resp_async(
-	                                    &mut fw,
-	                                    RESP_OUTPUT,
-	                                    session,
-	                                    b"the lever doesn't budge. something upstream still has pressure.\r\n",
-	                                )
-	                                .await?;
-	                                continue;
-	                            }
-	                            if already {
-	                                write_resp_async(
-	                                    &mut fw,
-	                                    RESP_OUTPUT,
-	                                    session,
-	                                    b"the lever is already down. the quarry bypass is unsealed.\r\n",
-	                                )
-	                                .await?;
-	                                continue;
-	                            }
+                                if valves_opened < 3 {
+                                    write_resp_async(
+                                        &mut fw,
+                                        RESP_OUTPUT,
+                                        session,
+                                        b"the lever doesn't budge. something upstream still has pressure.\r\n",
+                                    )
+                                    .await?;
+                                    continue;
+                                }
+                                if already {
+                                    write_resp_async(
+                                        &mut fw,
+                                        RESP_OUTPUT,
+                                        session,
+                                        b"the lever is already down. the quarry bypass is unsealed.\r\n",
+                                    )
+                                    .await?;
+                                    continue;
+                                }
 
-	                            write_resp_async(
-	                                &mut fw,
-	                                RESP_OUTPUT,
-	                                session,
-	                                b"you pull the bypass lever. somewhere deep in the tunnels, metal shifts.\r\n",
-	                            )
-	                            .await?;
-	                            let room_msg =
-	                                format!("* {} pulls the bypass lever. something heavy shifts.", p.name);
-	                            let _ = world.broadcast_room(&mut fw, &p.room_id, &room_msg).await;
-	                            continue;
-	                        }
-	                        PullLeverKind::RailSwitch1 | PullLeverKind::RailSwitch2 => {
-	                            let (pulled, already, unlocked_now) = {
-	                                let Some(c) = world.active_char_mut(session) else {
-	                                    write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n")
-	                                        .await?;
-	                                    continue;
-	                                };
-	                                let (key, label) = match kind {
-	                                    PullLeverKind::RailSwitch1 => ("e.e17.lever_1", "1"),
-	                                    PullLeverKind::RailSwitch2 => ("e.e17.lever_2", "2"),
-	                                    _ => unreachable!(),
-	                                };
-	                                let already = eval_gate_expr(c, key);
-	                                if !already {
-	                                    c.quest.insert(key.to_string(), "1".to_string());
-	                                }
+                                write_resp_async(
+                                    &mut fw,
+                                    RESP_OUTPUT,
+                                    session,
+                                    b"you pull the bypass lever. somewhere deep in the tunnels, metal shifts.\r\n",
+                                )
+                                .await?;
+                                let room_msg =
+                                    format!("* {} pulls the bypass lever. something heavy shifts.", p.name);
+                                let _ = world.broadcast_room(&mut fw, &p.room_id, &room_msg).await;
+                                continue;
+                            }
+                            PullLeverKind::RailSwitch1 | PullLeverKind::RailSwitch2 => {
+                                let (pulled, already, unlocked_now) = {
+                                    let Some(c) = world.active_char_mut(session) else {
+                                        write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n")
+                                            .await?;
+                                        continue;
+                                    };
+                                    let (key, label) = match kind {
+                                        PullLeverKind::RailSwitch1 => ("e.e17.lever_1", "1"),
+                                        PullLeverKind::RailSwitch2 => ("e.e17.lever_2", "2"),
+                                        _ => unreachable!(),
+                                    };
+                                    let already = eval_gate_expr(c, key);
+                                    if !already {
+                                        c.quest.insert(key.to_string(), "1".to_string());
+                                    }
 
-	                                let l1 = eval_gate_expr(c, "e.e17.lever_1") as i64;
-	                                let l2 = eval_gate_expr(c, "e.e17.lever_2") as i64;
-	                                let pulled = (l1 + l2).clamp(0, 2);
-	                                let has_pass = eval_gate_expr(c, "gate.rail_spur.pass");
-	                                let unlocked_now = !has_pass && pulled >= 2;
-	                                if unlocked_now {
-	                                    c.quest.insert("gate.rail_spur.pass".to_string(), "1".to_string());
-	                                }
-	                                // Keep a short state key so `quest list` is readable in dev.
-	                                c.quest.insert(
-	                                    "e.e17.last_lever".to_string(),
-	                                    label.to_string(),
-	                                );
-	                                (pulled, already, unlocked_now)
-	                            };
+                                    let l1 = eval_gate_expr(c, "e.e17.lever_1") as i64;
+                                    let l2 = eval_gate_expr(c, "e.e17.lever_2") as i64;
+                                    let pulled = (l1 + l2).clamp(0, 2);
+                                    let has_pass = eval_gate_expr(c, "gate.rail_spur.pass");
+                                    let unlocked_now = !has_pass && pulled >= 2;
+                                    if unlocked_now {
+                                        c.quest.insert("gate.rail_spur.pass".to_string(), "1".to_string());
+                                    }
+                                    // Keep a short state key so `quest list` is readable in dev.
+                                    c.quest.insert(
+                                        "e.e17.last_lever".to_string(),
+                                        label.to_string(),
+                                    );
+                                    (pulled, already, unlocked_now)
+                                };
 
-	                            if already {
-	                                let msg = format!(
-	                                    "the switch is already thrown. (rail levers: {pulled}/2)\r\n"
-	                                );
-	                                write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
-	                                continue;
-	                            }
+                                if already {
+                                    let msg = format!(
+                                        "the switch is already thrown. (rail levers: {pulled}/2)\r\n"
+                                    );
+                                    write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                                    continue;
+                                }
 
-	                            let mut msg =
-	                                format!("you throw the switch lever. (rail levers: {pulled}/2)\r\n");
-	                            if unlocked_now {
-	                                msg.push_str(
-	                                    "somewhere in the terminal, a lock tag snaps loose.\r\n",
-	                                );
-	                            }
-	                            write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
-	                            let room_msg = format!("* {} throws the switch lever.", p.name);
-	                            let _ = world.broadcast_room(&mut fw, &p.room_id, &room_msg).await;
-	                            continue;
-	                        }
-	                    }
-	                }
+                                let mut msg =
+                                    format!("you throw the switch lever. (rail levers: {pulled}/2)\r\n");
+                                if unlocked_now {
+                                    msg.push_str(
+                                        "somewhere in the terminal, a lock tag snaps loose.\r\n",
+                                    );
+                                }
+                                write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                                let room_msg = format!("* {} throws the switch lever.", p.name);
+                                let _ = world.broadcast_room(&mut fw, &p.room_id, &room_msg).await;
+                                continue;
+                            }
+                        }
+                    }
 
                 let mut moved = false;
 
