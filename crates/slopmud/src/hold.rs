@@ -110,4 +110,3 @@ mod tests {
         assert_eq!(names, vec!["alice".to_string(), "bob".to_string()]);
     }
 }
-

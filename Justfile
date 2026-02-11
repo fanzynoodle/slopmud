@@ -22,12 +22,20 @@ py-check:
   python3 -m compileall -q scripts
 
 check:
+  just check-core
+  just check-e2e
+
+# Everything that doesn't require a local TCP stack.
+check-core:
   just fmt-check
   just py-check
   cargo test -q
   just world-validate
   just proto-lint
   just proto-coverage
+
+# End-to-end checks (require local TCP sockets / port binding).
+check-e2e:
   just e2e-local
   just e2e-party
   just e2e-ws

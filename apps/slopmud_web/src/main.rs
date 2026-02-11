@@ -285,7 +285,10 @@ async fn api_oauth_providers(State(state): State<AppState>) -> impl IntoResponse
         && state.oauth.oidc_client_id.is_some()
         && state.oauth.oidc_client_secret.is_some()
         && state.oauth.oidc_redirect_uri.is_some();
-    (StatusCode::OK, axum::Json(OAuthProvidersResp { google, oidc }))
+    (
+        StatusCode::OK,
+        axum::Json(OAuthProvidersResp { google, oidc }),
+    )
 }
 
 #[derive(Debug, Deserialize)]
@@ -464,7 +467,10 @@ async fn api_oauth_status(
         m.get(q.resume.trim()).cloned()
     };
 
-    (StatusCode::OK, axum::Json(OAuthStatusResp::Ok { identity: ident }))
+    (
+        StatusCode::OK,
+        axum::Json(OAuthStatusResp::Ok { identity: ident }),
+    )
 }
 
 #[derive(Debug, Deserialize)]
@@ -490,7 +496,10 @@ async fn api_oauth_logout(
         m.remove(req.resume.trim());
     }
 
-    (StatusCode::OK, axum::Json(OAuthStatusResp::Ok { identity: None }))
+    (
+        StatusCode::OK,
+        axum::Json(OAuthStatusResp::Ok { identity: None }),
+    )
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -890,12 +899,7 @@ async fn google_auth_callback(
             file_pending = Some(pending);
         }
         Err(_) => {
-            web_pending = st
-                .oauth
-                .web_pending_google
-                .lock()
-                .await
-                .remove(state_code);
+            web_pending = st.oauth.web_pending_google.lock().await.remove(state_code);
             if web_pending.is_none() {
                 return (
                     axum::http::StatusCode::NOT_FOUND,
@@ -1176,7 +1180,11 @@ async fn oidc_auth_start(
         )
             .into_response();
     };
-    let scope = st.oauth.oidc_scope.as_deref().unwrap_or("openid email profile");
+    let scope = st
+        .oauth
+        .oidc_scope
+        .as_deref()
+        .unwrap_or("openid email profile");
 
     let now_unix = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -1273,7 +1281,8 @@ async fn oidc_auth_callback(
         st.oauth.oidc_client_id.as_deref(),
         st.oauth.oidc_client_secret.as_deref(),
         st.oauth.oidc_redirect_uri.as_deref(),
-    ) else {
+    )
+    else {
         return oauth_popup(false, "oidc sso not configured");
     };
 
@@ -1297,7 +1306,10 @@ async fn oidc_auth_callback(
     };
 
     if !token.status().is_success() {
-        return oauth_popup(false, &format!("token exchange returned {}", token.status()));
+        return oauth_popup(
+            false,
+            &format!("token exchange returned {}", token.status()),
+        );
     }
 
     let token: GoogleTokenResponse = match token.json().await {
@@ -2169,7 +2181,7 @@ async fn main() {
 "
             }),
         )
-            .route("/api/online", get(api_online))
+        .route("/api/online", get(api_online))
         .route("/api/ws/logout", post(api_ws_logout))
         .route("/api/oauth/providers", get(api_oauth_providers))
         .route("/api/oauth/start", post(api_oauth_start))
