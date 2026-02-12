@@ -2,6 +2,11 @@
 
 Monorepo.
 
+## Links
+
+- Website: https://slopmud.com
+- GitHub: https://github.com/fanzynoodle/slopmud
+
 ## Layout
 
 - `crates/` Rust crates

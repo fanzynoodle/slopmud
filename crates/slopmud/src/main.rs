@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -22,6 +22,7 @@ use tracing::{Level, info, warn};
 use zeroize::Zeroize;
 
 mod ban;
+mod email;
 mod eventlog;
 mod hold;
 mod nearline;
@@ -249,7 +250,7 @@ fn usage_and_exit() -> ! {
     eprintln!(
         "slopmud (session broker)\n\n\
 USAGE:\n  slopmud [--bind HOST:PORT] [--shard-addr HOST:PORT]\n\n\
-ENV:\n  SLOPMUD_BIND               default 0.0.0.0:4000\n  SHARD_ADDR                 default 127.0.0.1:5000\n  NODE_ID                    optional (for logs only)\n  SLOPMUD_ACCOUNTS_PATH       optional; default accounts.json (in WorkingDirectory)\n  SLOPMUD_LOCALE              optional; default en\n  SLOPMUD_ADMIN_BIND          optional; default 127.0.0.1:4011 (local admin JSON)\n  SLOPMUD_BANS_PATH           optional; default locks/bans.json\n  SBC_ADMIN_SOCK              optional; default /run/slopmud/sbc-admin.sock\n  SBC_EVENTS_SOCK             optional; default /run/slopmud/sbc-events.sock\n  SLOPMUD_EVENTLOG_ENABLED    optional; default 0\n  SLOPMUD_EVENTLOG_SPOOL_DIR  optional; default locks/eventlog\n  SLOPMUD_EVENTLOG_FLUSH_INTERVAL_S optional; default 60\n  SLOPMUD_EVENTLOG_S3_BUCKET  optional; if set, uploads target this bucket\n  SLOPMUD_EVENTLOG_S3_PREFIX  optional; default slopmud/eventlog\n  SLOPMUD_EVENTLOG_UPLOAD_ENABLED optional; default 0\n  SLOPMUD_EVENTLOG_UPLOAD_DELETE_LOCAL optional; default 1\n  SLOPMUD_EVENTLOG_UPLOAD_SCAN_INTERVAL_S optional; default 600\n  SLOPMUD_NEARLINE_ENABLED    optional; default 1\n  SLOPMUD_NEARLINE_DIR        optional; default locks/nearline_scrollback\n  SLOPMUD_NEARLINE_MAX_SEGMENTS optional; default 12\n  SLOPMUD_NEARLINE_SEGMENT_MAX_BYTES optional; default 2000000\n  SLOPMUD_GOOGLE_OAUTH_DIR    optional; default locks/google_oauth (shared with static_web)\n  SLOPMUD_GOOGLE_AUTH_BASE_URL optional; default http://127.0.0.1:8080 (where to open OAuth in browser)\n  SLOPMUD_OIDC_TOKEN_URL      optional; if set, mint a session token at login\n  SLOPMUD_OIDC_CLIENT_ID      required if token url set\n  SLOPMUD_OIDC_CLIENT_SECRET  required if token url set\n  SLOPMUD_OIDC_SCOPE          optional; default slopmud:session\n"
+ENV:\n  SLOPMUD_BIND               default 0.0.0.0:4000\n  SHARD_ADDR                 default 127.0.0.1:5000\n  NODE_ID                    optional (for logs only)\n  SLOPMUD_ACCOUNTS_PATH       optional; default accounts.json (in WorkingDirectory)\n  SLOPMUD_LOCALE              optional; default en\n  SLOPMUD_ADMIN_BIND          optional; default 127.0.0.1:4011 (local admin JSON)\n  SLOPMUD_BANS_PATH           optional; default locks/bans.json\n  SBC_ADMIN_SOCK              optional; default /run/slopmud/sbc-admin.sock\n  SBC_EVENTS_SOCK             optional; default /run/slopmud/sbc-events.sock\n  SLOPMUD_EMAIL_MODE          optional; default disabled (disabled | ses | smtp | file)\n  SLOPMUD_EMAIL_FROM          required for ses/smtp; optional for file\n  SLOPMUD_SMTP_HOST           required for smtp\n  SLOPMUD_SMTP_PORT           optional; default 587\n  SLOPMUD_SMTP_USERNAME       optional\n  SLOPMUD_SMTP_PASSWORD       optional\n  SLOPMUD_EMAIL_FILE_DIR      optional; default /tmp/slopmud_email_outbox\n  SLOPMUD_EVENTLOG_ENABLED    optional; default 0\n  SLOPMUD_EVENTLOG_SPOOL_DIR  optional; default locks/eventlog\n  SLOPMUD_EVENTLOG_FLUSH_INTERVAL_S optional; default 60\n  SLOPMUD_EVENTLOG_S3_BUCKET  optional; if set, uploads target this bucket\n  SLOPMUD_EVENTLOG_S3_PREFIX  optional; default slopmud/eventlog\n  SLOPMUD_EVENTLOG_UPLOAD_ENABLED optional; default 0\n  SLOPMUD_EVENTLOG_UPLOAD_DELETE_LOCAL optional; default 1\n  SLOPMUD_EVENTLOG_UPLOAD_SCAN_INTERVAL_S optional; default 600\n  SLOPMUD_NEARLINE_ENABLED    optional; default 1\n  SLOPMUD_NEARLINE_DIR        optional; default locks/nearline_scrollback\n  SLOPMUD_NEARLINE_MAX_SEGMENTS optional; default 12\n  SLOPMUD_NEARLINE_SEGMENT_MAX_BYTES optional; default 2000000\n  SLOPMUD_GOOGLE_OAUTH_DIR    optional; default locks/google_oauth (shared with static_web)\n  SLOPMUD_GOOGLE_AUTH_BASE_URL optional; default http://127.0.0.1:8080 (where to open OAuth in browser)\n  SLOPMUD_OIDC_TOKEN_URL      optional; if set, mint a session token at login\n  SLOPMUD_OIDC_CLIENT_ID      required if token url set\n  SLOPMUD_OIDC_CLIENT_SECRET  required if token url set\n  SLOPMUD_OIDC_SCOPE          optional; default slopmud:session\n"
     );
     std::process::exit(2);
 }
@@ -267,9 +268,13 @@ struct Config {
     google_auth_base_url: String,
     // If set, mint a session-scoped access token from an internal OIDC token endpoint.
     // The password is never sent to this service.
+    #[allow(dead_code)]
     oidc_token_url: Option<String>,
+    #[allow(dead_code)]
     oidc_client_id: Option<String>,
+    #[allow(dead_code)]
     oidc_client_secret: Option<String>,
+    #[allow(dead_code)]
     oidc_scope: Option<String>,
     locale: String,
 
@@ -277,6 +282,8 @@ struct Config {
     bans_path: PathBuf,
     sbc_admin_sock: PathBuf,
     sbc_events_sock: PathBuf,
+    #[allow(dead_code)]
+    email: email::EmailConfig,
     eventlog: eventlog::EventLogConfig,
     nearline: nearline::NearlineConfig,
 }
@@ -320,6 +327,22 @@ fn parse_args() -> Config {
     let sbc_events_sock: PathBuf = std::env::var("SBC_EVENTS_SOCK")
         .unwrap_or_else(|_| "/run/slopmud/sbc-events.sock".to_string())
         .into();
+
+    let mut email = email::EmailConfig::default();
+    email.mode = std::env::var("SLOPMUD_EMAIL_MODE").unwrap_or_else(|_| email.mode.clone());
+    email.from = std::env::var("SLOPMUD_EMAIL_FROM").ok();
+    email.smtp_host = std::env::var("SLOPMUD_SMTP_HOST").ok();
+    email.smtp_port = std::env::var("SLOPMUD_SMTP_PORT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(email.smtp_port);
+    email.smtp_username = std::env::var("SLOPMUD_SMTP_USERNAME").unwrap_or_default();
+    email.smtp_password = std::env::var("SLOPMUD_SMTP_PASSWORD").unwrap_or_default();
+    if let Ok(v) = std::env::var("SLOPMUD_EMAIL_FILE_DIR") {
+        if !v.trim().is_empty() {
+            email.file_dir = v.into();
+        }
+    }
 
     let mut eventlog = eventlog::EventLogConfig::default();
     eventlog.enabled = std::env::var("SLOPMUD_EVENTLOG_ENABLED")
@@ -403,6 +426,7 @@ fn parse_args() -> Config {
         bans_path,
         sbc_admin_sock,
         sbc_events_sock,
+        email,
         eventlog,
         nearline,
     }
@@ -660,6 +684,7 @@ fn extract_output_lines(b: &[u8]) -> Vec<String> {
     out
 }
 
+#[allow(dead_code)]
 fn extract_scrollback_lines(b: &[u8]) -> Vec<String> {
     extract_output_lines(b)
         .into_iter()
@@ -1651,6 +1676,8 @@ struct AccountRec {
     oidc_sub: Option<String>,
     #[serde(default)]
     oidc_email: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    caps: Option<Vec<String>>,
     // User-configured email address for notifications. Not used for auth.
     #[serde(default)]
     email: Option<String>,
@@ -1784,6 +1811,7 @@ async fn main() -> anyhow::Result<()> {
         cfg.admin_bind,
         bans.clone(),
         sessions.clone(),
+        accounts.clone(),
     ));
 
     tokio::spawn(sbc_holds_events_task(
@@ -2090,6 +2118,24 @@ enum AdminReq {
     },
     ListBans {},
     ListSessions {},
+    CreateAccountPassword {
+        name: String,
+        password: String,
+        #[serde(default)]
+        caps: Option<Vec<String>>,
+    },
+    SetAccountPassword {
+        name: String,
+        password: String,
+    },
+    GrantAccountCaps {
+        name: String,
+        caps: Vec<String>,
+    },
+    GetAccount {
+        name: String,
+    },
+    ListAccounts {},
 }
 
 #[derive(Debug, Serialize)]
@@ -2105,15 +2151,60 @@ enum AdminResp {
         humans: Vec<String>,
         bots: Vec<String>,
     },
+    OkAccount {
+        name: String,
+        has_password: bool,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        caps: Vec<String>,
+    },
+    OkAccounts {
+        names: Vec<String>,
+    },
     Err {
         message: String,
     },
+}
+
+fn normalize_caps_list(caps: &[String]) -> Vec<String> {
+    // Keep this compatible with shard-side capability parsing:
+    // - lowercase
+    // - ASCII only, no whitespace/control
+    // - conservative charset: [a-z0-9._-]
+    // - cap count and length limits to avoid unbounded growth
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+    for raw in caps.iter() {
+        if out.len() >= 32 {
+            break;
+        }
+        let t = raw.trim().to_ascii_lowercase();
+        if t.is_empty() || t.len() > 64 {
+            continue;
+        }
+        if !t.is_ascii()
+            || t.chars()
+                .any(|c| c.is_ascii_control() || c.is_ascii_whitespace())
+        {
+            continue;
+        }
+        if !t.chars().all(|c| {
+            c.is_ascii_lowercase() || c.is_ascii_digit() || c == '.' || c == '_' || c == '-'
+        }) {
+            continue;
+        }
+        if seen.insert(t.clone()) {
+            out.push(t);
+        }
+    }
+    out.sort_unstable();
+    out
 }
 
 async fn admin_server_task(
     bind: SocketAddr,
     bans: Arc<tokio::sync::Mutex<ban::BanState>>,
     sessions: Arc<tokio::sync::Mutex<HashMap<SessionId, SessionInfo>>>,
+    accounts: Arc<tokio::sync::Mutex<Accounts>>,
 ) -> anyhow::Result<()> {
     let listener = TcpListener::bind(bind).await?;
     info!(bind=%bind, "admin server listening");
@@ -2122,8 +2213,9 @@ async fn admin_server_task(
         let (stream, peer) = listener.accept().await?;
         let bans = bans.clone();
         let sessions = sessions.clone();
+        let accounts = accounts.clone();
         tokio::spawn(async move {
-            if let Err(e) = handle_admin_conn(stream, bans, sessions).await {
+            if let Err(e) = handle_admin_conn(stream, bans, sessions, accounts).await {
                 warn!(peer=%peer, err=%e, "admin request failed");
             }
         });
@@ -2134,6 +2226,7 @@ async fn handle_admin_conn(
     stream: TcpStream,
     bans: Arc<tokio::sync::Mutex<ban::BanState>>,
     sessions: Arc<tokio::sync::Mutex<HashMap<SessionId, SessionInfo>>>,
+    accounts: Arc<tokio::sync::Mutex<Accounts>>,
 ) -> anyhow::Result<()> {
     let (rd, mut wr) = stream.into_split();
     let mut rd = BufReader::new(rd);
@@ -2226,6 +2319,181 @@ async fn handle_admin_conn(
             bots.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
 
             AdminResp::OkSessions { humans, bots }
+        }
+        AdminReq::CreateAccountPassword {
+            name,
+            password,
+            caps,
+        } => {
+            let uname = sanitize_name(&name);
+            if uname.is_empty() {
+                AdminResp::Err {
+                    message: "bad name".to_string(),
+                }
+            } else if password.as_bytes().len() < 8 {
+                AdminResp::Err {
+                    message: "password too short (min 8)".to_string(),
+                }
+            } else {
+                let salt = SaltString::generate(&mut password_hash::rand_core::OsRng);
+                let hash = Argon2::default()
+                    .hash_password(password.as_bytes(), &salt)
+                    .map_err(|e| anyhow::anyhow!("hash_password failed: {e}"))?
+                    .to_string();
+                let caps = caps
+                    .map(|v| normalize_caps_list(&v))
+                    .filter(|v| !v.is_empty());
+                let caps_vec = caps.clone().unwrap_or_default();
+
+                let created = {
+                    let mut a = accounts.lock().await;
+                    if a.by_name.contains_key(&uname) {
+                        false
+                    } else {
+                        a.by_name.insert(
+                            uname.clone(),
+                            AccountRec {
+                                name: uname.clone(),
+                                pw_hash: Some(hash),
+                                google_sub: None,
+                                google_email: None,
+                                oidc_sub: None,
+                                oidc_email: None,
+                                caps,
+                                email: None,
+                                created_unix: now_unix,
+                            },
+                        );
+                        a.save()?;
+                        true
+                    }
+                };
+
+                if !created {
+                    AdminResp::Err {
+                        message: "account already exists".to_string(),
+                    }
+                } else {
+                    AdminResp::OkAccount {
+                        name: uname,
+                        has_password: true,
+                        caps: caps_vec,
+                    }
+                }
+            }
+        }
+        AdminReq::SetAccountPassword { name, password } => {
+            let uname = sanitize_name(&name);
+            if uname.is_empty() {
+                AdminResp::Err {
+                    message: "bad name".to_string(),
+                }
+            } else if password.as_bytes().len() < 8 {
+                AdminResp::Err {
+                    message: "password too short (min 8)".to_string(),
+                }
+            } else {
+                let salt = SaltString::generate(&mut password_hash::rand_core::OsRng);
+                let hash = Argon2::default()
+                    .hash_password(password.as_bytes(), &salt)
+                    .map_err(|e| anyhow::anyhow!("hash_password failed: {e}"))?
+                    .to_string();
+
+                let out = {
+                    let mut a = accounts.lock().await;
+                    if let Some(r) = a.by_name.get_mut(&uname) {
+                        r.pw_hash = Some(hash);
+                        let has_password =
+                            r.pw_hash.as_deref().map(|s| !s.is_empty()).unwrap_or(false);
+                        let caps = r.caps.clone().unwrap_or_default();
+                        a.save()?;
+                        AdminResp::OkAccount {
+                            name: uname,
+                            has_password,
+                            caps,
+                        }
+                    } else {
+                        AdminResp::Err {
+                            message: "account not found".to_string(),
+                        }
+                    }
+                };
+
+                out
+            }
+        }
+        AdminReq::GrantAccountCaps { name, caps } => {
+            let uname = sanitize_name(&name);
+            if uname.is_empty() {
+                AdminResp::Err {
+                    message: "bad name".to_string(),
+                }
+            } else {
+                let add = normalize_caps_list(&caps);
+                if add.is_empty() {
+                    AdminResp::Err {
+                        message: "no valid caps".to_string(),
+                    }
+                } else {
+                    let out = {
+                        let mut a = accounts.lock().await;
+                        if let Some(r) = a.by_name.get_mut(&uname) {
+                            let mut merged = r.caps.clone().unwrap_or_default();
+                            merged.extend(add);
+                            merged = normalize_caps_list(&merged);
+                            r.caps = if merged.is_empty() {
+                                None
+                            } else {
+                                Some(merged.clone())
+                            };
+                            let has_password =
+                                r.pw_hash.as_deref().map(|s| !s.is_empty()).unwrap_or(false);
+                            a.save()?;
+                            AdminResp::OkAccount {
+                                name: uname,
+                                has_password,
+                                caps: merged,
+                            }
+                        } else {
+                            AdminResp::Err {
+                                message: "account not found".to_string(),
+                            }
+                        }
+                    };
+                    out
+                }
+            }
+        }
+        AdminReq::GetAccount { name } => {
+            let uname = sanitize_name(&name);
+            if uname.is_empty() {
+                AdminResp::Err {
+                    message: "bad name".to_string(),
+                }
+            } else {
+                let rec = {
+                    let a = accounts.lock().await;
+                    a.by_name.get(&uname).cloned()
+                };
+                match rec {
+                    None => AdminResp::Err {
+                        message: "account not found".to_string(),
+                    },
+                    Some(r) => AdminResp::OkAccount {
+                        name: r.name,
+                        has_password: r.pw_hash.as_deref().map(|s| !s.is_empty()).unwrap_or(false),
+                        caps: r.caps.unwrap_or_default(),
+                    },
+                }
+            }
+        }
+        AdminReq::ListAccounts {} => {
+            let mut names = {
+                let a = accounts.lock().await;
+                a.by_name.keys().cloned().collect::<Vec<_>>()
+            };
+            names.sort_by(|a, b| a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase()));
+            AdminResp::OkAccounts { names }
         }
     };
 
@@ -2382,6 +2650,7 @@ fn attach_body(
     Bytes::from(b)
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 struct OidcTokenResponse {
     access_token: String,
@@ -2455,6 +2724,7 @@ fn redact_input_for_logs(line: &str) -> Cow<'_, str> {
     Cow::Borrowed(line)
 }
 
+#[allow(dead_code)]
 async fn mint_internal_oidc_token(
     cfg: &Config,
     session: SessionId,
@@ -2761,6 +3031,7 @@ async fn handle_conn(
                                                     google_email: None,
                                                     oidc_sub: None,
                                                     oidc_email: None,
+                                                    caps: None,
                                                     email: None,
                                                     created_unix: now_unix,
                                                 },
@@ -2830,7 +3101,7 @@ async fn handle_conn(
                                                         None,
                                                         None,
                                                         None,
-                                                        req.caps.as_deref(),
+                                                        r.caps.as_deref(),
                                                     ));
                                                     name = Some(uname.clone());
                                                     true
@@ -2917,6 +3188,7 @@ async fn handle_conn(
                                                         google_email: email.clone(),
                                                         oidc_sub: None,
                                                         oidc_email: None,
+                                                        caps: None,
                                                         email: None,
                                                         created_unix: now_unix,
                                                     },
@@ -3017,6 +3289,7 @@ async fn handle_conn(
                                                         google_email: None,
                                                         oidc_sub: Some(sub.to_string()),
                                                         oidc_email: email.clone(),
+                                                        caps: None,
                                                         email: None,
                                                         created_unix: now_unix,
                                                     },
@@ -3340,6 +3613,7 @@ async fn handle_conn(
                                             google_email: email.clone(),
                                             oidc_sub: None,
                                             oidc_email: None,
+                                            caps: None,
                                             email: None,
                                             created_unix: now_unix,
                                         },
@@ -3462,6 +3736,7 @@ async fn handle_conn(
                                 google_email: None,
                                 oidc_sub: None,
                                 oidc_email: None,
+                                caps: None,
                                 email: None,
                                 created_unix: now_unix,
                             },
@@ -3522,7 +3797,12 @@ async fn handle_conn(
                         let a = accounts.lock().await;
                         a.by_name.get(uname).cloned()
                     };
-                    if rec.as_ref().and_then(|r| r.pw_hash.as_deref()).is_none() {
+                    let (hash, caps) = match rec {
+                        Some(r) => (r.pw_hash, r.caps),
+                        None => (None, None),
+                    };
+
+                    if hash.as_deref().is_none() {
                         // Re-enable echo (best-effort).
                         if password_echo_disabled {
                             let _ = write_tx
@@ -3539,7 +3819,6 @@ async fn handle_conn(
                         break 'read;
                     }
 
-                    let hash = rec.and_then(|r| r.pw_hash);
                     let ok = if let Some(hash) = hash {
                         if let Ok(ph) = PasswordHash::new(&hash) {
                             Argon2::default().verify_password(pw, &ph).is_ok()
@@ -3592,7 +3871,7 @@ async fn handle_conn(
                         None,
                         None,
                         None,
-                        None,
+                        caps.as_deref(),
                     ));
 
                     line_bytes.zeroize();

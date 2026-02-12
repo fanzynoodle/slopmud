@@ -101,12 +101,13 @@ jobs:
 
       - name: Validate (fast + strict)
         shell: bash
+        env:
+          RUSTFLAGS: "-D warnings"
         run: |
           set -euo pipefail
           just fmt-check
           just py-check
-          RUSTFLAGS='-D warnings' cargo build -q -p bot_party
-          RUSTFLAGS='-D warnings' cargo build -q -p ws_gateway --bin e2e_ws
+          cargo build -q --workspace --all-targets
           cargo test -q
           just world-validate
           just proto-lint

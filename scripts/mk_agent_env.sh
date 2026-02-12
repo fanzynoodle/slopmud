@@ -59,6 +59,7 @@ SESSION_TCP_ADDR=127.0.0.1:${broker_port}
 SHARD_ADDR=127.0.0.1:${shard_port}
 SLOPMUD_ADMIN_BIND=127.0.0.1:${admin_port}
 SLOPMUD_ACCOUNTS_PATH=/tmp/slopmud_accounts_${name}.json
+SLOPMUD_GOOGLE_AUTH_BASE_URL=http://127.0.0.1:${oauth_port}
 
 # Keep SBC sockets per-agent so multiple brokers can run concurrently.
 SBC_ADMIN_SOCK=/tmp/slopmud_sbc_admin_${name}.sock

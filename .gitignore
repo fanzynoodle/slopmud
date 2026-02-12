@@ -19,8 +19,13 @@
 # Misc
 .DS_Store
 .env
+.env.*
 /env/*.env
 /dir=
+*.pem
+*.key
+*.p12
+*.pfx
 
 # Python
 **/__pycache__/

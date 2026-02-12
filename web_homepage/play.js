@@ -15,10 +15,15 @@
   const menuNewSession = document.getElementById("menu-new-session");
 
   const dlgConnect = document.getElementById("dlg-connect");
+  const dlgAuthGate = document.getElementById("dlg-auth-gate");
   const dlgOnline = document.getElementById("dlg-online");
   const dlgAccount = document.getElementById("dlg-account");
   const dlgSso = document.getElementById("dlg-sso");
   const dlgSettings = document.getElementById("dlg-settings");
+
+  const btnGatePassword = document.getElementById("btn-gate-password");
+  const btnGateSlopsso = document.getElementById("btn-gate-slopsso");
+  const btnGateGoogle = document.getElementById("btn-gate-google");
 
   const btnConnect = document.getElementById("btn-connect");
   const btnDisconnect = document.getElementById("btn-disconnect");
@@ -64,6 +69,8 @@
   let oauthProviders = { google: false, oidc: false };
   let oauthIdentity = null; // { provider, email?, sub? }
   let oauthPollTimer = null;
+
+  let authGateChosen = false;
 
   const LS_WS_URL = "slopmud_ws_url";
   const LS_AUTOSCROLL = "slopmud_autoscroll";
@@ -152,6 +159,10 @@
     const canUseSso = !!oauthIdentity;
     btnAuthLoginSso && (btnAuthLoginSso.disabled = !canUseSso);
     btnAuthCreateSso && (btnAuthCreateSso.disabled = !canUseSso);
+
+    // Auth gate buttons mirror provider availability.
+    btnGateGoogle && (btnGateGoogle.disabled = !oauthProviders.google);
+    btnGateSlopsso && (btnGateSlopsso.disabled = !oauthProviders.oidc);
   }
 
   async function loadOauthProviders() {
@@ -198,8 +209,9 @@
     renderSsoStatus();
   }
 
-  async function startOauth(provider) {
+  async function startOauth(provider, opts = {}) {
     const token = getOrCreateResumeToken();
+    const useRedirect = !!opts.redirect;
 
     let d = null;
     try {
@@ -210,19 +222,42 @@
       });
       d = await r.json().catch(() => null);
       if (!r.ok || !d || d.type !== "ok" || !d.url) {
-        appendLine(`# oauth start failed: ${(d && d.message) || r.status}`);
+        const msg = `oauth start failed: ${(d && d.message) || r.status}`;
+        appendLine(`# ${msg}`);
+        ssoStatusEl && (ssoStatusEl.textContent = msg);
         return;
       }
     } catch {
-      appendLine("# oauth start failed: network error");
+      const msg = "oauth start failed: network error";
+      appendLine(`# ${msg}`);
+      ssoStatusEl && (ssoStatusEl.textContent = msg);
+      return;
+    }
+
+    if (useRedirect) {
+      // Conventional IdP flow: navigate the current tab into the provider, which will
+      // redirect back to this page's return_to with #oauth=ok|err.
+      try {
+        window.location.href = d.url;
+      } catch {
+        const msg = "oauth redirect failed";
+        appendLine(`# ${msg}`);
+        ssoStatusEl && (ssoStatusEl.textContent = msg);
+      }
       return;
     }
 
     try {
       const pop = window.open(d.url, "slopmud_oauth", "popup=yes,width=520,height=720");
-      if (!pop) appendLine("# popup blocked");
+      if (!pop) {
+        const msg = "popup blocked; click the provider button again or allow popups";
+        appendLine(`# ${msg}`);
+        ssoStatusEl && (ssoStatusEl.textContent = msg);
+      }
     } catch {
-      appendLine("# popup blocked");
+      const msg = "popup blocked; click the provider button again or allow popups";
+      appendLine(`# ${msg}`);
+      ssoStatusEl && (ssoStatusEl.textContent = msg);
     }
 
     renderSsoStatus();
@@ -364,6 +399,13 @@
     lineEl && lineEl.focus();
   }
 
+  function setInputEnabled(on) {
+    if (!lineEl) return;
+    lineEl.disabled = !on;
+    if (!on) lineEl.placeholder = "choose an auth method to connect";
+    else lineEl.placeholder = "type here, press Enter";
+  }
+
   function connect() {
     const baseUrl = (wsUrlEl && wsUrlEl.value.trim()) || defaultWsUrl();
     if (wsUrlEl) wsUrlEl.value = baseUrl;
@@ -376,6 +418,7 @@
     const url = withResumeToken(baseUrl, resumeToken);
     const displayUrl = redactResumeToken(url);
     setStatus("connecting", displayUrl);
+    setInputEnabled(false);
 
     const ws = new WebSocket(url);
     ws.binaryType = "arraybuffer";
@@ -387,6 +430,7 @@
     ws.addEventListener("open", () => {
       setStatus("connected", displayUrl);
       appendLine(`# connected: ${displayUrl}`);
+      setInputEnabled(true);
       lineEl && lineEl.focus();
       reconnectAttempts = 0;
     });
@@ -395,6 +439,7 @@
       const why = ev.reason ? ` (${ev.reason})` : "";
       setStatus("disconnected", `${ev.code}${why}`);
       appendLine(`# disconnected: ${ev.code}${why}`);
+      setInputEnabled(false);
       btnConnect && (btnConnect.disabled = false);
       btnDisconnect && (btnDisconnect.disabled = true);
       if (shouldReconnect) scheduleReconnect();
@@ -503,7 +548,7 @@
 
   loadSettings();
   setStatus("disconnected", "");
-  lineEl && lineEl.focus();
+  setInputEnabled(false);
 
   loadOauthProviders();
   refreshOauthStatus();
@@ -550,6 +595,14 @@
     }
   }
 
+  function openInitialAuthGate() {
+    if (!dlgAuthGate) {
+      openDialog(dlgConnect, authNameEl || wsUrlEl);
+      return;
+    }
+    openDialog(dlgAuthGate, btnGatePassword || btnGateSlopsso || btnGateGoogle || null);
+  }
+
   document.addEventListener("click", () => closeMenu());
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
@@ -578,9 +631,53 @@
       });
   }
 
+  dlgAuthGate &&
+    dlgAuthGate.addEventListener("close", () => {
+      // If the user closes the gate without picking a method, put them into the connect dialog.
+      if (authGateChosen) return;
+      if (sock && (sock.readyState === WebSocket.OPEN || sock.readyState === WebSocket.CONNECTING)) return;
+      openDialog(dlgConnect, authNameEl || wsUrlEl);
+    });
+
+  btnGatePassword &&
+    btnGatePassword.addEventListener("click", () => {
+      authGateChosen = true;
+      try {
+        dlgAuthGate && dlgAuthGate.close();
+      } catch {
+        // ignore
+      }
+      openDialog(dlgConnect, authNameEl || authPasswordEl || wsUrlEl);
+    });
+
+  btnGateSlopsso &&
+    btnGateSlopsso.addEventListener("click", () => {
+      authGateChosen = true;
+      try {
+        dlgAuthGate && dlgAuthGate.close();
+      } catch {
+        // ignore
+      }
+      // Go straight to the IdP (no mud UI yet).
+      oauthProviders.oidc && startOauth("oidc", { redirect: true });
+    });
+
+  btnGateGoogle &&
+    btnGateGoogle.addEventListener("click", () => {
+      authGateChosen = true;
+      try {
+        dlgAuthGate && dlgAuthGate.close();
+      } catch {
+        // ignore
+      }
+      oauthProviders.google && startOauth("google", { redirect: true });
+    });
+
   btnConnect && btnConnect.addEventListener("click", () => {
     shouldReconnect = true;
     connect();
+    // This client is terminal-first; once connected, get the dialog out of the way.
+    dlgConnect && dlgConnect.close();
   });
   btnDisconnect &&
     btnDisconnect.addEventListener("click", async () => {
@@ -762,9 +859,19 @@
       saveSettings();
     });
 
-  const hadResumeToken = isValidResumeToken(localStorage.getItem(LS_RESUME_TOKEN));
-  connect();
-  if (!hadResumeToken) {
-    openDialog(dlgConnect, authNameEl || wsUrlEl);
+  // Always ask the user how they want to auth before opening a WebSocket.
+  {
+    const h = String(location.hash || "");
+    if (h.startsWith("#oauth=")) {
+      try {
+        history.replaceState(null, "", location.pathname + location.search);
+      } catch {
+        // ignore
+      }
+      authGateChosen = true;
+      openDialog(dlgConnect, authNameEl || wsUrlEl);
+    } else {
+      openInitialAuthGate();
+    }
   }
 })();

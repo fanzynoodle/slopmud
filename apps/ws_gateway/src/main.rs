@@ -98,8 +98,21 @@ struct ShardMsg {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 enum JsonIn {
-    Attach { name: String, is_bot: bool },
-    Input { line: String },
+    Attach {
+        name: String,
+        is_bot: bool,
+        #[serde(default)]
+        race: Option<String>,
+        #[serde(default)]
+        class: Option<String>,
+        #[serde(default)]
+        sex: Option<String>,
+        #[serde(default)]
+        pronouns: Option<String>,
+    },
+    Input {
+        line: String,
+    },
     Detach {},
     Ping {},
 }
@@ -123,13 +136,38 @@ fn sid_hex(s: SessionId) -> String {
     out
 }
 
-fn shard_attach_body(is_bot: bool, name: &str) -> Bytes {
-    let mut b = Vec::with_capacity(1 + name.len());
+fn shard_attach_body_with_build(
+    is_bot: bool,
+    name: &str,
+    race: Option<&str>,
+    class: Option<&str>,
+    sex: Option<&str>,
+    pronouns: Option<&str>,
+) -> Bytes {
+    let mut b = Vec::with_capacity(1 + name.len() + 64);
     let mut flags = 0u8;
     if is_bot {
         flags |= 0x01;
     }
+    let has_build = race.is_some() || class.is_some() || sex.is_some() || pronouns.is_some();
+    if has_build {
+        flags |= 0x04;
+    }
     b.push(flags);
+
+    if has_build {
+        fn push_field(dst: &mut Vec<u8>, s: Option<&str>) {
+            let t = s.unwrap_or("").trim();
+            let t = if t.len() > 255 { &t[..255] } else { t };
+            dst.push(t.len() as u8);
+            dst.extend_from_slice(t.as_bytes());
+        }
+        push_field(&mut b, race);
+        push_field(&mut b, class);
+        push_field(&mut b, sex);
+        push_field(&mut b, pronouns);
+    }
+
     b.extend_from_slice(name.as_bytes());
     Bytes::from(b)
 }
@@ -362,13 +400,27 @@ async fn handle_ws_conn(
                     continue;
                 };
                 match j {
-                    JsonIn::Attach { name, is_bot } => {
+                    JsonIn::Attach {
+                        name,
+                        is_bot,
+                        race,
+                        class,
+                        sex,
+                        pronouns,
+                    } => {
                         if session.is_some() {
                             continue;
                         }
                         let sid = new_session_id();
                         session = Some(sid);
-                        let body = shard_attach_body(is_bot, name.trim());
+                        let body = shard_attach_body_with_build(
+                            is_bot,
+                            name.trim(),
+                            race.as_deref(),
+                            class.as_deref(),
+                            sex.as_deref(),
+                            pronouns.as_deref(),
+                        );
                         clients.lock().await.insert(
                             sid,
                             ClientInfo {
@@ -440,8 +492,8 @@ async fn handle_ws_conn(
                     continue;
                 }
                 let mut sid = [0u8; 16];
-                for i in 0..16 {
-                    sid[i] = sess_v.get(i);
+                for (i, b) in sid.iter_mut().enumerate() {
+                    *b = sess_v.get(i);
                 }
                 let sid = SessionId::from_be_bytes(sid);
 

@@ -1,5 +1,31 @@
 # Agent Rules (slopmud)
 
+## Default Workflow (Dedicated Worktree + Port Allocation)
+
+Unless the user explicitly instructs otherwise, do local development work in a dedicated git worktree and avoid fixed/assumed ports.
+
+### Dedicated Worktree
+
+- Create a fresh worktree for each substantial task:
+  - `wt="/tmp/slopmud-wt-$(date +%Y%m%d-%H%M%S)"`
+  - `git worktree add -b "agent/$(date +%Y%m%d-%H%M%S)" "$wt" .`
+  - `cd "$wt"`
+- Keep the main working directory clean unless the user asks you to work directly in it.
+- If the repo already has user changes in the main worktree, do not discard them. Work around them via a new worktree.
+
+### Port Allocation
+
+- Never hardcode ports for local stacks/tests unless instructed.
+- Prefer allocating an unused port block and deriving per-service ports from that base (to avoid collisions with other stacks/tests).
+- Use the repo helper:
+  - `python3 scripts/alloc_port_block.py --range 4950-5990 --stride 5 --offsets 0,1,2,4`
+  - Convention used in this repo:
+    - `base+0` broker
+    - `base+1` shard
+    - `base+2` web (slopmud_web)
+    - `base+3` web (static_web) when used instead of slopmud_web
+    - `base+4` internal_oidc
+
 ## HTTPS (Certbot + Route53 DNS-01, No Nginx)
 
 When the user asks to "get certbot working" or "enable HTTPS" for `slopmud.com`/`www.slopmud.com`, use the EC2 instance role + `certbot-dns-route53` (DNS-01) and the repo's `static_web` server (it serves TLS directly on `:443`).

@@ -2,6 +2,8 @@
 resolver = "2"
 members = [
   "apps/internal_oidc",
+  "apps/slopmud_adminctl",
+  "apps/combat_refs",
   "apps/shard_01",
   "apps/static_web",
   "apps/sbc_raftd",

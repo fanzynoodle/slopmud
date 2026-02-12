@@ -1,0 +1,11 @@
+{
+  "users": [
+    {
+      "username": "alice",
+      "password_hash": "$argon2id$v=19$m=19456,t=2,p=1$GQrCklDdql8nNDwBVjLQbw$X4ktQGQ+1pb5l72aJnkj+sBILGV4y2EqP72tVqDnWNU",
+      "email": "alice@example.com",
+      "caps": ["admin.all", "builder"]
+    }
+  ]
+}
+
