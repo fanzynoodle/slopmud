@@ -99,6 +99,19 @@ jobs:
           cargo --version
           rustc --version
 
+      - name: Validate (fast + strict)
+        shell: bash
+        env:
+          RUSTFLAGS: "-D warnings"
+        run: |
+          set -euo pipefail
+          just fmt-check
+          just py-check
+          cargo build -q --workspace --all-targets
+          cargo test -q
+          just world-validate
+          just proto-lint
+
       - name: Build Asset (non-cleanroom)
         id: build_asset
         shell: bash

@@ -51,20 +51,11 @@ impl<'a> Frame<'a> {
     }
 }
 
+#[derive(Default)]
 pub struct FrameArgs<'a> {
     pub t: u8,
     pub session: Option<WIPOffset<Vector<'a, u8>>>,
     pub body: Option<WIPOffset<Vector<'a, u8>>>,
-}
-
-impl<'a> Default for FrameArgs<'a> {
-    fn default() -> Self {
-        Self {
-            t: 0,
-            session: None,
-            body: None,
-        }
-    }
 }
 
 pub struct FrameBuilder<'a: 'b, 'b> {

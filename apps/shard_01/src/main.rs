@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::cmp::{Ordering, Reverse};
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::net::SocketAddr;
@@ -1081,6 +1083,30 @@ fn principal_from_attach(name: &str, auth: Option<&[u8]>) -> String {
     format!("acct:{}", name.trim().to_ascii_lowercase())
 }
 
+fn caps_from_attach(auth: Option<&[u8]>) -> HashSet<groups::Capability> {
+    // `auth` is asserted by the broker; treat these caps as additional effective capabilities for
+    // the session's principal. Unknown caps are ignored.
+    let mut out = HashSet::new();
+    let Some(raw) = auth else {
+        return out;
+    };
+    let Ok(s) = std::str::from_utf8(raw) else {
+        return out;
+    };
+    let Ok(a) = serde_json::from_str::<AuthBlob>(s) else {
+        return out;
+    };
+    let Some(caps) = a.caps else {
+        return out;
+    };
+    for c in caps {
+        if let Some(cap) = groups::Capability::parse(&c) {
+            out.insert(cap);
+        }
+    }
+    out
+}
+
 fn normalize_principal_token(tok: &str) -> String {
     let t = tok.trim();
     if t.is_empty() {
@@ -1129,6 +1155,8 @@ struct Character {
     // Stable principal asserted by the broker (e.g. acct:alice, google_sub:..., google_email:...).
     // Used for permissions (groups/capabilities). Not displayed to players.
     principal: String,
+    // Additional capabilities asserted by the broker (typically from SSO/OIDC userinfo).
+    auth_caps: HashSet<groups::Capability>,
     is_bot: bool,
     bot_ever: bool, // sticky flag (silent): has this character ever been in bot mode?
     bot_ever_since_ms: Option<u64>, // world ms when bot_ever first became true
@@ -1159,6 +1187,10 @@ struct Character {
     max_stamina: i32,
     last_mana_regen_ms: u64,
     last_stamina_regen_ms: u64,
+    // PvP opt-in (off by default). Only effective in designated PvP rooms.
+    pvp_enabled: bool,
+    // Simple hard CC. While stunned, the character cannot autoattack or use skills.
+    stunned_until_ms: u64,
     combat: CombatState,
     equip: Equipment,
 }
@@ -1205,6 +1237,8 @@ enum EventKind {
     EnsureFirstFightWorm,
     EnsureClassHallMobs,
     CombatAct { attacker_id: CharacterId },
+    BossTelegraph { boss_id: CharacterId },
+    BossResolve { boss_id: CharacterId, seq: u64 },
     MobWander { mob_id: CharacterId },
     PartyBuildNext { party_id: PartyId },
     Tick,
@@ -1215,6 +1249,12 @@ struct ScheduledEvent {
     due_ms: u64,
     seq: u64,
     kind: EventKind,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct BossState {
+    casting_until_ms: u64,
+    seq: u64,
 }
 
 impl PartialEq for ScheduledEvent {
@@ -2056,6 +2096,10 @@ fn render_skill_detail(d: &SkillDef, rank: u32) -> String {
     if d.cost_stamina > 0 {
         s.push_str(&format!(" - cost_stamina: {}\r\n", d.cost_stamina));
     }
+    let stun_ms = skill_stun_ms(d);
+    if stun_ms > 0 {
+        s.push_str(&format!(" - stun_ms: {}\r\n", stun_ms));
+    }
     s.push_str(&format!(
         " - target: {}\r\n",
         match d.target {
@@ -2081,6 +2125,15 @@ fn render_skill_detail(d: &SkillDef, rank: u32) -> String {
         s.push_str(&format!(" - flavor: {}\r\n", d.flavor));
     }
     s
+}
+
+fn skill_stun_ms(d: &SkillDef) -> u64 {
+    // Keep this as data-driven as we can without expanding the SkillDef surface.
+    match d.id {
+        "shield_bash" => 1500,
+        "dirty_trick" => 1200,
+        _ => 0,
+    }
 }
 
 fn compute_skill_amount(d: &SkillDef, rank: u32, stats: &AbilityScores) -> i32 {
@@ -2243,6 +2296,7 @@ struct World {
     bartender_emote_idx: u64,
     bartender_emote_ms: u64,
     mob_wander_ms: u64,
+    bosses: HashMap<CharacterId, BossState>,
     raft: raftlog::RaftLog<groups::GroupLogEntry>,
     raft_watch: HashSet<CharacterId>,
     groups: groups::GroupStore,
@@ -2291,6 +2345,7 @@ impl World {
             bartender_emote_idx: 0,
             bartender_emote_ms,
             mob_wander_ms,
+            bosses: HashMap::new(),
             raft,
             raft_watch: HashSet::new(),
             groups,
@@ -2398,8 +2453,11 @@ impl World {
 
     fn effective_caps_for(&self, c: &Character) -> HashSet<groups::Capability> {
         let class = c.class.map(|class| class.as_str()).unwrap_or("");
-        self.groups
-            .effective_caps_for_principal(&c.principal, class)
+        let mut out = self
+            .groups
+            .effective_caps_for_principal(&c.principal, class);
+        out.extend(c.auth_caps.iter().copied());
+        out
     }
 
     fn has_cap(&self, c: &Character, cap: groups::Capability) -> bool {
@@ -2612,6 +2670,7 @@ impl World {
             created_by: None,
             name,
             principal: "mob:".to_string(),
+            auth_caps: HashSet::new(),
             is_bot: false,
             bot_ever: false,
             bot_ever_since_ms: None,
@@ -2642,6 +2701,8 @@ impl World {
             max_stamina: 0,
             last_mana_regen_ms: self.now_ms,
             last_stamina_regen_ms: self.now_ms,
+            pvp_enabled: false,
+            stunned_until_ms: 0,
             combat: CombatState::new(self.now_ms),
             equip: Equipment::new(),
         };
@@ -2724,6 +2785,57 @@ impl World {
         None
     }
 
+    fn find_player_in_room(&self, room_id: &str, token: &str) -> Option<CharacterId> {
+        let t = token.trim().to_ascii_lowercase();
+        if t.is_empty() {
+            return None;
+        }
+        let occ = self.occupants.get(room_id)?;
+        for cid in occ {
+            let Some(c) = self.chars.get(cid) else {
+                continue;
+            };
+            if c.controller.is_none() {
+                continue;
+            }
+            let name_lc = c.name.to_ascii_lowercase();
+            if name_lc == t || name_lc.starts_with(&t) {
+                return Some(*cid);
+            }
+        }
+        None
+    }
+
+    fn is_pvp_room(&self, room_id: &str) -> bool {
+        // Keep PvP constrained to explicit \"arena\" rooms for now.
+        room_id.starts_with("arena.")
+    }
+
+    fn can_pvp_ids(&self, attacker_id: CharacterId, target_id: CharacterId) -> bool {
+        if attacker_id == target_id {
+            return false;
+        }
+        let Some(att) = self.chars.get(&attacker_id) else {
+            return false;
+        };
+        let Some(tgt) = self.chars.get(&target_id) else {
+            return false;
+        };
+        if att.controller.is_none() || tgt.controller.is_none() {
+            return false;
+        }
+        if att.room_id != tgt.room_id {
+            return false;
+        }
+        if !self.is_pvp_room(&att.room_id) {
+            return false;
+        }
+        if !att.pvp_enabled || !tgt.pvp_enabled {
+            return false;
+        }
+        is_built(att) && is_built(tgt) && att.hp > 0 && tgt.hp > 0
+    }
+
     fn start_combat(&mut self, attacker_id: CharacterId, target_id: CharacterId) {
         let Some(a) = self.chars.get_mut(&attacker_id) else {
             return;
@@ -2738,7 +2850,13 @@ impl World {
             .chars
             .get(&target_id)
             .is_some_and(|t| t.controller.is_none());
-        if target_is_mob {
+        let target_is_player = self
+            .chars
+            .get(&target_id)
+            .is_some_and(|t| t.controller.is_some());
+        let allow_player_retaliate = target_is_player && self.can_pvp_ids(attacker_id, target_id);
+
+        if target_is_mob || allow_player_retaliate {
             if let Some(m) = self.chars.get_mut(&target_id) {
                 m.combat.autoattack = true;
                 m.combat.target = Some(attacker_id);
@@ -2754,6 +2872,113 @@ impl World {
 
         // Party auto-assist (best-effort).
         self.party_assist_attackers(attacker_id, target_id);
+    }
+
+    fn spawn_named_mob(&mut self, room_id: String, token: &str) -> Option<CharacterId> {
+        let t = token.trim().to_ascii_lowercase();
+        if t.is_empty() {
+            return None;
+        }
+        match t.as_str() {
+            "stenchworm" => Some(self.spawn_stenchworm(room_id)),
+            "dummy" | "training_dummy" => {
+                let cid = self.spawn_mob(room_id, "dummy".to_string());
+                if let Some(m) = self.chars.get_mut(&cid) {
+                    m.hp = 120;
+                    m.max_hp = 120;
+                }
+                Some(cid)
+            }
+            "rat" => {
+                let cid = self.spawn_mob(room_id, "rat".to_string());
+                if let Some(m) = self.chars.get_mut(&cid) {
+                    m.hp = 5;
+                    m.max_hp = 5;
+                }
+                Some(cid)
+            }
+            "spitter" => {
+                let cid = self.spawn_mob(room_id, "spitter".to_string());
+                if let Some(m) = self.chars.get_mut(&cid) {
+                    m.hp = 7;
+                    m.max_hp = 7;
+                }
+                Some(cid)
+            }
+            "grease_king" => {
+                let cid = self.spawn_mob(room_id.clone(), "grease_king".to_string());
+                if let Some(m) = self.chars.get_mut(&cid) {
+                    m.hp = 60;
+                    m.max_hp = 60;
+                }
+                self.bosses.insert(
+                    cid,
+                    BossState {
+                        casting_until_ms: 0,
+                        seq: 1,
+                    },
+                );
+                // Start boss mechanics quickly so reference scenarios can sync on the telegraph.
+                self.schedule_in_ms(800, EventKind::BossTelegraph { boss_id: cid });
+                Some(cid)
+            }
+            _ => {
+                let cid = self.spawn_mob(room_id, t.to_string());
+                if let Some(m) = self.chars.get_mut(&cid) {
+                    m.hp = 10;
+                    m.max_hp = 10;
+                }
+                Some(cid)
+            }
+        }
+    }
+
+    async fn apply_stun(
+        &mut self,
+        fw: &mut FrameWriter<tokio::net::tcp::OwnedWriteHalf>,
+        attacker_id: CharacterId,
+        target_id: CharacterId,
+        stun_ms: u64,
+    ) -> anyhow::Result<()> {
+        if stun_ms == 0 {
+            return Ok(());
+        }
+        let now = self.now_ms();
+        let Some(att) = self.chars.get(&attacker_id).cloned() else {
+            return Ok(());
+        };
+        let Some(tgt) = self.chars.get(&target_id).cloned() else {
+            return Ok(());
+        };
+        if att.room_id != tgt.room_id {
+            return Ok(());
+        }
+
+        // Extend stun (do not shorten).
+        let until = now.saturating_add(stun_ms);
+        if let Some(t) = self.chars.get_mut(&target_id) {
+            t.stunned_until_ms = t.stunned_until_ms.max(until);
+        }
+        let _ = self
+            .broadcast_room(
+                fw,
+                &att.room_id,
+                &format!("* {} stuns {}.", att.name, tgt.name),
+            )
+            .await;
+
+        // Interrupt boss casts if applicable.
+        if let Some(bs) = self.bosses.get_mut(&target_id) {
+            if bs.casting_until_ms > now {
+                bs.casting_until_ms = 0;
+                bs.seq = bs.seq.saturating_add(1);
+                let _ = self
+                    .broadcast_room(fw, &att.room_id, &format!("* {} is interrupted!", tgt.name))
+                    .await;
+            }
+        }
+
+        Ok(())
     }
 
     fn remove_char(&mut self, cid: CharacterId) -> Option<Character> {
@@ -2774,6 +2999,7 @@ impl World {
         controller: SessionId,
         name: String,
         principal: String,
+        auth_caps: HashSet<groups::Capability>,
         is_bot: bool,
         race: Race,
         class: Class,
@@ -2799,6 +3025,7 @@ impl World {
             created_by: Some(controller),
             name,
             principal,
+            auth_caps,
             is_bot,
             bot_ever: is_bot,
             bot_ever_since_ms: is_bot.then_some(now_ms),
@@ -2829,6 +3056,8 @@ impl World {
             max_stamina,
             last_mana_regen_ms: self.now_ms,
             last_stamina_regen_ms: self.now_ms,
+            pvp_enabled: false,
+            stunned_until_ms: 0,
             combat: CombatState::new(self.now_ms),
             equip: Equipment::new(),
         };
@@ -3505,6 +3734,13 @@ fn render_stats(p: &Character) -> String {
     s.push_str(&format!(" - hp: {}/{}\r\n", p.hp, p.max_hp));
     s.push_str(&format!(" - mana: {}/{}\r\n", p.mana, p.max_mana));
     s.push_str(&format!(" - stamina: {}/{}\r\n", p.stamina, p.max_stamina));
+    s.push_str(&format!(
+        " - pvp: {}\r\n",
+        if p.pvp_enabled { "on" } else { "off" }
+    ));
+    if p.stunned_until_ms > 0 {
+        s.push_str(&format!(" - stunned_until_ms: {}\r\n", p.stunned_until_ms));
+    }
     let av = equipped_armor_value(p);
     let ac = compute_ac(p);
     s.push_str(&format!(" - armor value: {av}\r\n"));
@@ -3644,6 +3880,7 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     continue;
                 }
                 let principal = principal_from_attach(&name, auth.as_deref());
+                let auth_caps = caps_from_attach(auth.as_deref());
 
                 // If the broker ever re-attaches the same session, drop prior characters first.
                 let removed = world.detach_session(session);
@@ -3686,6 +3923,7 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     session,
                     name.clone(),
                     principal,
+                    auth_caps,
                     is_bot,
                     race,
                     class,
@@ -4583,6 +4821,57 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     teleport_to(&mut world, &mut fw, session, to, "warps").await?;
                     continue;
                 }
+
+                if lc == "spawn" {
+                    if !world.has_cap(&p, groups::Capability::WorldWarp) {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"nope: world.spawn\r\n")
+                            .await?;
+                        continue;
+                    }
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"huh? (try: spawn rat 3 | spawn grease_king 1)\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+                if let Some(rest) = lc.strip_prefix("spawn ") {
+                    if !world.has_cap(&p, groups::Capability::WorldWarp) {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"nope: world.spawn\r\n")
+                            .await?;
+                        continue;
+                    }
+                    let mut it = rest.split_whitespace();
+                    let Some(kind) = it.next() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: spawn rat 3 | spawn grease_king 1)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let n: u32 = it
+                        .next()
+                        .and_then(|s| s.parse::<u32>().ok())
+                        .unwrap_or(1)
+                        .clamp(1, 20);
+
+                    let room_id = p.room_id.clone();
+                    let mut spawned = 0u32;
+                    for _ in 0..n {
+                        if world.spawn_named_mob(room_id.clone(), kind).is_some() {
+                            spawned += 1;
+                        }
+                    }
+                    let msg = format!("spawned: {} x {}\r\n", spawned, kind);
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                    process_due_events(&mut world, &mut fw).await?;
+                    continue;
+                }
                 if lc == "stats" || lc == "score" {
                     let s = world
                         .chars
@@ -5221,6 +5510,20 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                             write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n").await;
                         continue;
                     };
+                    if world
+                        .chars
+                        .get(&attacker_id)
+                        .is_some_and(|c| world.now_ms() < c.stunned_until_ms)
+                    {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (you are stunned)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
 
                     let (class, target) = match world.chars.get(&attacker_id) {
                         Some(pc) => (pc.class, pc.combat.target),
@@ -5303,6 +5606,28 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                                             .await?;
                                             continue;
                                         };
+                                        if world
+                                            .chars
+                                            .get(&target_id)
+                                            .is_some_and(|c| world.now_ms() < c.stunned_until_ms)
+                                        {
+                                            // You can still hit a stunned target, but calling it out makes
+                                            // reference scenarios easier to read.
+                                        }
+                                        let target_is_player = world
+                                            .chars
+                                            .get(&target_id)
+                                            .is_some_and(|c| c.controller.is_some());
+                                        if target_is_player && !world.can_pvp_ids(attacker_id, target_id) {
+                                            write_resp_async(
+                                                &mut fw,
+                                                RESP_OUTPUT,
+                                                session,
+                                                b"huh? (pvp not allowed)\r\n",
+                                            )
+                                            .await?;
+                                            continue;
+                                        }
                                         let msg = format!(
                                             "* {} uses {} on {} for {}.",
                                             p.name,
@@ -5314,19 +5639,38 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                                                 .unwrap_or("something"),
                                             amount
                                         );
-                                        let killed = apply_damage_to_mob(
-                                            &mut world,
-                                            &mut fw,
-                                            attacker_id,
-                                            target_id,
-                                            amount,
-                                            msg,
-                                        )
-                                        .await?;
+                                        let killed = if target_is_player {
+                                            apply_damage_to_player(
+                                                &mut world,
+                                                &mut fw,
+                                                attacker_id,
+                                                target_id,
+                                                amount,
+                                                msg,
+                                            )
+                                            .await?
+                                        } else {
+                                            apply_damage_to_mob(
+                                                &mut world,
+                                                &mut fw,
+                                                attacker_id,
+                                                target_id,
+                                                amount,
+                                                msg,
+                                            )
+                                            .await?
+                                        };
                                         if killed {
                                             if let Some(a) = world.chars.get_mut(&attacker_id) {
                                                 a.combat.target = None;
                                                 a.combat.autoattack = false;
+                                            }
+                                        } else {
+                                            let stun_ms = skill_stun_ms(def);
+                                            if stun_ms > 0 {
+                                                world
+                                                    .apply_stun(&mut fw, attacker_id, target_id, stun_ms)
+                                                    .await?;
                                             }
                                         }
                                     }
@@ -5877,6 +6221,20 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                             write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n").await;
                         continue;
                     };
+                    if world
+                        .chars
+                        .get(&attacker_id)
+                        .is_some_and(|c| world.now_ms() < c.stunned_until_ms)
+                    {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (you are stunned)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
                     if target.is_empty() {
                         write_resp_async(
                             &mut fw,
@@ -5887,7 +6245,11 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         .await?;
                         continue;
                     }
-                    let Some(mob_id) = world.find_mob_in_room(&p.room_id, target) else {
+                    let target_id = if let Some(id) = world.find_mob_in_room(&p.room_id, target) {
+                        id
+                    } else if let Some(id) = world.find_player_in_room(&p.room_id, target) {
+                        id
+                    } else {
                         write_resp_async(
                             &mut fw,
                             RESP_OUTPUT,
@@ -5907,10 +6269,74 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         .await?;
                         continue;
                     }
+                    let target_is_player = world
+                        .chars
+                        .get(&target_id)
+                        .is_some_and(|c| c.controller.is_some());
+                    if target_is_player {
+                        if attacker_id == target_id {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"huh? (can't target yourself)\r\n",
+                            )
+                            .await?;
+                            continue;
+                        }
+                        if !world.is_pvp_room(&p.room_id) {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"huh? (not a pvp room)\r\n",
+                            )
+                            .await?;
+                            continue;
+                        }
+                        let att_pvp = world
+                            .chars
+                            .get(&attacker_id)
+                            .is_some_and(|c| c.pvp_enabled);
+                        if !att_pvp {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"huh? (pvp is off; try: pvp on)\r\n",
+                            )
+                            .await?;
+                            continue;
+                        }
+                        let tgt_pvp = world
+                            .chars
+                            .get(&target_id)
+                            .is_some_and(|c| c.pvp_enabled);
+                        if !tgt_pvp {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"huh? (target has pvp off)\r\n",
+                            )
+                            .await?;
+                            continue;
+                        }
+                        if !world.can_pvp_ids(attacker_id, target_id) {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"huh? (pvp not allowed)\r\n",
+                            )
+                            .await?;
+                            continue;
+                        }
+                    }
                     let toggled_off = world
                         .chars
                         .get(&attacker_id)
-                        .is_some_and(|a| a.combat.autoattack && a.combat.target == Some(mob_id));
+                        .is_some_and(|a| a.combat.autoattack && a.combat.target == Some(target_id));
                     if toggled_off {
                         if let Some(a) = world.chars.get_mut(&attacker_id) {
                             a.combat.autoattack = false;
@@ -5921,7 +6347,7 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         continue;
                     }
                     write_resp_async(&mut fw, RESP_OUTPUT, session, b"you attack.\r\n").await?;
-                    world.start_combat(attacker_id, mob_id);
+                    world.start_combat(attacker_id, target_id);
                     process_due_events(&mut world, &mut fw).await?;
                     continue;
                 }
@@ -6585,6 +7011,49 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         b"follow: on\r\n" as &[u8]
                     } else {
                         b"follow: off\r\n" as &[u8]
+                    };
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, msg).await?;
+                    continue;
+                }
+
+                if lc == "pvp" {
+                    let on = world
+                        .chars
+                        .get(&p.id)
+                        .map(|c| c.pvp_enabled)
+                        .unwrap_or(false);
+                    let msg = if on {
+                        "pvp: on (arena rooms only)\r\n"
+                    } else {
+                        "pvp: off\r\n"
+                    };
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                    continue;
+                }
+                if let Some(rest) = lc.strip_prefix("pvp ") {
+                    let v = rest.trim();
+                    let on = match v {
+                        "on" => Some(true),
+                        "off" => Some(false),
+                        _ => None,
+                    };
+                    let Some(on) = on else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: pvp on|off)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    if let Some(pc) = world.active_char_mut(session) {
+                        pc.pvp_enabled = on;
+                    }
+                    let msg = if on {
+                        b"pvp: on\r\n" as &[u8]
+                    } else {
+                        b"pvp: off\r\n" as &[u8]
                     };
                     write_resp_async(&mut fw, RESP_OUTPUT, session, msg).await?;
                     continue;
@@ -8062,6 +8531,10 @@ async fn handle_event(
             let Some(target_id) = att.combat.target else {
                 return Ok(());
             };
+            if world.now_ms() < att.stunned_until_ms {
+                world.schedule_at_ms(att.stunned_until_ms, EventKind::CombatAct { attacker_id });
+                return Ok(());
+            }
             if world.now_ms() < att.combat.next_ready_ms {
                 world.schedule_at_ms(
                     att.combat.next_ready_ms,
@@ -8088,7 +8561,16 @@ async fn handle_event(
             let att_is_player = att.controller.is_some();
             let tgt_is_player = tgt.controller.is_some();
 
-            if (att_is_player && tgt_is_player) || (!att_is_player && !tgt_is_player) {
+            // No mob-vs-mob combat for now.
+            if !att_is_player && !tgt_is_player {
+                if let Some(a) = world.chars.get_mut(&attacker_id) {
+                    a.combat.target = None;
+                    a.combat.autoattack = false;
+                }
+                return Ok(());
+            }
+            // PvP is opt-in and only allowed in designated rooms.
+            if att_is_player && tgt_is_player && !world.can_pvp_ids(attacker_id, target_id) {
                 if let Some(a) = world.chars.get_mut(&attacker_id) {
                     a.combat.target = None;
                     a.combat.autoattack = false;
@@ -8097,13 +8579,9 @@ async fn handle_event(
             }
 
             let dmg = if att_is_player {
-                if let Some((a, b)) = equipped_weapon_damage_range(&att) {
-                    world.rng.roll_range(a, b)
-                } else {
-                    1
-                }
+                compute_autoattack_damage(world, attacker_id)
             } else {
-                world.rng.roll_range(1, 3)
+                compute_mob_autoattack_damage(world, &att)
             };
 
             let msg = format!("* {} hits {} for {}.", att.name, tgt.name, dmg);
@@ -8125,6 +8603,106 @@ async fn handle_event(
                 a.combat.next_ready_ms = next;
             }
             world.schedule_at_ms(next, EventKind::CombatAct { attacker_id });
+        }
+        EventKind::BossTelegraph { boss_id } => {
+            let now = world.now_ms();
+            let Some(b) = world.chars.get(&boss_id).cloned() else {
+                world.bosses.remove(&boss_id);
+                return Ok(());
+            };
+            if b.controller.is_some() || b.hp <= 0 {
+                world.bosses.remove(&boss_id);
+                return Ok(());
+            }
+            // Decide next action without holding a mutable borrow across awaits/scheduling.
+            let mut schedule_after_cast: Option<u64> = None;
+            let mut resolve_at: Option<(u64, u64)> = None; // (due_ms, seq)
+            {
+                let Some(bs) = world.bosses.get_mut(&boss_id) else {
+                    return Ok(());
+                };
+                // If still casting, don't start another cast; try again when cast ends.
+                if bs.casting_until_ms > now {
+                    schedule_after_cast = Some(bs.casting_until_ms);
+                } else {
+                    // Only one scripted boss for now.
+                    if b.name != "grease_king" {
+                        return Ok(());
+                    }
+                    let cast_ms = 2500u64;
+                    bs.casting_until_ms = now.saturating_add(cast_ms);
+                    bs.seq = bs.seq.saturating_add(1);
+                    resolve_at = Some((bs.casting_until_ms, bs.seq));
+                }
+            }
+
+            if let Some(due) = schedule_after_cast {
+                world.schedule_at_ms(due, EventKind::BossTelegraph { boss_id });
+                return Ok(());
+            }
+
+            let _ = world
+                .broadcast_room(
+                    fw,
+                    &b.room_id,
+                    "* grease_king begins casting grease_crush. interrupt it!",
+                )
+                .await;
+
+            if let Some((due, seq)) = resolve_at {
+                world.schedule_at_ms(due, EventKind::BossResolve { boss_id, seq });
+                // Periodic cadence.
+                world.schedule_in_ms(6500, EventKind::BossTelegraph { boss_id });
+            }
+        }
+        EventKind::BossResolve { boss_id, seq } => {
+            let now = world.now_ms();
+            let Some(b) = world.chars.get(&boss_id).cloned() else {
+                world.bosses.remove(&boss_id);
+                return Ok(());
+            };
+            if b.controller.is_some() || b.hp <= 0 {
+                world.bosses.remove(&boss_id);
+                return Ok(());
+            }
+            let should_resolve = {
+                let Some(bs) = world.bosses.get_mut(&boss_id) else {
+                    return Ok(());
+                };
+                if bs.seq != seq || bs.casting_until_ms == 0 || now < bs.casting_until_ms {
+                    // Interrupted or superseded.
+                    false
+                } else {
+                    bs.casting_until_ms = 0;
+                    true
+                }
+            };
+            if !should_resolve {
+                return Ok(());
+            }
+
+            let _ = world
+                .broadcast_room(fw, &b.room_id, "* grease_king unleashes grease_crush!")
+                .await;
+
+            // AoE hit all players in the room.
+            let victims = world
+                .occupants_of(&b.room_id)
+                .filter_map(|cid| world.chars.get(cid))
+                .filter(|c| c.controller.is_some() && c.hp > 0)
+                .map(|c| c.id)
+                .collect::<Vec<_>>();
+
+            for vid in victims {
+                let vname = world
+                    .chars
+                    .get(&vid)
+                    .map(|c| c.name.clone())
+                    .unwrap_or_else(|| "someone".to_string());
+                let dmg = 8;
+                let msg = format!("* grease_king crushes {} for {}.", vname, dmg);
+                let _ = apply_damage_to_player(world, fw, boss_id, vid, dmg, msg).await?;
+            }
         }
 
         EventKind::PartyBuildNext { party_id } => {
@@ -8263,6 +8841,16 @@ fn compute_autoattack_damage(world: &mut World, attacker_id: CharacterId) -> i32
     dmg.max(1)
 }
 
+fn compute_mob_autoattack_damage(world: &mut World, att: &Character) -> i32 {
+    // Keep simple and deterministic; use the per-world RNG.
+    match att.name.as_str() {
+        "dummy" => 0,
+        "spitter" => world.rng.roll_range(4, 6),
+        "grease_king" => world.rng.roll_range(2, 5),
+        _ => world.rng.roll_range(1, 3),
+    }
+}
+
 async fn apply_damage_to_mob(
     world: &mut World,
     fw: &mut FrameWriter<tokio::net::tcp::OwnedWriteHalf>,
@@ -8301,6 +8889,7 @@ async fn apply_damage_to_mob(
     let Some(deadc) = world.remove_char(target_id) else {
         return Ok(true);
     };
+    world.bosses.remove(&target_id);
     let _ = world
         .broadcast_room(fw, &room_id, &format!("* {} dies.", deadc.name))
         .await;
@@ -8725,7 +9314,9 @@ order <num|name>\r\n\
 order <qty> <name>\r\n\
 sell <item> <qty>\r\n\
 i\r\n\
-kill <mob>\r\n\
+kill <mob|player>\r\n\
+pvp on|off\r\n\
+spawn <mob> [n]\r\n\
 tell <player> <msg>\r\n\
 friends\r\n\
 friends add <player>\r\n\

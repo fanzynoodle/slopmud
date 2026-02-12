@@ -95,7 +95,9 @@ fn parse_args() -> Config {
 
 #[derive(Debug, serde::Deserialize)]
 struct TopResp {
+    #[allow(dead_code)]
     metric: String,
+    #[allow(dead_code)]
     group: String,
     top: Vec<TopItem>,
 }

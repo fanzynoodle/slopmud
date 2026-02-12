@@ -24,7 +24,8 @@ py-check:
 check:
   just fmt-check
   just py-check
-  cargo test -q
+  RUSTFLAGS='-D warnings' cargo build -q --workspace --all-targets
+  RUSTFLAGS='-D warnings' cargo test -q
   just world-validate
   just proto-lint
   just proto-coverage
@@ -320,6 +321,27 @@ agent-worktree dir name base_port="5040" branch="":
     ./scripts/mk_agent_env.sh "{{name}}" "{{base_port}}" "{{dir}}/env/agent.env"; \
   '
 
+# Smoke test: start N local agent stacks concurrently and verify their port ranges do not collide.
+# Positional args: `just agent-ports-smoke 4940 100 4`
+agent-ports-smoke base_port="4940" step="100" n="4":
+  bash -ceu ' \
+    ./scripts/agent_ports_smoke.sh "{{base_port}}" "{{step}}" "{{n}}"; \
+  '
+
+# Run the reference combat suite against a local shard + ws_gateway, using an env file for ports.
+combat-refs env_file="env/dev.env" suite="reference/combats/suite.json":
+  bash -ceu ' \
+    ./scripts/combat_refs_smoke.sh "{{env_file}}" "{{suite}}"; \
+  '
+
+# Local admin JSON helper (password resets / admin caps) against the running broker.
+adminctl env_file="env/dev.env" cmd="list-accounts":
+  bash -ceu ' \
+    set -a; source "{{env_file}}"; set +a; \
+    export SLOPMUD_ADMIN_ADDR="${SLOPMUD_ADMIN_BIND}"; \
+    cargo run -p slopmud_adminctl -- {{cmd}}; \
+  '
+
 # Run shard + broker for an arbitrary env file.
 local-run env_file="env/dev.env":
   bash -ceu ' \
@@ -402,6 +424,21 @@ e2e-party:
 
 e2e-web-local:
   python3 scripts/e2e_web_selenium_local.py
+
+e2e-web-sso-rbac-local:
+  python3 scripts/e2e_web_sso_rbac_selenium_local.py
+
+# Proves internal_oidc registration (/register with password twice) can complete a slopmud_web OIDC flow.
+e2e-web-slopsso-register-local:
+  python3 scripts/e2e_web_slopsso_register_local.py
+
+# Selenium: click gate->SlopSSO redirect, register (password twice) in IdP, return, create via SSO, connect.
+e2e-web-slopsso-register-selenium-local:
+  python3 scripts/e2e_web_slopsso_register_selenium_local.py
+
+# Local browser demo: slopmud_web + internal_oidc ("slopsso") on a random free 52xx port block.
+local-slopsso-demo:
+  ./scripts/local_slopsso_demo.sh
 
 proto-lint:
   python3 scripts/protoadventure_lint.py
@@ -494,7 +531,8 @@ area-lock-status zone_id="":
   '
 
 e2e-ws:
-  cargo build -q -p ws_gateway --bin e2e_ws
+  RUSTFLAGS='-D warnings' cargo build -q -p shard_01 -p ws_gateway -p bot_party
+  RUSTFLAGS='-D warnings' cargo build -q -p ws_gateway --bin e2e_ws
   ./target/debug/e2e_ws
 
 # --- Local dev: shard ---

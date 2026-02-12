@@ -1,0 +1,28 @@
+version: 1
+zone_id: arena
+zone_name: "Arena"
+
+area_id: A01
+level_band: [1, 20]
+target_rooms: 2
+
+anchor:
+  x: 0
+  y: -4
+
+bounds:
+  min:
+    x: -1
+    y: -1
+  max:
+    x: 1
+    y: 1
+
+clusters:
+  - id: CL_ARENA_PIT
+    rooms: 2
+
+portals: []
+
+notes:
+  - "Isolated sandbox zone; no overworld portals yet."

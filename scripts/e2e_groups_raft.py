@@ -57,6 +57,23 @@ def send_line(sock, s):
     sock.sendall((s.strip() + "\n").encode("utf-8"))
 
 
+def _pick_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        s.listen(1)
+        return int(s.getsockname()[1])
+
+
+def _tcp_allowed() -> bool:
+    try:
+        _pick_free_port()
+        return True
+    except OSError as e:
+        if getattr(e, "errno", None) in (1, 13):  # EPERM / EACCES
+            return False
+        raise
+
+
 def connect_and_create(name, is_bot=False, host="127.0.0.1", port=54012):
     deadline = time.time() + 12.0
     last_err = None
@@ -151,8 +168,12 @@ def stop_proc(p):
 
 
 def main():
-    shard_bind = "127.0.0.1:55013"
-    broker_bind = "127.0.0.1:54012"
+    if not _tcp_allowed():
+        print("SKIP: e2e_groups_raft requires TCP sockets (PermissionError)", file=sys.stderr)
+        return 0
+
+    shard_bind = f"127.0.0.1:{_pick_free_port()}"
+    broker_bind = f"127.0.0.1:{_pick_free_port()}"
     run_id = str(time.time_ns())
 
     env = os.environ.copy()
@@ -174,8 +195,9 @@ def main():
     try:
         shard, broker = start_stack(env, shard_log, broker_log)
 
-        alice = connect_and_create("Alice", is_bot=False, port=54012)
-        bob = connect_and_create("Bob", is_bot=False, port=54012)
+        broker_port = int(broker_bind.rsplit(":", 1)[1])
+        alice = connect_and_create("Alice", is_bot=False, port=broker_port)
+        bob = connect_and_create("Bob", is_bot=False, port=broker_port)
 
         # Alice is a bootstrap admin.
         send_line(alice.sock, "raft watch on")
@@ -219,7 +241,7 @@ def main():
         )
 
         # Reconnect Alice and validate group persisted.
-        alice2 = connect_and_create("Alice", is_bot=False, port=54012)
+        alice2 = connect_and_create("Alice", is_bot=False, port=broker_port)
         # Broker may take a moment to reconnect to the restarted shard.
         for _ in range(60):
             send_line(alice2.sock, "look")

@@ -65,7 +65,8 @@ impl EventLog {
                 let (tx, rx) = mpsc::channel::<Vec<String>>(64);
                 upload_tx = Some(tx.clone());
 
-                let aws_cfg = aws_config::load_from_env().await;
+                let aws_cfg =
+                    aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
                 let s3 = S3Client::new(&aws_cfg);
 
                 // Best-effort periodic scan for backlog uploads.

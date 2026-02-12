@@ -51,12 +51,45 @@ def _wait_term(driver, needle: str, timeout_s: float = 12.0) -> str:
     raise TimeoutError(f"timeout waiting for {needle!r}; got:\n{_term_text(driver)[-2000:]}")
 
 
+def _wait_el(driver, by: str, value: str, timeout_s: float = 10.0):
+    deadline = time.time() + timeout_s
+    last = None
+    while time.time() < deadline:
+        try:
+            return driver.find_element(by, value)
+        except Exception as e:
+            last = e
+            time.sleep(0.05)
+    raise TimeoutError(f"timeout waiting for element {by}={value!r} ({last})")
+
+
+def _click_id(driver, el_id: str, timeout_s: float = 10.0):
+    el = _wait_el(driver, "id", el_id, timeout_s=timeout_s)
+    el.click()
+    return el
+
+
+def _set_input(driver, el_id: str, value: str, timeout_s: float = 10.0):
+    el = _wait_el(driver, "id", el_id, timeout_s=timeout_s)
+    try:
+        el.clear()
+    except Exception:
+        pass
+    el.send_keys(value)
+    return el
+
+
 def _send_line(driver, s: str):
     el = driver.find_element("id", "line")
     el.send_keys(s + "\n")
 
 
 def run_create_flow(driver, name: str, password: str):
+    # Pick auth method before the terminal connects, then connect and use the in-terminal flow.
+    # (static_web doesn't serve /api/webauth; only slopmud_web does.)
+    _click_id(driver, "btn-gate-password", timeout_s=12.0)
+    _click_id(driver, "btn-connect", timeout_s=12.0)
+
     _wait_term(driver, "name:", timeout_s=20.0)
     _send_line(driver, name)
     _wait_term(driver, "auth method", timeout_s=20.0)
@@ -86,6 +119,9 @@ def run_create_flow(driver, name: str, password: str):
 
 
 def run_password_login_flow(driver, name: str, password: str):
+    _click_id(driver, "btn-gate-password", timeout_s=12.0)
+    _click_id(driver, "btn-connect", timeout_s=12.0)
+
     _wait_term(driver, "name:", timeout_s=20.0)
     _send_line(driver, name)
     _wait_term(driver, "auth method", timeout_s=20.0)

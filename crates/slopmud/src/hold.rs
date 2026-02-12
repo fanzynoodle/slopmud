@@ -12,6 +12,7 @@ impl HoldCache {
         Self::default()
     }
 
+    #[allow(dead_code)]
     pub fn last_index(&self) -> u64 {
         self.last_index
     }

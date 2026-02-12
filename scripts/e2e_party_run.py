@@ -57,6 +57,23 @@ def send_line(sock, s):
     sock.sendall((s.strip() + "\n").encode("utf-8"))
 
 
+def _pick_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        s.listen(1)
+        return int(s.getsockname()[1])
+
+
+def _tcp_allowed() -> bool:
+    try:
+        _pick_free_port()
+        return True
+    except OSError as e:
+        if getattr(e, "errno", None) in (1, 13):  # EPERM / EACCES
+            return False
+        raise
+
+
 def connect_and_create(name, is_bot=False, host="127.0.0.1", port=54100):
     # Broker startup can be a little slow (especially under cargo); retry connect.
     deadline = time.time() + 12.0
@@ -157,6 +174,10 @@ def main():
     ap.add_argument("--stride", type=int, default=5)
     args = ap.parse_args()
 
+    if not _tcp_allowed():
+        print("SKIP: e2e_party_run requires TCP sockets (PermissionError)", file=sys.stderr)
+        return 0
+
     base = args.base_port or _alloc_port_block(args.port_range, args.stride, "0,1")
     shard_bind = f"127.0.0.1:{base + 1}"
     broker_bind = f"127.0.0.1:{base + 0}"
@@ -204,7 +225,7 @@ def main():
     ok = False
     try:
         time.sleep(0.8)
-        broker_port = int(broker_bind.split(":")[-1])
+        broker_port = int(broker_bind.rsplit(":", 1)[1])
         a = connect_and_create("Alice", is_bot=False, port=broker_port)
         b = connect_and_create("Bob", is_bot=True, port=broker_port)
 

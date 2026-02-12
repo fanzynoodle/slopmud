@@ -309,6 +309,7 @@ body {
 .bot__bio {
   margin-top: 10px;
   color: var(--fg);
+  white-space: pre-line;
 }
 
 .post__title {
@@ -334,6 +335,19 @@ body {
 
 .post__p:last-child {
   margin-bottom: 0;
+}
+
+.orgchart {
+  margin: 0;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(232, 242, 234, 0.12);
+  background: rgba(0, 0, 0, 0.18);
+  overflow: auto;
+  white-space: pre;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--fg);
 }
 
 /* --- Web client --- */
@@ -474,6 +488,57 @@ body {
 
 .dlg--narrow {
   width: min(560px, calc(100vw - 24px));
+}
+
+.dlg--gate {
+  width: min(640px, calc(100vw - 24px));
+}
+
+.gategrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 900px) {
+  .gategrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.gatecard {
+  appearance: none;
+  border: 1px solid rgba(232, 242, 234, 0.16);
+  background: rgba(0, 0, 0, 0.16);
+  color: var(--fg);
+  border-radius: 14px;
+  padding: 14px 12px;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  gap: 6px;
+  min-height: 84px;
+}
+.gatecard:hover {
+  border-color: rgba(232, 242, 234, 0.25);
+  background: rgba(232, 242, 234, 0.06);
+}
+.gatecard:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(96, 211, 148, 0.16);
+}
+.gatecard:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.gatecard__title {
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+}
+.gatecard__sub {
+  color: var(--muted);
+  font-weight: 700;
 }
 
 .inline {

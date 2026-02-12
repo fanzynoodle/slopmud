@@ -82,6 +82,32 @@ just e2e-party
 just e2e-web-local  # selenium: web client creates account + logs in again
 ```
 
+## Local Admin Recovery (Passwords / Admin Caps)
+
+The broker (`apps/slopmud`) exposes a local-only admin JSON listener:
+
+- Bind: `SLOPMUD_ADMIN_BIND` (default `127.0.0.1:4011`, per-env via `scripts/mk_agent_env.sh`)
+
+Use `apps/slopmud_adminctl` to:
+
+- Reset an account password:
+
+```bash
+SLOPMUD_ADMIN_ADDR=127.0.0.1:4011 cargo run -p slopmud_adminctl -- reset-password alice --gen
+```
+
+- Create a new admin account (sets `admin.all` capability):
+
+```bash
+SLOPMUD_ADMIN_ADDR=127.0.0.1:4011 cargo run -p slopmud_adminctl -- create-admin alice --gen
+```
+
+- Promote an existing account to admin:
+
+```bash
+SLOPMUD_ADMIN_ADDR=127.0.0.1:4011 cargo run -p slopmud_adminctl -- promote-admin alice
+```
+
 ## Multi-Agent Local Dev (Dedicated Working Trees)
 
 If you have multiple agents working in parallel, each agent should run from a dedicated working tree

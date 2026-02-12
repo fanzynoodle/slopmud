@@ -112,6 +112,7 @@ pub struct ComplianceState {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)] // Authoring/debug metadata; not currently read by the portal.
 struct ComplianceSession {
     email: String,
     created_unix: u64,
@@ -236,11 +237,11 @@ impl ComplianceState {
                 },
             ],
         };
-        if let Ok(s) = std::env::var("SLOPMUD_COMPLIANCE_PORTAL_CONFIG_JSON") {
-            if !s.trim().is_empty() {
-                portal_cfg = serde_json::from_str(&s)
-                    .context("parse SLOPMUD_COMPLIANCE_PORTAL_CONFIG_JSON")?;
-            }
+        if let Ok(s) = std::env::var("SLOPMUD_COMPLIANCE_PORTAL_CONFIG_JSON")
+            && !s.trim().is_empty()
+        {
+            portal_cfg =
+                serde_json::from_str(&s).context("parse SLOPMUD_COMPLIANCE_PORTAL_CONFIG_JSON")?;
         }
 
         let keys_path: PathBuf = std::env::var("SLOPMUD_COMPLIANCE_KEYS_PATH")
@@ -253,9 +254,10 @@ impl ComplianceState {
             .unwrap_or_else(|_| "locks/compliance/public.logfmt".to_string())
             .into();
 
-        let public_log_enabled = !std::env::var("SLOPMUD_COMPLIANCE_PUBLIC_LOG_ENABLED")
+        let public_log_enabled = std::env::var("SLOPMUD_COMPLIANCE_PUBLIC_LOG_ENABLED")
             .ok()
-            .is_some_and(|v| v == "0");
+            .map(|v| v != "0")
+            .unwrap_or(true);
 
         // Optional: redact public emails (defaults to full email in public log).
         let public_log_redact_email = std::env::var("SLOPMUD_COMPLIANCE_PUBLIC_LOG_REDACT_EMAIL")
@@ -293,7 +295,7 @@ impl ComplianceState {
             .unwrap_or_else(|_| "slopmud/eventlog".to_string());
 
         let s3 = if enabled && s3_bucket.is_some() {
-            let aws_cfg = aws_config::load_from_env().await;
+            let aws_cfg = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
             Some(S3Client::new(&aws_cfg))
         } else {
             None
@@ -312,7 +314,8 @@ impl ComplianceState {
                         "SLOPMUD_COMPLIANCE_EMAIL_MODE=ses but missing SLOPMUD_COMPLIANCE_EMAIL_FROM"
                     );
                 };
-                let aws_cfg = aws_config::load_from_env().await;
+                let aws_cfg =
+                    aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
                 EmailSender::Ses {
                     client: SesClient::new(&aws_cfg),
                     from,
@@ -644,10 +647,10 @@ async fn compliance_action_confirm(
     //
     // For login, we only log if the one-time key is successfully consumed so the
     // public log can't claim a login that didn't happen.
-    if !matches!(pending.kind, ActionKind::Login) {
-        if let Err(e) = write_compliance_logs(&st, &pending) {
-            warn!(err=%e, "failed to write compliance logs");
-        }
+    if !matches!(pending.kind, ActionKind::Login)
+        && let Err(e) = write_compliance_logs(&st, &pending)
+    {
+        warn!(err=%e, "failed to write compliance logs");
     }
 
     match pending.kind {
@@ -689,62 +692,55 @@ async fn compliance_action_confirm(
                 .secure(st.compliance.cookie_secure)
                 .build();
 
-            return (jar.add(cookie), Redirect::temporary("/compliance")).into_response();
+            (jar.add(cookie), Redirect::temporary("/compliance")).into_response()
         }
         ActionKind::ViewCharacters => match load_character_list(&st.compliance.accounts_path) {
-            Ok(names) => {
-                return Html(render_characters_page(&names)).into_response();
-            }
+            Ok(names) => Html(render_characters_page(&names)).into_response(),
             Err(e) => {
                 warn!(err=%e, "failed to load character list");
-                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }
         },
-        ActionKind::DownloadAll => {
-            return match download_links(&st, LogStream::All, None).await {
-                Ok(html) => Html(html).into_response(),
-                Err(e) => {
-                    warn!(err=%e, "download all failed");
-                    StatusCode::SERVICE_UNAVAILABLE.into_response()
-                }
-            };
-        }
-        ActionKind::DownloadLogin => {
-            return match download_links(&st, LogStream::Login, None).await {
-                Ok(html) => Html(html).into_response(),
-                Err(e) => {
-                    warn!(err=%e, "download login failed");
-                    StatusCode::SERVICE_UNAVAILABLE.into_response()
-                }
-            };
-        }
+        ActionKind::DownloadAll => match download_links(&st, LogStream::All, None).await {
+            Ok(html) => Html(html).into_response(),
+            Err(e) => {
+                warn!(err=%e, "download all failed");
+                StatusCode::SERVICE_UNAVAILABLE.into_response()
+            }
+        },
+        ActionKind::DownloadLogin => match download_links(&st, LogStream::Login, None).await {
+            Ok(html) => Html(html).into_response(),
+            Err(e) => {
+                warn!(err=%e, "download login failed");
+                StatusCode::SERVICE_UNAVAILABLE.into_response()
+            }
+        },
         ActionKind::DownloadCharacter { name } => {
-            let name = name;
-            return match download_links(&st, LogStream::Character(&name), Some(&name)).await {
+            match download_links(&st, LogStream::Character(&name), Some(&name)).await {
                 Ok(html) => Html(html).into_response(),
                 Err(e) => {
                     warn!(err=%e, "download character failed");
                     StatusCode::SERVICE_UNAVAILABLE.into_response()
                 }
-            };
+            }
         }
         ActionKind::BanCharacter { name } => {
-            return match admin_ban_character(&st, &pending.email, &name, pending.reason).await {
+            match admin_ban_character(&st, &pending.email, &name, pending.reason).await {
                 Ok(html) => Html(html).into_response(),
                 Err(e) => {
                     warn!(err=%e, "ban character failed");
                     StatusCode::SERVICE_UNAVAILABLE.into_response()
                 }
-            };
+            }
         }
         ActionKind::BanIpPrefix { cidr } => {
-            return match admin_ban_ip(&st, &pending.email, &cidr, pending.reason).await {
+            match admin_ban_ip(&st, &pending.email, &cidr, pending.reason).await {
                 Ok(html) => Html(html).into_response(),
                 Err(e) => {
                     warn!(err=%e, "ban ip failed");
                     StatusCode::SERVICE_UNAVAILABLE.into_response()
                 }
-            };
+            }
         }
     }
 }
@@ -1001,7 +997,7 @@ async fn download_links(
         anyhow::bail!("missing S3 client");
     };
 
-    let ttl = Duration::from_secs(st.compliance.presign_ttl_s.max(60).min(24 * 3600));
+    let ttl = Duration::from_secs(st.compliance.presign_ttl_s.clamp(60, 24 * 3600));
 
     let end = Utc::now().date_naive();
     let start = end - ChronoDuration::days(st.compliance.lookback_days.saturating_sub(1));
@@ -1012,7 +1008,7 @@ async fn download_links(
         let ts = Utc
             .with_ymd_and_hms(day.year(), day.month(), day.day(), 0, 0, 0)
             .single()
-            .unwrap_or_else(|| Utc::now());
+            .unwrap_or_else(Utc::now);
 
         let key = s3_key(&st.compliance.s3_prefix, stream, ts);
 
@@ -1055,7 +1051,7 @@ async fn download_links(
         body.push_str("<h2>URL manifest</h2><pre>");
         for (_d, u) in &urls {
             body.push_str(&html_escape(u));
-            body.push_str("\n");
+            body.push('\n');
         }
         body.push_str("</pre>");
     }
@@ -1081,6 +1077,7 @@ enum AdminReq {
 
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[allow(dead_code)] // Response payload fields are not always consumed by callers.
 enum AdminResp {
     Ok {
         kicked: u64,

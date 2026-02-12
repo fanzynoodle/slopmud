@@ -1,0 +1,25 @@
+version: 1
+zone_id: arena
+zone_name: Arena
+start_room: R_ARENA_PIT
+rooms:
+- id: R_ARENA_PIT
+  name: The Arena Pit
+  cluster: CL_ARENA_PIT
+  desc: |
+    A circular pit of packed sand, ringed by blunt stone.
+    There are no exits. This place exists to settle questions with steel.
+  exits:
+    - dir: north
+      to: R_ARENA_RING
+      len: 1
+- id: R_ARENA_RING
+  name: The Grease King's Ring
+  cluster: CL_ARENA_PIT
+  desc: |
+    The air here smells like rancid oil and old applause.
+    A scarred circle is carved into the ground, as if something heavy keeps returning to it.
+  exits:
+    - dir: south
+      to: R_ARENA_PIT
+      len: 1

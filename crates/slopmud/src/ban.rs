@@ -53,10 +53,12 @@ impl BanState {
         st
     }
 
+    #[allow(dead_code)]
     pub fn path(&self) -> &Path {
         &self.path
     }
 
+    #[allow(dead_code)]
     pub fn updated_unix(&self) -> u64 {
         self.updated_unix
     }

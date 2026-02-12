@@ -44,6 +44,7 @@ Anchors are not used for travel costs directly; portal coordinates below are.
 | Crater Gardens | (27,7) |
 | The Core | (30,7) |
 | The Seam | (33,7) |
+| Arena | (0,-4) |
 
 ## Portals (Entrances/Exits)
 

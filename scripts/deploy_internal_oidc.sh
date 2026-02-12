@@ -84,6 +84,11 @@ Environment=OIDC_ISSUER=${OIDC_ISSUER}
 Environment=OIDC_CLIENT_ID=${OIDC_CLIENT_ID}
 Environment=OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET}
 Environment=OIDC_ED25519_SEED_B64=${OIDC_ED25519_SEED_B64}
+Environment=OIDC_TOKEN_TTL_S=${OIDC_TOKEN_TTL_S:-}
+Environment=OIDC_AUTH_CODE_TTL_S=${OIDC_AUTH_CODE_TTL_S:-}
+Environment=OIDC_USERS_PATH=${OIDC_USERS_PATH:-}
+Environment=OIDC_ALLOWED_REDIRECT_URIS=${OIDC_ALLOWED_REDIRECT_URIS:-}
+Environment=OIDC_ALLOW_PLAINTEXT_PASSWORDS=${OIDC_ALLOW_PLAINTEXT_PASSWORDS:-}
 ExecStart=${OIDC_REMOTE_BIN}
 Restart=always
 RestartSec=2
@@ -112,4 +117,3 @@ ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
   set -euo pipefail; \
   sudo ss -lntp | grep -n \":${port}\\\\b\" || { echo 'not listening'; exit 1; } \
 "
-

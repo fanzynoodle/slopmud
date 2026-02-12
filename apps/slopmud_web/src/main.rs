@@ -820,6 +820,7 @@ async fn google_auth_start(
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)] // DTO: we only read a subset of fields from Google's token response.
 struct GoogleTokenResponse {
     access_token: String,
     #[serde(default)]
@@ -831,6 +832,7 @@ struct GoogleTokenResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)] // DTO: we only read a subset of fields from Google's userinfo response.
 struct GoogleUserInfo {
     sub: String,
     #[serde(default)]
@@ -1801,10 +1803,7 @@ impl WebSession {
                             if *shutdown_rx.borrow() { break; }
                         }
                         res = tokio::io::AsyncReadExt::read(&mut tcp_r, &mut buf) => {
-                            let n = match res {
-                                Ok(n) => n,
-                                Err(_) => 0,
-                            };
+                            let n = res.unwrap_or_default();
                             if n == 0 {
                                 break;
                             }
@@ -1835,10 +1834,10 @@ impl WebSession {
         let _ = self.shutdown_tx.send(true);
         // Also kick any attached websocket.
         // Best-effort: if we can't lock immediately, the sweeper will retry later.
-        if let Ok(mut st) = self.state.try_lock() {
-            if let Some(att) = st.attached.take() {
-                att.cancel.cancel();
-            }
+        if let Ok(mut st) = self.state.try_lock()
+            && let Some(att) = st.attached.take()
+        {
+            att.cancel.cancel();
         }
     }
 
