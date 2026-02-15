@@ -8,9 +8,9 @@ export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-$AWS_REGION}"
 usage() {
   cat >&2 <<'EOF'
 USAGE:
-  slopmud-shuttle-assets --env <dev|stg|prd> --from-s3 s3://BUCKET/KEY
-  slopmud-shuttle-assets --env <dev|stg|prd> --from-file /path/to/artifact.tgz
-  slopmud-shuttle-assets --env <dev|stg|prd> --rewrite-unit --from-file /path/to/artifact.tgz
+  slopmud-shuttle-assets --env <dev|stg|prd|sandbox> --from-s3 s3://BUCKET/KEY
+  slopmud-shuttle-assets --env <dev|stg|prd|sandbox> --from-file /path/to/artifact.tgz
+  slopmud-shuttle-assets --env <dev|stg|prd|sandbox> --rewrite-unit --from-file /path/to/artifact.tgz
 
 This script:
 - copies the asset tarball into /opt/slopmud/assets/<env>/<sha>/
@@ -90,6 +90,12 @@ case "$env_name" in
     shard_bind="127.0.0.1:5000"
     shard_bin_dst="/opt/slopmud/bin/shard-01-dev"
     ;;
+  sandbox)
+    service_name="slopmud-sandbox"
+    node_id="9"
+    bind="0.0.0.0:4500"
+    bin_dst="/opt/slopmud/bin/slopmud-sandbox"
+    ;;
   stg)
     service_name="slopmud-stg"
     node_id="3"
@@ -109,7 +115,7 @@ case "$env_name" in
     shard_bin_dst="/opt/slopmud/bin/shard-01-prd"
     ;;
   *)
-    echo "ERROR: invalid --env: $env_name (expected dev|stg|prd)" >&2
+    echo "ERROR: invalid --env: $env_name (expected dev|stg|prd|sandbox)" >&2
     exit 2
     ;;
 esac
