@@ -80,8 +80,14 @@ jobs:
           echo "Disk before cleanup"
           df -h /
 
-          rm -rf "$GITHUB_WORKSPACE/target"
-          rm -rf /opt/actions-runner/_work/slopmud/slopmud/target
+          avail_kb="$(df -Pk / | awk 'NR==2 {print $4}')"
+          if [ "${avail_kb}" -lt 1572864 ]; then
+            echo "Disk pressure detected; pruning local target caches to preserve stability."
+            rm -rf "$GITHUB_WORKSPACE/target"
+            rm -rf /opt/actions-runner/_work/slopmud/slopmud/target
+          else
+            echo "Keeping local cargo target directories for warm-cache compile speed."
+          fi
           find /opt/actions-runner/_diag -type f -name '*.log' -mtime +7 -delete || true
 
           avail_kb="$(df -Pk / | awk 'NR==2 {print $4}')"
@@ -125,6 +131,9 @@ jobs:
           cargo --version
           rustc --version
 
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+
       - name: Validate (fast + strict)
         shell: bash
         env:
@@ -137,11 +146,11 @@ jobs:
 
           # dev: keep this fast for iteration; stg: run the full validation suite.
           if [[ "$DEPLOY_ENV" == "dev" ]]; then
-            cargo build -q --workspace --all-targets
-            cargo test -q -p slopmud
+            cargo build --workspace --all-targets
+            cargo test -p slopmud
           else
-            cargo build -q --workspace --all-targets
-            cargo test -q
+            cargo build --workspace --all-targets
+            cargo test
             just world-validate
             just proto-lint
           fi

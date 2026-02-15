@@ -71,15 +71,31 @@ If SSH is unreachable, validate DNS/instance and SGs (`mud.slopmud.com` points t
 
   ```bash
   run_id="$(gh run list --workflow enterprise-cicd.yml --branch dev --limit 1 --json databaseId --jq '.[0].databaseId')"
-  gh run view "$run_id" --log --job \
-    "$(gh run view "$run_id" --json jobs --jq '.jobs[] | select(.name=="Build + Store Asset") | .id')"
+    gh run view "$run_id" --log --job \
+      "$(gh run view "$run_id" --json jobs --jq '.jobs[] | select(.name=="Build + Store Asset") | .id')"
+  ```
+
+- Live job progress and runner-tail while waiting:
+
+  ```bash
+  run_id="$(gh run list --workflow enterprise-cicd.yml --branch dev --limit 1 --json databaseId --jq '.[0].databaseId')"
+  gh run watch --interval 10 --workflow enterprise-cicd.yml
+  ```
+
+  For self-hosted runner live stdout while a step is running:
+
+  ```bash
+  ssh -o StrictHostKeyChecking=accept-new admin@mud.slopmud.com '
+    log="$(ls -1t /opt/actions-runner/_diag/Worker_*.log | head -n 1)"
+    tail -f "/opt/actions-runner/_diag/$log"
+  '
   ```
 
 - Live watch without opening the UI:
 
   ```bash
   gh run watch --workflow enterprise-cicd.yml --interval 10 --json status,databaseId,conclusion
-  ```
+  ``` 
 
 - SSH to deployment host from `env/<track>.env`:
 
