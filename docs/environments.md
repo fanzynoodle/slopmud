@@ -31,7 +31,7 @@ Port layout is documented in `docs/gaia_ports.md`.
 
 ## Fast Deploys (Code Only)
 
-For quick "hot" deploys that reuse the same asset tarball + install logic as CI, use:
+For quick "hot" deploys that reuse the same asset tarball + install logic as CI (broker + shard), use:
 
 ```bash
 just hot-deploy-slopmud dev

@@ -16,7 +16,8 @@ This script:
 - copies the asset tarball into /opt/slopmud/assets/<env>/<sha>/
 - extracts it
 - installs the slopmud binary into /opt/slopmud/bin/slopmud-<env>
-- restarts the systemd unit
+- installs the shard_01 binary into /opt/slopmud/bin/shard-01-<env> when present
+- restarts the slopmud and shard services
 
 By default, it does NOT overwrite an existing unit file. This is important because
 real deployments often bake critical env/config into the systemd unit.
@@ -85,6 +86,9 @@ case "$env_name" in
     node_id="2"
     bind="0.0.0.0:4000"
     bin_dst="/opt/slopmud/bin/slopmud-dev"
+    shard_service_name="shard-01-dev"
+    shard_bind="127.0.0.1:5000"
+    shard_bin_dst="/opt/slopmud/bin/shard-01-dev"
     ;;
   sandbox)
     service_name="slopmud-sandbox"
@@ -97,12 +101,18 @@ case "$env_name" in
     node_id="3"
     bind="0.0.0.0:4023"
     bin_dst="/opt/slopmud/bin/slopmud-stg"
+    shard_service_name="shard-01-stg"
+    shard_bind="127.0.0.1:5002"
+    shard_bin_dst="/opt/slopmud/bin/shard-01-stg"
     ;;
   prd)
     service_name="slopmud-prd"
     node_id="1"
     bind="0.0.0.0:4200"
     bin_dst="/opt/slopmud/bin/slopmud-prd"
+    shard_service_name="shard-01-prd"
+    shard_bind="127.0.0.1:5000"
+    shard_bin_dst="/opt/slopmud/bin/shard-01-prd"
     ;;
   *)
     echo "ERROR: invalid --env: $env_name (expected dev|stg|prd|sandbox)" >&2
@@ -115,6 +125,13 @@ load_state="$(systemctl show -p LoadState --value "$unit_name" 2>/dev/null || tr
 unit_exists="0"
 if [[ -n "$load_state" && "$load_state" != "not-found" ]]; then
   unit_exists="1"
+fi
+
+shard_unit_name="${shard_service_name}.service"
+shard_load_state="$(systemctl show -p LoadState --value "$shard_unit_name" 2>/dev/null || true)"
+shard_unit_exists="0"
+if [[ -n "$shard_load_state" && "$shard_load_state" != "not-found" ]]; then
+  shard_unit_exists="1"
 fi
 
 get_unit_env_var() {
@@ -131,29 +148,50 @@ get_unit_env_var() {
 }
 
 maybe_override_from_unit() {
-  local existing_bind=""
+  local unit="$1"
+  local env_key="$2"
+  local env_var=""
   local execstart=""
   local path_token=""
   local bin_from_unit=""
 
-  if [[ "$unit_exists" != "1" ]]; then
+  if [[ "$unit" == "$unit_name" && "$unit_exists" != "1" ]]; then
+    return 0
+  fi
+  if [[ "$unit" == "$shard_unit_name" && "$shard_unit_exists" != "1" ]]; then
     return 0
   fi
 
-  existing_bind="$(get_unit_env_var "$unit_name" "SLOPMUD_BIND" || true)"
-  if [[ -n "$existing_bind" ]]; then
-    bind="$existing_bind"
+  if [[ "$env_key" == "SLOPMUD_BIND" ]]; then
+    env_var="$(get_unit_env_var "$unit" "$env_key" || true)"
+    if [[ -n "$env_var" ]]; then
+      bind="$env_var"
+    fi
+  elif [[ "$env_key" == "SHARD_BIND" ]]; then
+    env_var="$(get_unit_env_var "$unit" "$env_key" || true)"
+    if [[ -n "$env_var" ]]; then
+      shard_bind="$env_var"
+    fi
   fi
 
-  execstart="$(systemctl show -p ExecStart --value "$unit_name" 2>/dev/null || true)"
+  execstart="$(systemctl show -p ExecStart --value "$unit" 2>/dev/null || true)"
   path_token="$(printf '%s' "$execstart" | grep -oE 'path=[^ ;}]+' | head -n 1 || true)"
   bin_from_unit="${path_token#path=}"
   if [[ -n "$bin_from_unit" && "$bin_from_unit" == /opt/slopmud/bin/* ]]; then
-    bin_dst="$bin_from_unit"
+    if [[ "$env_key" == "SLOPMUD_BIND" ]]; then
+      bin_dst="$bin_from_unit"
+    elif [[ "$env_key" == "SHARD_BIND" ]]; then
+      shard_bin_dst="$bin_from_unit"
+    fi
   fi
 }
 
-maybe_override_from_unit
+if [[ "$unit_exists" == "1" ]]; then
+  maybe_override_from_unit "$unit_name" "SLOPMUD_BIND"
+fi
+if [[ "$shard_unit_exists" == "1" ]]; then
+  maybe_override_from_unit "$shard_unit_name" "SHARD_BIND"
+fi
 
 if [[ -n "$from_s3" ]] && ! command -v aws >/dev/null 2>&1; then
   echo "ERROR: aws CLI is required for --from-s3 deployments" >&2
@@ -210,6 +248,12 @@ chown slopmud:slopmud /opt/slopmud
 echo "Installing binary -> ${bin_dst}"
 install -m 0755 -o root -g root "$bin_src" "$bin_dst"
 
+bin_shard_src="${assets_dir}/bin/shard_01"
+if [[ -x "$bin_shard_src" ]]; then
+  echo "Installing shard binary -> ${shard_bin_dst}"
+  install -m 0755 -o root -g root "$bin_shard_src" "$shard_bin_dst"
+fi
+
 unit_path="/etc/systemd/system/${service_name}.service"
 if [[ "$unit_exists" != "1" || "$rewrite_unit" == "1" ]]; then
   if [[ "$unit_exists" == "1" && "$rewrite_unit" == "1" ]]; then
@@ -232,7 +276,7 @@ WorkingDirectory=/opt/slopmud
 Environment=RUST_LOG=slopmud=info
 Environment=NODE_ID=${node_id}
 Environment=SLOPMUD_BIND=${bind}
-Environment=SHARD_ADDR=127.0.0.1:5000
+Environment=SHARD_ADDR=${shard_bind}
 ExecStart=${bin_dst}
 Restart=always
 RestartSec=2
@@ -255,5 +299,49 @@ systemctl restart "${service_name}"
 port="${bind##*:}"
 echo "Listening check (port ${port})"
 ss -lnt | grep -qE ":${port}\\b" || { echo "not listening on ${port}" >&2; exit 1; }
+
+if [[ -x "$bin_shard_src" ]]; then
+  shard_unit_path="/etc/systemd/system/${shard_service_name}.service"
+  if [[ "$shard_unit_exists" != "1" || "$rewrite_unit" == "1" ]]; then
+    if [[ "$shard_unit_exists" == "1" && "$rewrite_unit" == "1" ]]; then
+      echo "WARN: rewriting existing shard unit file: ${shard_unit_path}" >&2
+    else
+      echo "Writing shard systemd unit file: ${shard_unit_path}"
+    fi
+
+    cat >"$shard_unit_path" <<EOF
+[Unit]
+Description=slopmud shard_01 (env: ${env_name}, sha: ${sha})
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=slopmud
+Group=slopmud
+WorkingDirectory=/opt/slopmud
+Environment=RUST_LOG=shard_01=info
+Environment=SHARD_BIND=${shard_bind}
+ExecStart=${shard_bin_dst}
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  fi
+
+  echo "Restarting systemd unit: ${shard_service_name}"
+  if [[ "$shard_unit_exists" != "1" || "$rewrite_unit" == "1" ]]; then
+    systemctl daemon-reload
+    systemctl enable --now "${shard_service_name}"
+  fi
+  systemctl restart "${shard_service_name}"
+
+  shard_port="${shard_bind##*:}"
+  echo "Listening check (shard port ${shard_port})"
+  ss -lnt | grep -qE ":${shard_port}\\b" || { echo "not listening on ${shard_port}" >&2; exit 1; }
+fi
 
 echo "OK: ${service_name} deployed (sha=${sha})"
