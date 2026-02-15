@@ -63,7 +63,7 @@ ssh -i "$KEY_PATH" root@mud.slopmud.com "systemctl status slopmud-dev"
 
 ```bash
 ssh -i "$KEY_PATH" root@mud.slopmud.com \
-  'sudo systemctl status slopmud-dev slopmud-shuttle-assets --no-pager; \
+  'sudo systemctl status slopmud-dev --no-pager; \
    sudo ss -ltnp | rg "(4000|4023|4200|443|4242|4042|4043)"'
 ```
 
