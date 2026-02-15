@@ -201,12 +201,58 @@ jobs:
           echo "bucket=$bucket" >> "$GITHUB_OUTPUT"
           echo "key=$key" >> "$GITHUB_OUTPUT"
 
+  deploy_sandbox:
+    name: Deploy to sandbox (pre-dev smoke)
+    runs-on: [self-hosted, Linux]
+    timeout-minutes: 20
+    needs: build
+    if: needs.build.outputs.deploy_env == 'dev'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Assert Deploy Hook Installed
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null 2>&1
+
+      - name: Deploy to sandbox
+        shell: bash
+        env:
+          ARTIFACT_PATH: ${{ needs.build.outputs.artifact_path }}
+          BUCKET: ${{ needs.build.outputs.bucket }}
+          KEY: ${{ needs.build.outputs.key }}
+        run: |
+          set -euo pipefail
+
+          if [[ -n "${BUCKET}" && -n "${KEY}" ]]; then
+            sudo -n /usr/local/bin/slopmud-shuttle-assets \
+              --env sandbox \
+              --from-s3 "s3://${BUCKET}/${KEY}"
+          else
+            sudo -n /usr/local/bin/slopmud-shuttle-assets \
+              --env sandbox \
+              --from-file "$ARTIFACT_PATH"
+          fi
+
+      - name: Smoke Test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ./scripts/cicd/smoke_telnet.py --host 127.0.0.1 --port 4500
+
   deploy:
     name: Deploy To ${{ needs.build.outputs.deploy_env }}
     runs-on: [self-hosted, Linux]
     timeout-minutes: 20
-    needs: build
-    if: needs.build.outputs.deploy_env == 'dev' || needs.build.outputs.deploy_env == 'stg'
+    needs: [build, deploy_sandbox]
+    if: |
+      needs.build.outputs.deploy_env == 'stg' ||
+      (needs.build.outputs.deploy_env == 'dev' && needs.deploy_sandbox.result == 'success')
 
     steps:
       - name: Checkout

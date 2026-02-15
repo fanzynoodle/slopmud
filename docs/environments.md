@@ -3,6 +3,7 @@
 This repo uses the term **track** for deployment environments:
 
 - `dev`
+- `sandbox` (pre-dev validation target)
 - `stg` (staging)
 - `prd`
 
@@ -43,7 +44,14 @@ systemd unit without overwriting an existing unit file by default.
 
 ## How to verify a `dev` push reaches mud.slopmud.com
 
-For this repo, a push to `dev` should trigger `.github/workflows/enterprise-cicd.yml` and run the deploy job with `DEPLOY_ENV=dev`.
+For this repo, a push to `dev` should trigger `.github/workflows/enterprise-cicd.yml` and run:
+
+1. `build` (artifact generation)
+2. `deploy_sandbox` (deploy artifact to sandbox on port `4500`)
+3. smoke test against `127.0.0.1:4500`
+4. `deploy` (promote the same artifact to `dev` on `4000`)
+
+If any sandbox step fails, the `dev` deploy is blocked and `deploy` does not run.
 
 1. SSH key source (your org standard, one of):
    - AWS SSM parameter (example path: `/slopmud/dev/ops_ssh_key_pem`)
@@ -60,7 +68,7 @@ sudo systemctl status slopmud-dev --no-pager
 
 ```bash
 ssh -o StrictHostKeyChecking=accept-new admin@mud.slopmud.com \
-  'sudo ss -ltnp | rg "(4000|4023|4200|443|4242|4042|4043)"'
+  'sudo ss -ltnp | rg "(4000|4023|4200|4500|443|4242|4042|4043)"'
 ```
 
 If SSH is unreachable, validate DNS/instance and SGs (`mud.slopmud.com` points to the current instance and SSH is allowed from your egress IP).
