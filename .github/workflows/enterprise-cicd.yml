@@ -218,14 +218,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo cp scripts/cicd/slopmud-shuttle-assets /usr/local/bin/slopmud-shuttle-assets
-          sudo chmod 0755 /usr/local/bin/slopmud-shuttle-assets
+          chmod +x scripts/cicd/slopmud-shuttle-assets
 
       - name: Assert Deploy Hook Installed
         shell: bash
         run: |
           set -euo pipefail
-          sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null 2>&1
+          ./scripts/cicd/slopmud-shuttle-assets --help >/dev/null 2>&1
 
       - name: Deploy to sandbox
         shell: bash
@@ -237,11 +236,11 @@ jobs:
           set -euo pipefail
 
           if [[ -n "${BUCKET}" && -n "${KEY}" ]]; then
-            sudo -n /usr/local/bin/slopmud-shuttle-assets \
+            ./scripts/cicd/slopmud-shuttle-assets \
               --env sandbox \
               --from-s3 "s3://${BUCKET}/${KEY}"
           else
-            sudo -n /usr/local/bin/slopmud-shuttle-assets \
+            ./scripts/cicd/slopmud-shuttle-assets \
               --env sandbox \
               --from-file "$ARTIFACT_PATH"
           fi
@@ -271,14 +270,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo cp scripts/cicd/slopmud-shuttle-assets /usr/local/bin/slopmud-shuttle-assets
-          sudo chmod 0755 /usr/local/bin/slopmud-shuttle-assets
+          chmod +x scripts/cicd/slopmud-shuttle-assets
 
       - name: Assert Deploy Hook Installed
         shell: bash
         run: |
           set -euo pipefail
-          sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null 2>&1
+          ./scripts/cicd/slopmud-shuttle-assets --help >/dev/null 2>&1
 
       - name: Deploy
         shell: bash
@@ -291,11 +289,11 @@ jobs:
           set -euo pipefail
 
           if [[ -n "${BUCKET}" && -n "${KEY}" ]]; then
-            sudo -n /usr/local/bin/slopmud-shuttle-assets \
+            ./scripts/cicd/slopmud-shuttle-assets \
               --env "$DEPLOY_ENV" \
               --from-s3 "s3://${BUCKET}/${KEY}"
           else
-            sudo -n /usr/local/bin/slopmud-shuttle-assets \
+            ./scripts/cicd/slopmud-shuttle-assets \
               --env "$DEPLOY_ENV" \
               --from-file "$ARTIFACT_PATH"
           fi
@@ -332,14 +330,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo cp scripts/cicd/slopmud-shuttle-assets /usr/local/bin/slopmud-shuttle-assets
-          sudo chmod 0755 /usr/local/bin/slopmud-shuttle-assets
+          chmod +x scripts/cicd/slopmud-shuttle-assets
 
       - name: Assert Deploy Hook Installed
         shell: bash
         run: |
           set -euo pipefail
-          sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null 2>&1
+          ./scripts/cicd/slopmud-shuttle-assets --help >/dev/null 2>&1
 
       - name: Copy STG Asset -> prod/
         shell: bash
@@ -371,7 +368,7 @@ jobs:
           SHA: ${{ needs.build.outputs.sha }}
         run: |
           set -euo pipefail
-          sudo -n /usr/local/bin/slopmud-shuttle-assets \
+          ./scripts/cicd/slopmud-shuttle-assets \
             --env prd \
             --from-s3 "s3://${BUCKET}/prod/${SHA}/artifact.tgz"
 
