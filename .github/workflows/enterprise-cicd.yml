@@ -214,6 +214,13 @@ jobs:
         with:
           clean: false
 
+      - name: Sync local shuttle helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo cp scripts/cicd/slopmud-shuttle-assets /usr/local/bin/slopmud-shuttle-assets
+          sudo chmod 0755 /usr/local/bin/slopmud-shuttle-assets
+
       - name: Assert Deploy Hook Installed
         shell: bash
         run: |
@@ -259,6 +266,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           clean: false
+
+      - name: Sync local shuttle helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo cp scripts/cicd/slopmud-shuttle-assets /usr/local/bin/slopmud-shuttle-assets
+          sudo chmod 0755 /usr/local/bin/slopmud-shuttle-assets
 
       - name: Assert Deploy Hook Installed
         shell: bash
@@ -313,6 +327,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           clean: false
+
+      - name: Sync local shuttle helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo cp scripts/cicd/slopmud-shuttle-assets /usr/local/bin/slopmud-shuttle-assets
+          sudo chmod 0755 /usr/local/bin/slopmud-shuttle-assets
 
       - name: Assert Deploy Hook Installed
         shell: bash
