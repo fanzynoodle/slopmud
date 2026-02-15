@@ -1,4 +1,14 @@
 (() => {
+  // prd: `mud.slopmud.com` serves the homepage on :443 but runs OAuth on :4242.
+  // Redirect play/connect flows to the OAuth origin so Google SSO uses the right redirect_uri.
+  if (location.hostname === "mud.slopmud.com" && location.port !== "4242") {
+    const to = new URL(location.href);
+    to.protocol = "https:";
+    to.port = "4242";
+    location.replace(to.toString());
+    return;
+  }
+
   const term = document.getElementById("term");
   const wsUrlEl = document.getElementById("ws-url");
   const lineEl = document.getElementById("line");

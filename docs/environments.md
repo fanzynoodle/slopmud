@@ -27,3 +27,16 @@ Env files:
 - OAuth web: `env/<track>-gaia-oauth.env` (sources the static env file and overrides only the web bind ports/binary)
 
 Port layout is documented in `docs/gaia_ports.md`.
+
+## Fast Deploys (Code Only)
+
+For quick "hot" deploys that reuse the same asset tarball + install logic as CI, use:
+
+```bash
+just hot-deploy-slopmud dev
+just hot-deploy-slopmud stg
+just hot-deploy-slopmud prd
+```
+
+This relies on `scripts/cicd/slopmud-shuttle-assets`, which installs the new broker binary and restarts the
+systemd unit without overwriting an existing unit file by default.

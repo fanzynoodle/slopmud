@@ -632,6 +632,10 @@ deploy-slopmud env="prd":
     ./scripts/deploy_slopmud.sh "env/{{env}}.env"; \
   '
 
+# Fast deploy: use the CI-style asset tarball + slopmud-shuttle-assets (no unit rewrite by default).
+hot-deploy-slopmud env="prd":
+  ./scripts/cicd/hot_deploy_slopmud.sh "env/{{env}}.env"
+
 deploy-shard env="prd":
   bash -ceu ' \
     set -o pipefail; \

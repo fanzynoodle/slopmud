@@ -77,13 +77,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for c in gcc make pkg-config; do
+          for c in gcc make pkg-config just python3 tar; do
             command -v "$c" >/dev/null 2>&1 || {
               echo "missing build dependency: $c" >&2
               echo "bootstrap the runner once (as admin on the host) using scripts/cicd/bootstrap_runner.sh" >&2
               exit 2
             }
           done
+
+          # Only required for the S3 artifact path; dev track can fall back to local artifacts.
+          command -v aws >/dev/null 2>&1 || {
+            echo "WARN: aws CLI is missing; S3 upload will fail (dev continues, stg/prod requires aws)" >&2
+          }
 
       - name: Rust Toolchain On PATH
         shell: bash
@@ -103,14 +108,22 @@ jobs:
         shell: bash
         env:
           RUSTFLAGS: "-D warnings"
+          DEPLOY_ENV: ${{ steps.meta.outputs.deploy_env }}
         run: |
           set -euo pipefail
           just fmt-check
           just py-check
-          cargo build -q --workspace --all-targets
-          cargo test -q
-          just world-validate
-          just proto-lint
+
+          # dev: keep this fast for iteration; stg: run the full validation suite.
+          if [[ "$DEPLOY_ENV" == "dev" ]]; then
+            cargo build -q --workspace --all-targets
+            cargo test -q -p slopmud
+          else
+            cargo build -q --workspace --all-targets
+            cargo test -q
+            just world-validate
+            just proto-lint
+          fi
 
       - name: Build Asset (non-cleanroom)
         id: build_asset

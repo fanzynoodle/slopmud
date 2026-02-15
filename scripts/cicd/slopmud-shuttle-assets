@@ -10,12 +10,19 @@ usage() {
 USAGE:
   slopmud-shuttle-assets --env <dev|stg|prd> --from-s3 s3://BUCKET/KEY
   slopmud-shuttle-assets --env <dev|stg|prd> --from-file /path/to/artifact.tgz
+  slopmud-shuttle-assets --env <dev|stg|prd> --rewrite-unit --from-file /path/to/artifact.tgz
 
 This script:
 - copies the asset tarball into /opt/slopmud/assets/<env>/<sha>/
 - extracts it
 - installs the slopmud binary into /opt/slopmud/bin/slopmud-<env>
-- (re)writes the systemd unit and restarts it
+- restarts the systemd unit
+
+By default, it does NOT overwrite an existing unit file. This is important because
+real deployments often bake critical env/config into the systemd unit.
+
+If the unit is missing, or you pass --rewrite-unit, the script writes a minimal
+unit file and enables it.
 
 NOTE:
   Must run as root (use sudo). Intended to be callable by the GitHub Actions runner user
@@ -31,6 +38,7 @@ fi
 env_name=""
 from_s3=""
 from_file=""
+rewrite_unit="0"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -40,6 +48,8 @@ while [[ $# -gt 0 ]]; do
       from_s3="${2:-}"; shift 2 ;;
     --from-file)
       from_file="${2:-}"; shift 2 ;;
+    --rewrite-unit)
+      rewrite_unit="1"; shift ;;
     -h|--help)
       usage
       exit 0
@@ -94,6 +104,56 @@ case "$env_name" in
     ;;
 esac
 
+unit_name="${service_name}.service"
+load_state="$(systemctl show -p LoadState --value "$unit_name" 2>/dev/null || true)"
+unit_exists="0"
+if [[ -n "$load_state" && "$load_state" != "not-found" ]]; then
+  unit_exists="1"
+fi
+
+get_unit_env_var() {
+  local unit="$1"
+  local var="$2"
+
+  # `systemctl show -p Environment` prints a space-separated list of KEY=VALUE items.
+  # Our values don't contain spaces, so tokenization is safe.
+  systemctl show -p Environment --value "$unit" 2>/dev/null \
+    | tr ' ' '\n' \
+    | sed 's/^"//; s/"$//' \
+    | sed -n "s/^${var}=//p" \
+    | head -n 1
+}
+
+maybe_override_from_unit() {
+  local existing_bind=""
+  local execstart=""
+  local path_token=""
+  local bin_from_unit=""
+
+  if [[ "$unit_exists" != "1" ]]; then
+    return 0
+  fi
+
+  existing_bind="$(get_unit_env_var "$unit_name" "SLOPMUD_BIND" || true)"
+  if [[ -n "$existing_bind" ]]; then
+    bind="$existing_bind"
+  fi
+
+  execstart="$(systemctl show -p ExecStart --value "$unit_name" 2>/dev/null || true)"
+  path_token="$(printf '%s' "$execstart" | grep -oE 'path=[^ ;}]+' | head -n 1 || true)"
+  bin_from_unit="${path_token#path=}"
+  if [[ -n "$bin_from_unit" && "$bin_from_unit" == /opt/slopmud/bin/* ]]; then
+    bin_dst="$bin_from_unit"
+  fi
+}
+
+maybe_override_from_unit
+
+if [[ -n "$from_s3" ]] && ! command -v aws >/dev/null 2>&1; then
+  echo "ERROR: aws CLI is required for --from-s3 deployments" >&2
+  exit 2
+fi
+
 sha="unknown"
 if [[ -n "$from_s3" ]]; then
   if [[ "$from_s3" != s3://*/* ]]; then
@@ -145,7 +205,14 @@ echo "Installing binary -> ${bin_dst}"
 install -m 0755 -o root -g root "$bin_src" "$bin_dst"
 
 unit_path="/etc/systemd/system/${service_name}.service"
-cat >"$unit_path" <<EOF
+if [[ "$unit_exists" != "1" || "$rewrite_unit" == "1" ]]; then
+  if [[ "$unit_exists" == "1" && "$rewrite_unit" == "1" ]]; then
+    echo "WARN: rewriting existing unit file: ${unit_path}" >&2
+  else
+    echo "Writing systemd unit file: ${unit_path}"
+  fi
+
+  cat >"$unit_path" <<EOF
 [Unit]
 Description=slopmud service (env: ${env_name}, sha: ${sha})
 After=network-online.target
@@ -170,10 +237,13 @@ CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 [Install]
 WantedBy=multi-user.target
 EOF
+fi
 
 echo "Restarting systemd unit: ${service_name}"
-systemctl daemon-reload
-systemctl enable --now "${service_name}"
+if [[ "$unit_exists" != "1" || "$rewrite_unit" == "1" ]]; then
+  systemctl daemon-reload
+  systemctl enable --now "${service_name}"
+fi
 systemctl restart "${service_name}"
 
 port="${bind##*:}"
