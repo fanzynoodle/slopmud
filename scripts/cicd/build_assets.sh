@@ -23,7 +23,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
 out_dir="${assets_root}/${track}/${sha}"
-target_dir="${assets_root}/.cargo-target/${track}"
+target_dir="${CARGO_TARGET_DIR:-${repo_root}/${assets_root}/.cargo-target/${track}}"
 
 if [[ "$clean_build" == "1" ]]; then
   rm -rf "$target_dir"
@@ -31,7 +31,7 @@ fi
 
 mkdir -p "${out_dir}/bin"
 
-export CARGO_TARGET_DIR="$repo_root/$target_dir"
+export CARGO_TARGET_DIR="$target_dir"
 
 echo "Building (track=${track}, clean=${clean_build}, sha=${sha})" >&2
 # Keep stdout clean so callers can safely capture the artifact path.
