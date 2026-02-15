@@ -42,6 +42,7 @@ sudo -u ghrunner -H bash -lc ' \
   fi; \
   "$HOME/.cargo/bin/rustup" toolchain install stable --profile minimal; \
   "$HOME/.cargo/bin/rustup" default stable; \
+  "$HOME/.cargo/bin/rustup" component add rustfmt; \
   "$HOME/.cargo/bin/cargo" --version; \
   "$HOME/.cargo/bin/rustc" --version; \
 '
