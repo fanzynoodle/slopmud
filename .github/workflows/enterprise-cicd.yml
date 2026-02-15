@@ -73,6 +73,27 @@ jobs:
           esac
           echo "deploy_env=$deploy_env" >> "$GITHUB_OUTPUT"
 
+      - name: Preflight disk hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Disk before cleanup"
+          df -h /
+
+          rm -rf "$GITHUB_WORKSPACE/target"
+          rm -rf /opt/actions-runner/_work/slopmud/slopmud/target
+          find /opt/actions-runner/_diag -type f -name '*.log' -mtime +7 -delete || true
+
+          avail_kb="$(df -Pk / | awk 'NR==2 {print $4}')"
+          if [ "${avail_kb}" -lt 1048576 ]; then
+            echo "insufficient free space on / (available ${avail_kb} KB)" >&2
+            echo "manual cleanup required on the runner host before retrying" >&2
+            exit 2
+          fi
+
+          echo "Disk after cleanup"
+          df -h /
+
       - name: Assert Runner Build Deps
         shell: bash
         run: |

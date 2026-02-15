@@ -45,26 +45,47 @@ systemd unit without overwriting an existing unit file by default.
 
 For this repo, a push to `dev` should trigger `.github/workflows/enterprise-cicd.yml` and run the deploy job with `DEPLOY_ENV=dev`.
 
-To check live host state:
-
 1. SSH key source (your org standard, one of):
    - AWS SSM parameter (example path: `/slopmud/dev/ops_ssh_key_pem`)
    - AWS Key Vault secret (equivalent secret name/path used by your organization)
 
-2. Write the private key to disk, lock it down, and connect using `root` or `admin`:
+2. Connect using `admin` or `root` and run host checks:
 
 ```bash
-KEY_PATH=~/.ssh/mud-dev-host-key.pem
-chmod 0600 "$KEY_PATH"
-ssh -i "$KEY_PATH" root@mud.slopmud.com "systemctl status slopmud-dev"
+ssh -o StrictHostKeyChecking=accept-new admin@mud.slopmud.com
+sudo systemctl status slopmud-dev --no-pager
 ```
 
-3. Confirm services are running and on the expected port:
+3. Confirm services are running and on the expected ports:
 
 ```bash
-ssh -i "$KEY_PATH" root@mud.slopmud.com \
-  'sudo systemctl status slopmud-dev --no-pager; \
-   sudo ss -ltnp | rg "(4000|4023|4200|443|4242|4042|4043)"'
+ssh -o StrictHostKeyChecking=accept-new admin@mud.slopmud.com \
+  'sudo ss -ltnp | rg "(4000|4023|4200|443|4242|4042|4043)"'
 ```
 
 If SSH is unreachable, validate DNS/instance and SGs (`mud.slopmud.com` points to the current instance and SSH is allowed from your egress IP).
+
+## CI/CD troubleshooting
+
+- Quick tail of latest `dev` workflow run:
+
+  ```bash
+  run_id="$(gh run list --workflow enterprise-cicd.yml --branch dev --limit 1 --json databaseId --jq '.[0].databaseId')"
+  gh run view "$run_id" --log --job \
+    "$(gh run view "$run_id" --json jobs --jq '.jobs[] | select(.name=="Build + Store Asset") | .id')"
+  ```
+
+- Live watch without opening the UI:
+
+  ```bash
+  gh run watch --workflow enterprise-cicd.yml --interval 10 --json status,databaseId,conclusion
+  ```
+
+- SSH to deployment host from `env/<track>.env`:
+
+  ```bash
+  source env/dev.env
+  ssh -o StrictHostKeyChecking=accept-new -p "$SSH_PORT" "$SSH_USER@$HOST"
+  ```
+
+- If SSH fails from your machine, refresh the instance by updating DNS with Terraform (`terragrunt apply`) and confirm `HOST` in env files points at the active instance.
