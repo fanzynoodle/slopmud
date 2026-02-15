@@ -80,13 +80,17 @@ jobs:
           echo "Disk before cleanup"
           df -h /
 
-          avail_kb="$(df -Pk / | awk 'NR==2 {print $4}')"
-          if [ "${avail_kb}" -lt 1572864 ]; then
-            echo "Disk pressure detected; pruning local target caches to preserve stability."
-            rm -rf "$GITHUB_WORKSPACE/target"
-            rm -rf /opt/actions-runner/_work/slopmud/slopmud/target
+          if [[ "${GITHUB_REF_NAME}" == "dev" ]]; then
+            echo "Dev branch: keeping workspace and target caches for warm builds."
           else
-            echo "Keeping local cargo target directories for warm-cache compile speed."
+            avail_kb="$(df -Pk / | awk 'NR==2 {print $4}')"
+            if [ "${avail_kb}" -lt 1572864 ]; then
+              echo "Disk pressure detected; pruning local target caches to preserve stability."
+              rm -rf "$GITHUB_WORKSPACE/target"
+              rm -rf /opt/actions-runner/_work/slopmud/slopmud/target
+            else
+              echo "Keeping local cargo target directories for warm-cache compile speed."
+            fi
           fi
           find /opt/actions-runner/_diag -type f -name '*.log' -mtime +7 -delete || true
 
