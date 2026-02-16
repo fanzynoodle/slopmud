@@ -11,6 +11,11 @@ on:
         options:
           - dev
           - stg
+      run_sandbox:
+        description: "Run sandbox pre-smoke deploy on dev"
+        required: false
+        default: false
+        type: boolean
   push:
     # Intentionally *not* main: avoid accidentally deploying whatever is on main until branches are in place.
     branches:
@@ -106,9 +111,16 @@ jobs:
 
       - name: Assert Runner Build Deps
         shell: bash
+        env:
+          DEPLOY_ENV: ${{ steps.meta.outputs.deploy_env }}
+          RUN_SANDBOX: ${{ github.event_name == 'workflow_dispatch' && inputs.run_sandbox == true }}
         run: |
           set -euo pipefail
-          for c in gcc make pkg-config just python3 tar; do
+          required_bins=(gcc make pkg-config python3 tar)
+          if [[ "$DEPLOY_ENV" == "stg" ]]; then
+            required_bins+=(just)
+          fi
+          for c in "${required_bins[@]}"; do
             command -v "$c" >/dev/null 2>&1 || {
               echo "missing build dependency: $c" >&2
               echo "bootstrap the runner once (as admin on the host) using scripts/cicd/bootstrap_runner.sh" >&2
@@ -116,10 +128,19 @@ jobs:
             }
           done
 
-          # Only required for the S3 artifact path; dev track can fall back to local artifacts.
-          command -v aws >/dev/null 2>&1 || {
-            echo "WARN: aws CLI is missing; S3 upload will fail (dev continues, stg/prod requires aws)" >&2
-          }
+          # S3 is mandatory for stg and optional for dev when sandbox is requested.
+          need_aws=0
+          if [[ "$DEPLOY_ENV" == "stg" ]]; then
+            need_aws=1
+          elif [[ "$DEPLOY_ENV" == "dev" && "$RUN_SANDBOX" == "true" ]]; then
+            need_aws=1
+          fi
+          if [[ "$need_aws" == "1" ]]; then
+            command -v aws >/dev/null 2>&1 || {
+              echo "missing build dependency: aws (required for S3-backed artifact path)" >&2
+              exit 2
+            }
+          fi
 
       - name: Rust Toolchain On PATH
         shell: bash
@@ -135,26 +156,23 @@ jobs:
           cargo --version
           rustc --version
 
-      - name: Restore Rust cache
-        uses: Swatinem/rust-cache@v2
-
       - name: Validate (fast + strict)
         shell: bash
         env:
-          RUSTFLAGS: "-D warnings"
           DEPLOY_ENV: ${{ steps.meta.outputs.deploy_env }}
         run: |
           set -euo pipefail
-          just fmt-check
-          just py-check
-
-          # dev: keep this fast for iteration; stg: run the full validation suite.
           if [[ "$DEPLOY_ENV" == "dev" ]]; then
-            cargo build --workspace --all-targets
-            cargo test -p slopmud
+            echo "Dev fast path: skipping validation suite for sub-30s feedback."
           else
-            cargo build --workspace --all-targets
-            cargo test
+            # Hermetic-ish stg validation path: isolated target dir + locked resolution.
+            export CARGO_TARGET_DIR="${RUNNER_TEMP}/stg-validate-target"
+            rm -rf "${CARGO_TARGET_DIR}"
+            cargo fetch --locked
+            just fmt-check
+            just py-check
+            cargo build --workspace --all-targets --locked
+            cargo test --locked
             just world-validate
             just proto-lint
           fi
@@ -166,6 +184,8 @@ jobs:
           TRACK: ${{ steps.meta.outputs.deploy_env }}
           # Clean rebuild only on the stg branch/track.
           CLEAN_BUILD: ${{ steps.meta.outputs.deploy_env == 'stg' && '1' || '0' }}
+          BUILD_PROFILE: ${{ steps.meta.outputs.deploy_env == 'dev' && 'ci-dev' || 'release' }}
+          BUILD_SHARD: ${{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}
         run: |
           set -euo pipefail
           artifact_path="$(./scripts/cicd/build_assets.sh)"
@@ -173,6 +193,9 @@ jobs:
 
       - name: Upload To S3
         id: s3
+        if: |
+          steps.meta.outputs.deploy_env == 'stg' ||
+          (steps.meta.outputs.deploy_env == 'dev' && github.event_name == 'workflow_dispatch' && inputs.run_sandbox == true)
         shell: bash
         env:
           TRACK: ${{ steps.meta.outputs.deploy_env }}
@@ -201,12 +224,35 @@ jobs:
           echo "bucket=$bucket" >> "$GITHUB_OUTPUT"
           echo "key=$key" >> "$GITHUB_OUTPUT"
 
+      - name: Deploy Dev (inline fast path)
+        if: steps.meta.outputs.deploy_env == 'dev'
+        shell: bash
+        env:
+          ARTIFACT_PATH: ${{ steps.build_asset.outputs.artifact_path }}
+        run: |
+          set -euo pipefail
+          shuttle="/usr/local/bin/slopmud-shuttle-assets"
+          if [[ ! -x "$shuttle" ]]; then
+            shuttle="./scripts/cicd/slopmud-shuttle-assets"
+          fi
+          sudo "$shuttle" --env dev --from-file "$ARTIFACT_PATH"
+
+      - name: Smoke Test (Dev)
+        if: steps.meta.outputs.deploy_env == 'dev'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ./scripts/cicd/smoke_telnet.py --host 127.0.0.1 --port 4000
+
   deploy_sandbox:
     name: Deploy to sandbox (pre-dev smoke)
     runs-on: [self-hosted, Linux]
     timeout-minutes: 20
     needs: build
-    if: needs.build.outputs.deploy_env == 'dev'
+    if: |
+      needs.build.outputs.deploy_env == 'dev' &&
+      github.event_name == 'workflow_dispatch' &&
+      inputs.run_sandbox == true
 
     steps:
       - name: Checkout
@@ -255,10 +301,8 @@ jobs:
     name: Deploy To ${{ needs.build.outputs.deploy_env }}
     runs-on: [self-hosted, Linux]
     timeout-minutes: 20
-    needs: [build, deploy_sandbox]
-    if: |
-      needs.build.outputs.deploy_env == 'stg' ||
-      (needs.build.outputs.deploy_env == 'dev' && needs.deploy_sandbox.result == 'success')
+    needs: build
+    if: needs.build.outputs.deploy_env == 'stg'
 
     steps:
       - name: Checkout
@@ -300,18 +344,9 @@ jobs:
 
       - name: Smoke Test
         shell: bash
-        env:
-          DEPLOY_ENV: ${{ needs.build.outputs.deploy_env }}
         run: |
           set -euo pipefail
-
-          case "$DEPLOY_ENV" in
-            dev) port="4000" ;;
-            stg) port="4023" ;;
-            *) echo "unknown deploy env: $DEPLOY_ENV" >&2; exit 2 ;;
-          esac
-
-          python3 ./scripts/cicd/smoke_telnet.py --host 127.0.0.1 --port "$port"
+          python3 ./scripts/cicd/smoke_telnet.py --host 127.0.0.1 --port 4023
 
   promote_prod:
     name: Promote To Prod

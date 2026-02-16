@@ -9,6 +9,7 @@ set -euo pipefail
 track="${TRACK:-dev}"
 clean_build="${CLEAN_BUILD:-0}"
 build_shard="${BUILD_SHARD:-1}"
+build_profile="${BUILD_PROFILE:-release}"
 assets_root="${ASSETS_ROOT:-assets}"
 sha="${GITHUB_SHA:-}"
 
@@ -33,24 +34,38 @@ fi
 mkdir -p "${out_dir}/bin"
 
 export CARGO_TARGET_DIR="$target_dir"
+case "$build_profile" in
+  release)
+    cargo_profile_args=(--release)
+    profile_dir="release"
+    ;;
+  dev|debug)
+    cargo_profile_args=()
+    profile_dir="debug"
+    ;;
+  *)
+    cargo_profile_args=(--profile "$build_profile")
+    profile_dir="$build_profile"
+    ;;
+esac
 
-echo "Building (track=${track}, clean=${clean_build}, sha=${sha})" >&2
+echo "Building (track=${track}, clean=${clean_build}, profile=${build_profile}, shard=${build_shard}, sha=${sha})" >&2
 # Keep stdout clean so callers can safely capture the artifact path.
-cargo build -p slopmud --release 1>&2
+cargo build -p slopmud "${cargo_profile_args[@]}" 1>&2
 
 if [[ "$build_shard" == "1" ]]; then
   echo "Building shard_01 (track=${track}, clean=${clean_build}, sha=${sha})" >&2
-  cargo build -p shard_01 --release 1>&2
+  cargo build -p shard_01 "${cargo_profile_args[@]}" 1>&2
 else
   echo "Skipping shard_01 build (BUILD_SHARD=${build_shard})" >&2
 fi
 
-bin_src="${CARGO_TARGET_DIR}/release/slopmud"
+bin_src="${CARGO_TARGET_DIR}/${profile_dir}/slopmud"
 if [[ ! -x "$bin_src" ]]; then
   echo "ERROR: expected binary at ${bin_src}" >&2
   exit 2
 fi
-bin_shard_src="${CARGO_TARGET_DIR}/release/shard_01"
+bin_shard_src="${CARGO_TARGET_DIR}/${profile_dir}/shard_01"
 if [[ "$build_shard" == "1" ]]; then
   if [[ ! -x "$bin_shard_src" ]]; then
     echo "ERROR: expected binary at ${bin_shard_src}" >&2
@@ -67,6 +82,8 @@ cat >"${out_dir}/BUILD_INFO.txt" <<EOF
 sha=${sha}
 track=${track}
 clean_build=${clean_build}
+build_profile=${build_profile}
+build_shard=${build_shard}
 built_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 cargo=$(cargo --version 2>/dev/null || true)
 rustc=$(rustc --version 2>/dev/null || true)
