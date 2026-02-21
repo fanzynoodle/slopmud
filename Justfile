@@ -419,8 +419,18 @@ bot-party-run-local:
 e2e-local:
   python3 scripts/e2e_local.py
 
+e2e-local-fast:
+  python3 scripts/e2e_local.py --skip-build
+
 e2e-party:
   python3 scripts/e2e_party_run.py
+
+e2e-party-fast:
+  python3 scripts/e2e_party_run.py --skip-build
+
+e2e-fast:
+  just e2e-local-fast
+  just e2e-party-fast
 
 e2e-web-local:
   python3 scripts/e2e_web_selenium_local.py

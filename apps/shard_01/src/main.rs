@@ -470,6 +470,45 @@ fn parse_qty_and_item(s: &str) -> Option<(u32, String)> {
     Some((1, parts.join(" ")))
 }
 
+fn parse_tell_args<'a>(line: &'a str, command: &str) -> Option<(&'a str, &'a str)> {
+    let rest = command_arg(line, command)?;
+    let mut parts = rest.splitn(2, |c: char| c.is_whitespace());
+    let who = parts.next()?.trim();
+    let msg = parts.next().unwrap_or("").trim();
+    if who.is_empty() || msg.is_empty() {
+        None
+    } else {
+        Some((who, msg))
+    }
+}
+
+fn command_arg(line: &str, command: &str) -> Option<&str> {
+    let Some(rest) = line.strip_prefix(command) else {
+        return None;
+    };
+    if !rest.starts_with(' ') {
+        return None;
+    }
+    let arg = rest.trim();
+    if arg.is_empty() {
+        None
+    } else {
+        Some(arg)
+    }
+}
+
+fn shout_payload(line: &str, speaker: &str) -> Option<String> {
+    command_arg(line, "shout").map(|msg| format!("{speaker} shouts: {msg}"))
+}
+
+fn room_emote_payload(line: &str, speaker: &str, command: &str) -> Option<String> {
+    command_arg(line, command).map(|msg| format!("* {speaker} {msg}"))
+}
+
+fn room_emote_noarg(speaker: &str, verb: &str) -> String {
+    format!("* {speaker} {verb}")
+}
+
 fn is_tavern_sellable(token: &str) -> bool {
     let t = token.trim().to_ascii_lowercase();
     t == ITEM_STENCHPOUCH || t == "stench pouch" || t == "pouch"
@@ -3105,6 +3144,21 @@ impl World {
                 continue;
             }
             write_resp_async(fw, RESP_OUTPUT, controller, &b).await?;
+        }
+        Ok(())
+    }
+
+    async fn broadcast_all_sessions(
+        &self,
+        fw: &mut FrameWriter<tokio::net::tcp::OwnedWriteHalf>,
+        msg: &str,
+    ) -> std::io::Result<()> {
+        let mut b = Vec::with_capacity(msg.len() + 2);
+        b.extend_from_slice(msg.as_bytes());
+        b.extend_from_slice(b"\r\n");
+
+        for sid in self.sessions.keys() {
+            write_resp_async(fw, RESP_OUTPUT, *sid, &b).await?;
         }
         Ok(())
     }
@@ -6581,6 +6635,129 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     continue;
                 }
 
+                if lc == "shout" {
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"huh? (try: shout <msg>)\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+                if lc == "yell" {
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"huh? (try: yell <msg>)\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+                if let Some(shout) = shout_payload(line, &p.name) {
+                    world.broadcast_all_sessions(&mut fw, &shout).await?;
+                    continue;
+                }
+                if let Some(msg) = command_arg(line, "yell") {
+                    let shout = format!("{} shouts: {}", p.name, msg);
+                    world.broadcast_all_sessions(&mut fw, &shout).await?;
+                    continue;
+                }
+
+                if lc == "emote" {
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"huh? (try: emote <action>)\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+                if let Some(emote) = room_emote_payload(line, &p.name, "emote") {
+                    world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
+                    continue;
+                }
+                if lc == "em" {
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"huh? (try: emote <action>)\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+                if let Some(emote) = room_emote_payload(line, &p.name, "em") {
+                    world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
+                    continue;
+                }
+
+                if lc == "me" {
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"huh? (try: me <action>)\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+                if let Some(emote) = room_emote_payload(line, &p.name, "me") {
+                    world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
+                    continue;
+                }
+                if lc == "pose" {
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"huh? (try: pose <action>)\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+                if let Some(emote) = room_emote_payload(line, &p.name, "pose") {
+                    world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
+                    continue;
+                }
+                if lc == "dance" {
+                    let emote = room_emote_noarg(&p.name, "dances");
+                    world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
+                    continue;
+                }
+                if lc == "smile" {
+                    let emote = room_emote_noarg(&p.name, "smiles");
+                    world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
+                    continue;
+                }
+                if lc == "nod" {
+                    let emote = room_emote_noarg(&p.name, "nods");
+                    world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
+                    continue;
+                }
+                if lc == "bow" {
+                    let emote = room_emote_noarg(&p.name, "bows");
+                    world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
+                    continue;
+                }
+                if lc == "laugh" {
+                    let emote = room_emote_noarg(&p.name, "laughs");
+                    world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
+                    continue;
+                }
+                if lc == "wink" {
+                    let emote = room_emote_noarg(&p.name, "winks");
+                    world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
+                    continue;
+                }
+                if lc == "salute" {
+                    let emote = room_emote_noarg(&p.name, "salutes");
+                    world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
+                    continue;
+                }
+
                 if lc == "tell" {
                     write_resp_async(
                         &mut fw,
@@ -6591,22 +6768,7 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     .await?;
                     continue;
                 }
-                if lc.starts_with("tell ") {
-                    let rest = line[5..].trim();
-                    let mut parts = rest.splitn(2, |c: char| c.is_whitespace());
-                    let who = parts.next().unwrap_or("").trim();
-                    let msg = parts.next().unwrap_or("").trim();
-                    if who.is_empty() || msg.is_empty() {
-                        write_resp_async(
-                            &mut fw,
-                            RESP_OUTPUT,
-                            session,
-                            b"huh? (try: tell <player> <msg>)\r\n",
-                        )
-                        .await?;
-                        continue;
-                    }
-
+                if let Some((who, msg)) = parse_tell_args(line, "tell") {
                     let Some(tgt_id) = world.find_player_by_prefix(who) else {
                         write_resp_async(
                             &mut fw,
@@ -6646,6 +6808,60 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
 
                     let out_to = format!("{} tells you: {}\r\n", p.name, msg);
                     let out_from = format!("you tell {}: {}\r\n", tgt_name, msg);
+                    let _ = write_resp_async(&mut fw, RESP_OUTPUT, tgt_sid, out_to.as_bytes()).await;
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, out_from.as_bytes()).await?;
+                    continue;
+                }
+                if lc == "whisper" {
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"huh? (try: whisper <player> <msg>)\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+                if let Some((who, msg)) = parse_tell_args(line, "whisper") {
+                    let Some(tgt_id) = world.find_player_by_prefix(who) else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"tell: no such player (or ambiguous)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    if tgt_id == p.id {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"tell: (to yourself)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    let Some(tgt_sid) = world.chars.get(&tgt_id).and_then(|c| c.controller) else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"tell: player is not online\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+
+                    let tgt_name = world
+                        .chars
+                        .get(&tgt_id)
+                        .map(|c| c.name.clone())
+                        .unwrap_or_else(|| who.to_string());
+
+                    let out_to = format!("{} whispers: {}\r\n", p.name, msg);
+                    let out_from = format!("you whisper {}: {}\r\n", tgt_name, msg);
                     let _ = write_resp_async(&mut fw, RESP_OUTPUT, tgt_sid, out_to.as_bytes()).await;
                     write_resp_async(&mut fw, RESP_OUTPUT, session, out_from.as_bytes()).await?;
                     continue;
@@ -9327,6 +9543,20 @@ whomans\r\n\
 go <exit>\r\n\
 (or just type an exit name / alias)\r\n\
 say <msg>\r\n\
+emote <action>\r\n\
+me <action>\r\n\
+em <action>\r\n\
+pose <action>\r\n\
+yell <msg>\r\n\
+whisper <player> <msg>\r\n\
+dance\r\n\
+smile\r\n\
+nod\r\n\
+bow\r\n\
+laugh\r\n\
+wink\r\n\
+salute\r\n\
+shout <msg>\r\n\
 exit\r\n\
 ";
     s.to_string()
@@ -9446,5 +9676,74 @@ fn normalize_dir(line: &str) -> Option<&'static str> {
         "up" | "u" => Some("up"),
         "down" | "d" => Some("down"),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn command_arg_extracts_action_text() {
+        assert_eq!(command_arg("shout hello everyone", "shout"), Some("hello everyone"));
+        assert_eq!(command_arg("emote   grins", "emote"), Some("grins"));
+        assert_eq!(command_arg("pose", "pose"), None);
+        assert_eq!(command_arg("pose   ", "pose"), None);
+        assert_eq!(command_arg("pose   bows", "pose"), Some("bows"));
+    }
+
+    #[test]
+    fn shout_payload_rejects_empty_messages() {
+        assert_eq!(
+            shout_payload("shout hello everyone", "Alice"),
+            Some("Alice shouts: hello everyone".to_string())
+        );
+        assert_eq!(shout_payload("shout", "Alice"), None);
+        assert_eq!(shout_payload("shout   ", "Alice"), None);
+    }
+
+    #[test]
+    fn parse_tell_args_parses_targets_and_messages() {
+        assert_eq!(
+            parse_tell_args("tell alice hi there", "tell"),
+            Some(("alice", "hi there"))
+        );
+        assert_eq!(
+            parse_tell_args("whisper bob let's go", "whisper"),
+            Some(("bob", "let's go"))
+        );
+        assert_eq!(parse_tell_args("tell", "tell"), None);
+        assert_eq!(parse_tell_args("tell   ", "tell"), None);
+        assert_eq!(parse_tell_args("whisper bob", "whisper"), None);
+    }
+
+    #[test]
+    fn room_emote_payload_supports_aliases() {
+        assert_eq!(
+            room_emote_payload("emote bows", "Alice"),
+            Some("* Alice bows".to_string())
+        );
+        assert_eq!(
+            room_emote_payload("me dances", "Alice"),
+            Some("* Alice dances".to_string())
+        );
+        assert_eq!(
+            room_emote_payload("pose salutes", "Alice"),
+            Some("* Alice salutes".to_string())
+        );
+        assert_eq!(room_emote_payload("pose", "Alice"), None);
+        assert_eq!(room_emote_payload("pose   ", "Alice"), None);
+        assert_eq!(
+            room_emote_payload("em grins", "Alice"),
+            Some("* Alice grins".to_string())
+        );
+    }
+
+    #[test]
+    fn room_emote_noarg_generates_room_motion() {
+        assert_eq!(room_emote_noarg("Alice", "dances"), "* Alice dances");
+        assert_eq!(room_emote_noarg("Alice", "smiles"), "* Alice smiles");
+        assert_eq!(room_emote_noarg("Alice", "bows"), "* Alice bows");
+        assert_eq!(room_emote_noarg("Alice", "laughs"), "* Alice laughs");
     }
 }
