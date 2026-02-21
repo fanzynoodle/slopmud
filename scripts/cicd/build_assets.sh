@@ -24,11 +24,14 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
 out_dir="${assets_root}/${track}/${sha}"
-target_dir="${CARGO_TARGET_DIR:-${repo_root}/${assets_root}/.cargo-target/${track}}"
+default_target_dir="${CARGO_TARGET_DIR:-${repo_root}/target}"
+target_dir="${BUILD_ASSETS_TARGET_DIR:-${default_target_dir}}"
 
 if [[ "$clean_build" == "1" ]]; then
   rm -rf "$target_dir"
 fi
+
+mkdir -p "${assets_root}/${track}"
 
 mkdir -p "${out_dir}/bin"
 
