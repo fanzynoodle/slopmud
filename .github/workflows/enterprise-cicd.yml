@@ -19,6 +19,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: enterprise-cicd-${{ github.event_name == 'workflow_dispatch' && inputs.track || github.ref_name }}
