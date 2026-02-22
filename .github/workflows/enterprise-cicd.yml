@@ -48,23 +48,32 @@ jobs:
         run: |
           set -euo pipefail
 
-          runner_names="$(
+          runner_snapshot="$(
             gh api repos/${{ github.repository }}/actions/runners --paginate \
-              --jq '[.runners[]
-                | select(
+              --jq '.runners | map({name: .name, status: .status, busy: .busy, labels: (.labels | map(.name)})'
+          )"
+          runner_names="$(
+            printf "%s" "$runner_snapshot" | jq -r '
+              map(
+                select(
                   .status=="online" and
-                  (.labels | map(.name) | index("self-hosted")) != null and
-                  (.labels | map(.name) | index("Linux")) != null and
-                  (.labels | map(.name) | index("mud")) != null
+                  (.labels | index("self-hosted")) != null and
+                  (.labels | index("Linux")) != null and
+                  (.labels | index("mud")) != null
                 )
-                | .name] | sort | unique | join(",")'
+              )
+              | map(.name)
+              | sort
+              | unique
+              | join(",")
+            '
           )"
           runner_count="$(printf "%s" "$runner_names" | awk -F',' '{print (NF==1 && $1=="" ? 0 : NF)}')"
 
           if [ "$runner_count" -eq 0 ]; then
             echo "::error::No online self-hosted runner matching labels [self-hosted, Linux, mud] was found."
-            echo "Available runners:"
-            gh api repos/${{ github.repository }}/actions/runners --paginate --jq '.runners[] | "\(.name): status=\(.status) busy=\(.busy) labels=\(.labels | map(.name) | join(\",\"))"' || true
+            echo "Registered runners:"
+            printf "%s" "$runner_snapshot" | jq -r 'map("\(.name): status=\(.status) busy=\(.busy) labels=\(.labels | join(\",\"))") | join("\n")'
             exit 1
           fi
 
