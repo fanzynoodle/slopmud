@@ -1,4 +1,14 @@
 (() => {
+  // prd: `mud.slopmud.com` serves the homepage on :443 but runs OAuth on :4242.
+  // Redirect play/connect flows to the OAuth origin so Google SSO uses the right redirect_uri.
+  if (location.hostname === "mud.slopmud.com" && location.port !== "4242") {
+    const to = new URL(location.href);
+    to.protocol = "https:";
+    to.port = "4242";
+    location.replace(to.toString());
+    return;
+  }
+
   const term = document.getElementById("term");
   const wsUrlEl = document.getElementById("ws-url");
   const lineEl = document.getElementById("line");
@@ -289,7 +299,7 @@
     }, 500);
   }
 
-  async function setWebAuth(action, method, name, password) {
+  async function setWebAuth(action, method, name = "", password) {
     const token = getOrCreateResumeToken();
     const body = { resume: token, action, method, name };
     if (password !== undefined) body.password = password;
@@ -309,6 +319,14 @@
       appendLine("# auth failed: network error");
       return false;
     }
+  }
+
+  async function setAutoSsoWebAuth() {
+    await refreshOauthStatus();
+    const provider = oauthIdentity && oauthIdentity.provider ? String(oauthIdentity.provider) : "";
+    const method = provider.toLowerCase();
+    if (method !== "google" && method !== "oidc") return false;
+    return setWebAuth("auto", method, "");
   }
 
   function withResumeToken(url, token) {
@@ -432,7 +450,10 @@
       appendLine(`# connected: ${displayUrl}`);
       setInputEnabled(true);
       lineEl && lineEl.focus();
+      const hadReconnectAttempts = reconnectAttempts > 0;
       reconnectAttempts = 0;
+      // Only nudge on reconnect paths; a fresh connect already receives initial prompts.
+      if (hadReconnectAttempts) sendText("\n");
     });
 
     ws.addEventListener("close", (ev) => {
@@ -501,6 +522,20 @@
     } catch {
       // ignore
     }
+  }
+
+  async function connectFreshSession(preConnectAuth) {
+    // Use a fresh backend session for auth-gate entry to avoid stale/silent resume state.
+    await logoutResumeSession();
+    if (typeof preConnectAuth === "function") {
+      try {
+        await preConnectAuth();
+      } catch {
+        // ignore
+      }
+    }
+    shouldReconnect = true;
+    connect();
   }
 
   function scheduleReconnect() {
@@ -640,14 +675,16 @@
     });
 
   btnGatePassword &&
-    btnGatePassword.addEventListener("click", () => {
+    btnGatePassword.addEventListener("click", async () => {
       authGateChosen = true;
       try {
         dlgAuthGate && dlgAuthGate.close();
       } catch {
         // ignore
       }
-      openDialog(dlgConnect, authNameEl || authPasswordEl || wsUrlEl);
+      // Password mode is terminal-first: connect immediately and let the MUD prompt.
+      await connectFreshSession();
+      lineEl && lineEl.focus();
     });
 
   btnGateSlopsso &&
@@ -863,13 +900,24 @@
   {
     const h = String(location.hash || "");
     if (h.startsWith("#oauth=")) {
+      const oauthResult = h.slice("#oauth=".length).toLowerCase();
       try {
         history.replaceState(null, "", location.pathname + location.search);
       } catch {
         // ignore
       }
       authGateChosen = true;
-      openDialog(dlgConnect, authNameEl || wsUrlEl);
+      if (oauthResult === "ok") {
+        // After OAuth callback, connect immediately (no extra connect dialog).
+        connectFreshSession(async () => {
+          await setAutoSsoWebAuth();
+        }).catch(() => {
+          // ignore
+        });
+        lineEl && lineEl.focus();
+      } else {
+        openInitialAuthGate();
+      }
     } else {
       openInitialAuthGate();
     }

@@ -74,11 +74,45 @@ Useful smoke commands:
 
 ## Local End-To-End Verification
 
-This is the fastest way to prove local end-to-end works (broker <-> shard <-> gameplay):
+Recommended fast path (daily feature iteration):
+
+- First, compile once (or after dependency changes):
+
+```bash
+cargo build -p shard_01 -p slopmud
+```
+
+- Then run the fast stack-only smoke check (reuses existing `target/debug` binaries):
+
+```bash
+just e2e-local-fast
+```
+
+That flow now exercises the new global (`shout`), room (`emote`), and shorthand body-action (`me`) chat paths in one pass.
+
+If you want a clean full run (including rebuild), keep using:
 
 ```bash
 just e2e-local
 just e2e-party
+```
+
+Fast-only run (after dependencies are built):
+
+```bash
+just e2e-local-fast
+just e2e-party-fast
+```
+
+Or run both fast harnesses in one command:
+
+```bash
+just e2e-fast
+```
+
+and follow with your normal web smoke when needed:
+
+```bash
 just e2e-web-local  # selenium: web client creates account + logs in again
 ```
 

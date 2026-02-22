@@ -11,6 +11,7 @@ use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{Html, IntoResponse};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use axum_server::tls_rustls::RustlsConfig;
 use base64::Engine;
 use ed25519_dalek::SigningKey;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
@@ -29,7 +30,10 @@ struct AppState {
 
 #[derive(Clone, Debug)]
 struct Config {
-    bind: SocketAddr,
+    http_bind: SocketAddr,
+    https_bind: Option<SocketAddr>,
+    tls_cert: Option<PathBuf>,
+    tls_key: Option<PathBuf>,
     issuer: String,
     client_id: String,
     client_secret: String,
@@ -135,7 +139,7 @@ fn usage_and_exit() -> ! {
     eprintln!(
         "internal_oidc (minimal internal OIDC provider/token issuer)\n\n\
 USAGE:\n  internal_oidc\n  internal_oidc hash-password <password>\n\n\
-ENV:\n  OIDC_BIND                     default 127.0.0.1:9000\n  OIDC_ISSUER                   default http://127.0.0.1:9000\n  OIDC_CLIENT_ID                required\n  OIDC_CLIENT_SECRET            required\n  OIDC_TOKEN_TTL_S              default 3600\n  OIDC_ED25519_SEED_B64         optional; 32 bytes seed (base64). If omitted, generates an ephemeral key.\n  OIDC_ALLOWED_REDIRECT_URIS    optional; comma-separated allowlist for /authorize redirect_uri\n  OIDC_USERS_PATH               optional; if set, enables /authorize using this JSON user db\n  OIDC_AUTH_CODE_TTL_S          default 300\n  OIDC_ALLOW_PLAINTEXT_PASSWORDS optional; default 0\n  OIDC_ALLOW_REGISTRATION        optional; default 0 (dev only)\n  OIDC_ALLOW_PASSWORD_RESET      optional; default 0 (dev only)\n"
+ENV:\n  OIDC_BIND                     default 127.0.0.1:9000\n  OIDC_HTTPS_BIND               optional (e.g. 0.0.0.0:9443)\n  OIDC_TLS_CERT                 required if OIDC_HTTPS_BIND set\n  OIDC_TLS_KEY                  required if OIDC_HTTPS_BIND set\n  OIDC_ISSUER                   default http://OIDC_BIND (or https://OIDC_HTTPS_BIND when set)\n  OIDC_CLIENT_ID                required\n  OIDC_CLIENT_SECRET            required\n  OIDC_TOKEN_TTL_S              default 3600\n  OIDC_ED25519_SEED_B64         optional; 32 bytes seed (base64). If omitted, generates an ephemeral key.\n  OIDC_ALLOWED_REDIRECT_URIS    optional; comma-separated allowlist for /authorize redirect_uri\n  OIDC_USERS_PATH               optional; if set, enables /authorize using this JSON user db\n  OIDC_AUTH_CODE_TTL_S          default 300\n  OIDC_ALLOW_PLAINTEXT_PASSWORDS optional; default 0\n  OIDC_ALLOW_REGISTRATION        optional; default 0 (dev only)\n  OIDC_ALLOW_PASSWORD_RESET      optional; default 0 (dev only)\n"
     );
     std::process::exit(2);
 }
@@ -186,11 +190,41 @@ fn html_escape(s: &str) -> String {
 }
 
 fn parse_cfg() -> anyhow::Result<Config> {
-    let bind: SocketAddr = std::env::var("OIDC_BIND")
+    let http_bind: SocketAddr = std::env::var("OIDC_BIND")
         .unwrap_or_else(|_| "127.0.0.1:9000".to_string())
         .parse()
         .map_err(|_| anyhow::anyhow!("bad OIDC_BIND"))?;
-    let issuer = std::env::var("OIDC_ISSUER").unwrap_or_else(|_| format!("http://{bind}"));
+    let https_bind: Option<SocketAddr> = std::env::var("OIDC_HTTPS_BIND")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            s.parse()
+                .map_err(|_| anyhow::anyhow!("bad OIDC_HTTPS_BIND"))
+        })
+        .transpose()?;
+    let tls_cert: Option<PathBuf> = std::env::var("OIDC_TLS_CERT")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(Into::into);
+    let tls_key: Option<PathBuf> = std::env::var("OIDC_TLS_KEY")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(Into::into);
+
+    if https_bind.is_some() && (tls_cert.is_none() || tls_key.is_none()) {
+        anyhow::bail!("OIDC_HTTPS_BIND set but OIDC_TLS_CERT and/or OIDC_TLS_KEY missing");
+    }
+
+    let issuer = std::env::var("OIDC_ISSUER").unwrap_or_else(|_| {
+        if let Some(https) = https_bind {
+            format!("https://{https}")
+        } else {
+            format!("http://{http_bind}")
+        }
+    });
 
     let client_id =
         std::env::var("OIDC_CLIENT_ID").map_err(|_| anyhow::anyhow!("missing OIDC_CLIENT_ID"))?;
@@ -287,7 +321,10 @@ fn parse_cfg() -> anyhow::Result<Config> {
     };
 
     Ok(Config {
-        bind,
+        http_bind,
+        https_bind,
+        tls_cert,
+        tls_key,
         issuer,
         client_id,
         client_secret,
@@ -1403,6 +1440,9 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
+    // rustls 0.23: choose a process-wide crypto provider before config builders run.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     if cfg.users_path.is_some() && cfg.allowed_redirect_uris.is_empty() {
         warn!(
             "OIDC_USERS_PATH set but OIDC_ALLOWED_REDIRECT_URIS is empty; /authorize will accept any redirect_uri (unsafe)"
@@ -1436,9 +1476,42 @@ async fn main() -> anyhow::Result<()> {
         .route("/userinfo", get(userinfo))
         .with_state(st.clone());
 
-    info!(bind = %cfg.bind, issuer = %cfg.issuer, "internal oidc listening");
+    info!(
+        http_bind = %cfg.http_bind,
+        https_bind = ?cfg.https_bind,
+        issuer = %cfg.issuer,
+        "internal oidc listening"
+    );
 
-    let listener = tokio::net::TcpListener::bind(cfg.bind).await?;
-    axum::serve(listener, app).await?;
+    let mut joins = Vec::new();
+    {
+        let listener = tokio::net::TcpListener::bind(cfg.http_bind).await?;
+        let app_http = app.clone();
+        joins.push(tokio::spawn(async move {
+            axum::serve(listener, app_http)
+                .await
+                .map_err(anyhow::Error::from)
+        }));
+    }
+
+    if let (Some(https_bind), Some(cert), Some(key)) =
+        (cfg.https_bind, cfg.tls_cert.as_ref(), cfg.tls_key.as_ref())
+    {
+        let rustls = RustlsConfig::from_pem_file(cert, key)
+            .await
+            .context("invalid OIDC_TLS_CERT/OIDC_TLS_KEY")?;
+        let app_https = app.clone();
+        joins.push(tokio::spawn(async move {
+            axum_server::bind_rustls(https_bind, rustls)
+                .serve(app_https.into_make_service())
+                .await
+                .map_err(anyhow::Error::from)
+        }));
+    }
+
+    for j in joins {
+        j.await??;
+    }
+
     Ok(())
 }

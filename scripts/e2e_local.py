@@ -174,6 +174,37 @@ def _parse_exits(out: bytes) -> list[str]:
     return []
 
 
+def ensure_built(env: dict[str, str], skip_build: bool = False) -> None:
+    target_root = Path("target/debug")
+    missing = []
+    for bin_name in ["shard_01", "slopmud"]:
+        if not (target_root / bin_name).exists():
+            missing.append(bin_name)
+    if not skip_build:
+        missing = ["shard_01", "slopmud"]
+
+    if skip_build and not missing:
+        return
+
+    if skip_build:
+        print(
+            f"e2e-local: skip-build requested but missing {', '.join(missing)}; building now"
+        )
+
+    subprocess.check_call(
+        ["cargo", "build", "-q", "-p", "shard_01"],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    subprocess.check_call(
+        ["cargo", "build", "-q", "-p", "slopmud"],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
 def roam_until_worm(c: Client, max_moves=60):
     # Walk around the newbie area until we find the worm spawn room.
     tried_by_room: dict[str, set[str]] = {}
@@ -236,6 +267,7 @@ def main():
     ap.add_argument("--base-port", type=int, default=0)
     ap.add_argument("--port-range", default="4950-5990")
     ap.add_argument("--stride", type=int, default=5)
+    ap.add_argument("--skip-build", action="store_true")
     args = ap.parse_args()
 
     # Some environments disallow TCP sockets entirely (ex: sandboxed CI runners). In that
@@ -265,18 +297,7 @@ def main():
     shard_f = open(shard_log, "wb")
     broker_f = open(broker_log, "wb")
 
-    subprocess.check_call(
-        ["cargo", "build", "-q", "-p", "shard_01"],
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    subprocess.check_call(
-        ["cargo", "build", "-q", "-p", "slopmud"],
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    ensure_built(env, args.skip_build)
 
     shard = subprocess.Popen(
         ["target/debug/shard_01"],
@@ -313,6 +334,21 @@ def main():
         wait_for_room_occupant(b, "Alice")
         send_line(a.sock, "say hi bob")
         b.read_until("Alice: hi bob", timeout_s=3.0)
+        send_line(a.sock, "shout hello everyone")
+        b.read_until("Alice shouts: hello everyone", timeout_s=3.0)
+        send_line(a.sock, "emote grins at Bob")
+        b.read_until("* Alice grins at Bob", timeout_s=3.0)
+        send_line(a.sock, "me claps hands")
+        b.read_until("* Alice claps hands", timeout_s=3.0)
+        send_line(a.sock, "pose bows with grace")
+        b.read_until("* Alice bows with grace", timeout_s=3.0)
+        send_line(a.sock, "yell rally now")
+        b.read_until("Alice shouts: rally now", timeout_s=3.0)
+        send_line(a.sock, "whisper Bob keep it steady")
+        b.read_until("Alice whispers: keep it steady", timeout_s=3.0)
+        a.read_until("you whisper Bob: keep it steady", timeout_s=3.0)
+        send_line(a.sock, "dance")
+        b.read_until("* Alice dances", timeout_s=3.0)
 
         # Character setup (required for movement/combat).
         send_line(a.sock, "wear tunic")

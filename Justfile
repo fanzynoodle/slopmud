@@ -158,37 +158,30 @@ certbot-hook-install env="prd":
     svc="${WEB_SERVICE_NAME:-slopmud-web}"; \
     cert_name="${CERTBOT_CERT_NAME:-${DOMAIN}}"; \
     hook_name="slopmud-${ENV_NAME:-{{env}}}.sh"; \
-    tmp_hook="$(mktemp)"; \
-    trap "rm -f \"${tmp_hook}\"" EXIT; \
+    base_hook="$(mktemp)"; \
+    wrapper_hook="$(mktemp)"; \
+    trap "rm -f \"${base_hook}\" \"${wrapper_hook}\"" EXIT; \
+    cp scripts/certbot_deploy_hook_slopmud.sh "${base_hook}"; \
+    chmod 0755 "${base_hook}"; \
     { \
       printf "%s\\n" "#!/usr/bin/env bash"; \
       printf "%s\\n" "set -euo pipefail"; \
-      printf "\\n"; \
-      printf "%s\\n" ": \"\\${RENEWED_LINEAGE:?missing RENEWED_LINEAGE}\""; \
-      printf "\\n"; \
-      printf "%s\\n" "expected=\"${cert_name}\""; \
-      printf "%s\\n" "if [[ \"\\$(basename \"\\${RENEWED_LINEAGE}\")\" != \"\\${expected}\" ]]; then"; \
-      printf "%s\\n" "  exit 0"; \
-      printf "%s\\n" "fi"; \
-      printf "\\n"; \
-      printf "%s\\n" "dst_dir=\"${dst_dir}\""; \
-      printf "%s\\n" "svc=\"${svc}\""; \
-      printf "\\n"; \
-      printf "%s\\n" "install -d -o slopmud -g slopmud -m 0750 \"\\${dst_dir}\""; \
-      printf "%s\\n" "install -o slopmud -g slopmud -m 0640 \"\\${RENEWED_LINEAGE}/fullchain.pem\" \"\\${dst_dir}/fullchain.pem\""; \
-      printf "%s\\n" "install -o slopmud -g slopmud -m 0640 \"\\${RENEWED_LINEAGE}/privkey.pem\" \"\\${dst_dir}/privkey.pem\""; \
-      printf "\\n"; \
-      printf "%s\\n" "systemctl restart \"\\${svc}\" 2>/dev/null || true"; \
-    } >"${tmp_hook}"; \
-    scp -P "${SSH_PORT}" {{ssh_opts}} "${tmp_hook}" "${SSH_USER}@${HOST}:/tmp/${hook_name}"; \
+      printf "%s\\n" "export CERTBOT_CERT_NAME=${cert_name}"; \
+      printf "%s\\n" "export TLS_DST_DIR=${dst_dir}"; \
+      printf "%s\\n" "export WEB_SERVICE_NAME=${svc}"; \
+      printf "%s\\n" "exec /usr/local/bin/slopmud-certbot-hook"; \
+    } >"${wrapper_hook}"; \
+    scp -P "${SSH_PORT}" {{ssh_opts}} "${base_hook}" "${SSH_USER}@${HOST}:/tmp/slopmud-certbot-hook"; \
+    scp -P "${SSH_PORT}" {{ssh_opts}} "${wrapper_hook}" "${SSH_USER}@${HOST}:/tmp/${hook_name}"; \
     ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" " \
       set -euo pipefail; \
       if ! id -u slopmud >/dev/null 2>&1; then \
         sudo useradd --system --home \"${REMOTE_ROOT}\" --create-home --shell /usr/sbin/nologin slopmud; \
       fi; \
       sudo install -d -m 0755 /etc/letsencrypt/renewal-hooks/deploy; \
+      sudo install -m 0755 -o root -g root /tmp/slopmud-certbot-hook /usr/local/bin/slopmud-certbot-hook; \
       sudo install -m 0755 -o root -g root \"/tmp/${hook_name}\" \"/etc/letsencrypt/renewal-hooks/deploy/${hook_name}\"; \
-      sudo rm -f \"/tmp/${hook_name}\"; \
+      sudo rm -f /tmp/slopmud-certbot-hook \"/tmp/${hook_name}\"; \
       sudo rm -f /etc/letsencrypt/renewal-hooks/deploy/slopmud.sh 2>/dev/null || true; \
     "; \
   '
@@ -427,8 +420,18 @@ bot-party-run-local:
 e2e-local:
   python3 scripts/e2e_local.py
 
+e2e-local-fast:
+  python3 scripts/e2e_local.py --skip-build
+
 e2e-party:
   python3 scripts/e2e_party_run.py
+
+e2e-party-fast:
+  python3 scripts/e2e_party_run.py --skip-build
+
+e2e-fast:
+  just e2e-local-fast
+  just e2e-party-fast
 
 e2e-web-local:
   python3 scripts/e2e_web_selenium_local.py
@@ -639,6 +642,22 @@ deploy-slopmud env="prd":
     if [ "${ENABLED:-1}" != "1" ]; then echo "{{env}} disabled (ENABLED=${ENABLED:-})"; exit 0; fi; \
     ./scripts/deploy_slopmud.sh "env/{{env}}.env"; \
   '
+
+# Fast deploy: use the CI-style asset tarball + slopmud-shuttle-assets (no unit rewrite by default).
+hot-deploy-slopmud env="prd":
+  ./scripts/cicd/hot_deploy_slopmud.sh "env/{{env}}.env"
+
+# Build a release artifact and upload it to the assets bucket for this env track.
+assets-publish env="prd":
+  ./scripts/cicd/publish_assets_to_s3.sh "env/{{env}}.env"
+
+# Redeploy from S3 without rebuilding.
+# artifact can be:
+# - empty (use latest in track)
+# - SHA (mapped to s3://<bucket>/<track>/<sha>/artifact.tgz)
+# - full s3:// URI
+assets-redeploy env="prd" artifact="":
+  ./scripts/cicd/deploy_slopmud_from_s3.sh "env/{{env}}.env" "{{artifact}}"
 
 deploy-shard env="prd":
   bash -ceu ' \

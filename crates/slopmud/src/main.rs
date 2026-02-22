@@ -1702,7 +1702,7 @@ struct GoogleOAuthPending {
 
 #[derive(Debug, Clone, Deserialize)]
 struct WebAuthReq {
-    action: String, // login | create
+    action: String, // login | create | auto
     method: String, // password | google | oidc
     name: String,
     #[serde(default)]
@@ -2820,6 +2820,20 @@ async fn handle_conn(
     let mut google_email: Option<String> = None;
     let mut oidc_sub: Option<String> = None;
     let mut oidc_email: Option<String> = None;
+    #[derive(Debug, Clone)]
+    enum PendingAutoWebAuth {
+        Google {
+            sub: String,
+            email: Option<String>,
+            caps: Option<Vec<String>>,
+        },
+        Oidc {
+            sub: String,
+            email: Option<String>,
+            caps: Option<Vec<String>>,
+        },
+    }
+    let mut pending_auto_webauth: Option<PendingAutoWebAuth> = None;
     let mut google_oauth_code: Option<String> = None;
     let mut race: Option<String> = None;
     let mut class: Option<String> = None;
@@ -2907,7 +2921,8 @@ async fn handle_conn(
                                 break 'read;
                             }
 
-                            let _ = write_tx.send(Bytes::from_static(b"name: ")).await;
+                            // Initial `name:` prompt was already sent when the session opened.
+                            // Don't emit a second prompt after accepting PROXY metadata.
                             continue;
                         }
                         // Fall through: treat as a name if it's not a valid PROXY line.
@@ -2952,7 +2967,75 @@ async fn handle_conn(
                                 }
                             };
 
-                            let uname = sanitize_name(&req.name);
+                            let action = req.action.trim().to_ascii_lowercase();
+                            let method = req.method.trim().to_ascii_lowercase();
+
+                            let mut uname = sanitize_name(&req.name);
+                            if action == "auto" && (method == "google" || method == "oidc") {
+                                let sub = if method == "google" {
+                                    req.google_sub.as_deref().unwrap_or("").trim()
+                                } else {
+                                    req.oidc_sub.as_deref().unwrap_or("").trim()
+                                };
+                                if sub.is_empty() {
+                                    let msg = if method == "google" {
+                                        b"web_auth: missing google_sub\r\nname: ".as_slice()
+                                    } else {
+                                        b"web_auth: missing oidc_sub\r\nname: ".as_slice()
+                                    };
+                                    let _ = write_tx.send(Bytes::copy_from_slice(msg)).await;
+                                    continue;
+                                }
+
+                                let linked_names = {
+                                    let a = accounts.lock().await;
+                                    a.by_name
+                                        .values()
+                                        .filter_map(|r| {
+                                            let linked = if method == "google" {
+                                                r.google_sub.as_deref() == Some(sub)
+                                            } else {
+                                                r.oidc_sub.as_deref() == Some(sub)
+                                            };
+                                            if linked { Some(r.name.clone()) } else { None }
+                                        })
+                                        .collect::<Vec<_>>()
+                                };
+
+                                match linked_names.as_slice() {
+                                    [] => {
+                                        // No linked account yet. Keep the player in-band at `name:`
+                                        // so they can choose an in-game character name, then we'll
+                                        // create/link via this pending web auth identity.
+                                        pending_auto_webauth = Some(if method == "google" {
+                                            PendingAutoWebAuth::Google {
+                                                sub: sub.to_string(),
+                                                email: req.google_email.clone(),
+                                                caps: req.caps.clone(),
+                                            }
+                                        } else {
+                                            PendingAutoWebAuth::Oidc {
+                                                sub: sub.to_string(),
+                                                email: req.oidc_email.clone(),
+                                                caps: req.caps.clone(),
+                                            }
+                                        });
+                                        continue;
+                                    }
+                                    [only] => {
+                                        uname = only.clone();
+                                    }
+                                    _ => {
+                                        let _ = write_tx
+                                            .send(Bytes::from_static(
+                                                b"web_auth: multiple linked accounts\r\nname: ",
+                                            ))
+                                            .await;
+                                        continue;
+                                    }
+                                }
+                            }
+
                             if uname.is_empty() {
                                 let _ = write_tx
                                     .send(Bytes::from_static(
@@ -2981,9 +3064,6 @@ async fn handle_conn(
                                     .await;
                                 break 'read;
                             }
-
-                            let action = req.action.trim().to_ascii_lowercase();
-                            let method = req.method.trim().to_ascii_lowercase();
 
                             let ok = match (action.as_str(), method.as_str()) {
                                 ("create", "password") => {
@@ -3110,7 +3190,7 @@ async fn handle_conn(
                                         },
                                     }
                                 }
-                                ("create", "google") | ("login", "google") => {
+                                ("create", "google") | ("login", "google") | ("auto", "google") => {
                                     let sub = req.google_sub.as_deref().unwrap_or("").trim();
                                     if sub.is_empty() {
                                         let _ = write_tx
@@ -3130,7 +3210,7 @@ async fn handle_conn(
                                             a.by_name.get(&uname).cloned()
                                         };
 
-                                        if action == "login" {
+                                        if action == "login" || action == "auto" {
                                             match exists {
                                                 None => {
                                                     let _ = write_tx
@@ -3213,7 +3293,7 @@ async fn handle_conn(
                                         }
                                     }
                                 }
-                                ("create", "oidc") | ("login", "oidc") => {
+                                ("create", "oidc") | ("login", "oidc") | ("auto", "oidc") => {
                                     let sub = req.oidc_sub.as_deref().unwrap_or("").trim();
                                     if sub.is_empty() {
                                         let _ = write_tx
@@ -3233,7 +3313,7 @@ async fn handle_conn(
                                             a.by_name.get(&uname).cloned()
                                         };
 
-                                        if action == "login" {
+                                        if action == "login" || action == "auto" {
                                             match exists {
                                                 None => {
                                                     let _ = write_tx
@@ -3364,6 +3444,179 @@ async fn handle_conn(
                             .send(Bytes::from_static(b"banned\r\nbye\r\n"))
                             .await;
                         break 'read;
+                    }
+
+                    if let Some(pending) = pending_auto_webauth.clone() {
+                        match pending {
+                            PendingAutoWebAuth::Google { sub, email, caps } => {
+                                let exists = {
+                                    let a = accounts.lock().await;
+                                    a.by_name.get(&n).cloned()
+                                };
+                                match exists {
+                                    Some(r) => {
+                                        if r.google_sub.as_deref() != Some(sub.as_str()) {
+                                            let _ = write_tx
+                                                .send(Bytes::from_static(
+                                                    b"name already taken\r\nname: ",
+                                                ))
+                                                .await;
+                                            continue;
+                                        }
+                                        google_sub = Some(sub.clone());
+                                        google_email = r.google_email.clone().or(email.clone());
+                                        auth_method = Some("google".to_string());
+                                        auth_blob = Some(make_shard_auth_blob(
+                                            &n,
+                                            "google",
+                                            Some(sub.as_str()),
+                                            google_email.as_deref(),
+                                            None,
+                                            None,
+                                            caps.as_deref(),
+                                        ));
+                                        name = Some(n.clone());
+                                        pending_auto_webauth = None;
+                                        state = ConnState::NeedBotDisclosure;
+                                        let _ = write_tx
+                                            .send(Bytes::from_static(
+                                                b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
+                                            ))
+                                            .await;
+                                        continue;
+                                    }
+                                    None => {
+                                        let now_unix = std::time::SystemTime::now()
+                                            .duration_since(std::time::UNIX_EPOCH)
+                                            .unwrap_or_default()
+                                            .as_secs();
+                                        {
+                                            let mut a = accounts.lock().await;
+                                            a.by_name.insert(
+                                                n.clone(),
+                                                AccountRec {
+                                                    name: n.clone(),
+                                                    pw_hash: None,
+                                                    google_sub: Some(sub.clone()),
+                                                    google_email: email.clone(),
+                                                    oidc_sub: None,
+                                                    oidc_email: None,
+                                                    caps: None,
+                                                    email: None,
+                                                    created_unix: now_unix,
+                                                },
+                                            );
+                                            a.save()?;
+                                        }
+                                        google_sub = Some(sub.clone());
+                                        google_email = email.clone();
+                                        auth_method = Some("google".to_string());
+                                        auth_blob = Some(make_shard_auth_blob(
+                                            &n,
+                                            "google",
+                                            Some(sub.as_str()),
+                                            google_email.as_deref(),
+                                            None,
+                                            None,
+                                            caps.as_deref(),
+                                        ));
+                                        name = Some(n.clone());
+                                        pending_auto_webauth = None;
+                                        state = ConnState::NeedBotDisclosure;
+                                        let _ = write_tx
+                                            .send(Bytes::from_static(
+                                                b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
+                                            ))
+                                            .await;
+                                        continue;
+                                    }
+                                }
+                            }
+                            PendingAutoWebAuth::Oidc { sub, email, caps } => {
+                                let exists = {
+                                    let a = accounts.lock().await;
+                                    a.by_name.get(&n).cloned()
+                                };
+                                match exists {
+                                    Some(r) => {
+                                        if r.oidc_sub.as_deref() != Some(sub.as_str()) {
+                                            let _ = write_tx
+                                                .send(Bytes::from_static(
+                                                    b"name already taken\r\nname: ",
+                                                ))
+                                                .await;
+                                            continue;
+                                        }
+                                        oidc_sub = Some(sub.clone());
+                                        oidc_email = r.oidc_email.clone().or(email.clone());
+                                        auth_method = Some("oidc".to_string());
+                                        auth_blob = Some(make_shard_auth_blob(
+                                            &n,
+                                            "oidc",
+                                            None,
+                                            None,
+                                            Some(sub.as_str()),
+                                            oidc_email.as_deref(),
+                                            caps.as_deref(),
+                                        ));
+                                        name = Some(n.clone());
+                                        pending_auto_webauth = None;
+                                        state = ConnState::NeedBotDisclosure;
+                                        let _ = write_tx
+                                            .send(Bytes::from_static(
+                                                b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
+                                            ))
+                                            .await;
+                                        continue;
+                                    }
+                                    None => {
+                                        let now_unix = std::time::SystemTime::now()
+                                            .duration_since(std::time::UNIX_EPOCH)
+                                            .unwrap_or_default()
+                                            .as_secs();
+                                        {
+                                            let mut a = accounts.lock().await;
+                                            a.by_name.insert(
+                                                n.clone(),
+                                                AccountRec {
+                                                    name: n.clone(),
+                                                    pw_hash: None,
+                                                    google_sub: None,
+                                                    google_email: None,
+                                                    oidc_sub: Some(sub.clone()),
+                                                    oidc_email: email.clone(),
+                                                    caps: None,
+                                                    email: None,
+                                                    created_unix: now_unix,
+                                                },
+                                            );
+                                            a.save()?;
+                                        }
+                                        oidc_sub = Some(sub.clone());
+                                        oidc_email = email.clone();
+                                        auth_method = Some("oidc".to_string());
+                                        auth_blob = Some(make_shard_auth_blob(
+                                            &n,
+                                            "oidc",
+                                            None,
+                                            None,
+                                            Some(sub.as_str()),
+                                            oidc_email.as_deref(),
+                                            caps.as_deref(),
+                                        ));
+                                        name = Some(n.clone());
+                                        pending_auto_webauth = None;
+                                        state = ConnState::NeedBotDisclosure;
+                                        let _ = write_tx
+                                            .send(Bytes::from_static(
+                                                b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
+                                            ))
+                                            .await;
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     name = Some(n);

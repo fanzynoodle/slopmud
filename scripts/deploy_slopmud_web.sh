@@ -114,6 +114,29 @@ if [[ -n "${GOOGLE_OAUTH_REDIRECT_URI:-}" ]]; then
   echo "Environment=GOOGLE_OAUTH_REDIRECT_URI=${GOOGLE_OAUTH_REDIRECT_URI}" >>"$tmp_unit"
 fi
 
+# Optional: custom OIDC SSO (slopsso).
+if [[ -n "${SLOPMUD_OIDC_SSO_AUTH_URL:-}" ]]; then
+  echo "Environment=SLOPMUD_OIDC_SSO_AUTH_URL=${SLOPMUD_OIDC_SSO_AUTH_URL}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_OIDC_SSO_TOKEN_URL:-}" ]]; then
+  echo "Environment=SLOPMUD_OIDC_SSO_TOKEN_URL=${SLOPMUD_OIDC_SSO_TOKEN_URL}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_OIDC_SSO_USERINFO_URL:-}" ]]; then
+  echo "Environment=SLOPMUD_OIDC_SSO_USERINFO_URL=${SLOPMUD_OIDC_SSO_USERINFO_URL}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_OIDC_SSO_CLIENT_ID:-}" ]]; then
+  echo "Environment=SLOPMUD_OIDC_SSO_CLIENT_ID=${SLOPMUD_OIDC_SSO_CLIENT_ID}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_OIDC_SSO_CLIENT_SECRET:-}" ]]; then
+  echo "Environment=SLOPMUD_OIDC_SSO_CLIENT_SECRET=${SLOPMUD_OIDC_SSO_CLIENT_SECRET}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_OIDC_SSO_REDIRECT_URI:-}" ]]; then
+  echo "Environment=SLOPMUD_OIDC_SSO_REDIRECT_URI=${SLOPMUD_OIDC_SSO_REDIRECT_URI}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_OIDC_SSO_SCOPE:-}" ]]; then
+  echo "Environment=\"SLOPMUD_OIDC_SSO_SCOPE=${SLOPMUD_OIDC_SSO_SCOPE}\"" >>"$tmp_unit"
+fi
+
 # If the env file references SSM parameter names, fetch them at service start on the instance using its IAM role.
 if [[ -n "${GOOGLE_OAUTH_CLIENT_ID_SSM:-}" ]]; then
   echo "Environment=GOOGLE_OAUTH_CLIENT_ID_SSM=${GOOGLE_OAUTH_CLIENT_ID_SSM}" >>"$tmp_unit"

@@ -1,4 +1,19 @@
 (() => {
+  // prd: `mud.slopmud.com` serves the homepage on :443 but runs OAuth on :4242.
+  // Redirect only the connect/play pages so SSO uses the right redirect_uri without moving the homepage.
+  const p = String(location.pathname || "");
+  if (
+    location.hostname === "mud.slopmud.com" &&
+    location.port !== "4242" &&
+    (p === "/connect.html" || p === "/play.html")
+  ) {
+    const to = new URL(location.href);
+    to.protocol = "https:";
+    to.port = "4242";
+    location.replace(to.toString());
+    return;
+  }
+
   const seed = Math.floor(Math.random() * 1_000_000);
   const mottos = [
     "ship it, regret it later",

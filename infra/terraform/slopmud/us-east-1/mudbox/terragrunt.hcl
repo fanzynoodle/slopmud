@@ -11,6 +11,7 @@ inputs = {
   enable_compute = true
   os             = "debian12"
   instance_type  = "t3a.small"
+  root_volume_gib = 30
   spot_max_price = ""
 
   zone_name        = "slopmud.com"

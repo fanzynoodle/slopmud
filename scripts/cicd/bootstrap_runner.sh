@@ -22,9 +22,12 @@ sudo apt-get update -y
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
   build-essential \
   pkg-config \
+  libssl-dev \
   ca-certificates \
   curl \
-  python3
+  python3 \
+  awscli \
+  ripgrep
 
 if ! id -u ghrunner >/dev/null 2>&1; then
   echo "ERROR: expected runner user 'ghrunner' to exist on this host" >&2
@@ -39,9 +42,23 @@ sudo -u ghrunner -H bash -lc ' \
   fi; \
   "$HOME/.cargo/bin/rustup" toolchain install stable --profile minimal; \
   "$HOME/.cargo/bin/rustup" default stable; \
+  "$HOME/.cargo/bin/rustup" component add rustfmt; \
   "$HOME/.cargo/bin/cargo" --version; \
   "$HOME/.cargo/bin/rustc" --version; \
 '
+
+echo "Installing just for ghrunner (if missing)"
+just_path="$(
+  sudo -u ghrunner -H bash -lc ' \
+    set -euo pipefail; \
+    source "$HOME/.cargo/env"; \
+    if ! command -v just >/dev/null 2>&1; then \
+      cargo install just --locked; \
+    fi; \
+    command -v just; \
+  '
+)"
+sudo ln -sf "$just_path" /usr/local/bin/just
 
 echo "Installing deploy hook to /usr/local/bin/slopmud-shuttle-assets"
 sudo install -m 0755 scripts/cicd/slopmud-shuttle-assets /usr/local/bin/slopmud-shuttle-assets
