@@ -482,7 +482,7 @@ fn parse_tell_args<'a>(line: &'a str, command: &str) -> Option<(&'a str, &'a str
     }
 }
 
-fn command_arg(line: &str, command: &str) -> Option<&str> {
+fn command_arg<'a>(line: &'a str, command: &str) -> Option<&'a str> {
     let Some(rest) = line.strip_prefix(command) else {
         return None;
     };
@@ -490,11 +490,7 @@ fn command_arg(line: &str, command: &str) -> Option<&str> {
         return None;
     }
     let arg = rest.trim();
-    if arg.is_empty() {
-        None
-    } else {
-        Some(arg)
-    }
+    if arg.is_empty() { None } else { Some(arg) }
 }
 
 fn shout_payload(line: &str, speaker: &str) -> Option<String> {
@@ -9685,7 +9681,10 @@ mod tests {
 
     #[test]
     fn command_arg_extracts_action_text() {
-        assert_eq!(command_arg("shout hello everyone", "shout"), Some("hello everyone"));
+        assert_eq!(
+            command_arg("shout hello everyone", "shout"),
+            Some("hello everyone")
+        );
         assert_eq!(command_arg("emote   grins", "emote"), Some("grins"));
         assert_eq!(command_arg("pose", "pose"), None);
         assert_eq!(command_arg("pose   ", "pose"), None);

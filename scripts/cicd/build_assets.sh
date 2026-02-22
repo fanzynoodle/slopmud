@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Builds a release binary and packages it into an "asset" tarball under:
+# Builds release binaries and packages them into an "asset" tarball under:
 #   assets/<track>/<sha>/
 #
 # Output: prints the path to the created tarball.
@@ -24,8 +24,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
 out_dir="${assets_root}/${track}/${sha}"
-default_target_dir="${CARGO_TARGET_DIR:-${repo_root}/target}"
-target_dir="${BUILD_ASSETS_TARGET_DIR:-${default_target_dir}}"
+target_dir="${BUILD_ASSETS_TARGET_DIR:-${repo_root}/target}"
 
 if [[ "$clean_build" == "1" ]]; then
   rm -rf "$target_dir"
@@ -35,25 +34,24 @@ mkdir -p "${assets_root}/${track}"
 
 mkdir -p "${out_dir}/bin"
 
-export CARGO_TARGET_DIR="$target_dir"
-
 echo "Building (track=${track}, clean=${clean_build}, sha=${sha})" >&2
 # Keep stdout clean so callers can safely capture the artifact path.
-cargo build -p slopmud --release 1>&2
+# Build inside Debian 12 (bookworm) so artifacts are compatible with mudbox hosts.
+./scripts/build_bookworm_release.sh slopmud 1>&2
 
 if [[ "$build_shard" == "1" ]]; then
   echo "Building shard_01 (track=${track}, clean=${clean_build}, sha=${sha})" >&2
-  cargo build -p shard_01 --release 1>&2
+  ./scripts/build_bookworm_release.sh shard_01 1>&2
 else
   echo "Skipping shard_01 build (BUILD_SHARD=${build_shard})" >&2
 fi
 
-bin_src="${CARGO_TARGET_DIR}/release/slopmud"
+bin_src="${repo_root}/target/release/slopmud"
 if [[ ! -x "$bin_src" ]]; then
   echo "ERROR: expected binary at ${bin_src}" >&2
   exit 2
 fi
-bin_shard_src="${CARGO_TARGET_DIR}/release/shard_01"
+bin_shard_src="${repo_root}/target/release/shard_01"
 if [[ "$build_shard" == "1" ]]; then
   if [[ ! -x "$bin_shard_src" ]]; then
     echo "ERROR: expected binary at ${bin_shard_src}" >&2

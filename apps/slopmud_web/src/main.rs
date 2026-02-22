@@ -504,7 +504,7 @@ async fn api_oauth_logout(
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct WebAuthReq {
-    action: String, // login | create
+    action: String, // login | create | auto
     method: String, // password | google | oidc
     name: String,
     #[serde(default)]
@@ -555,11 +555,20 @@ async fn api_webauth_set(
     let method = req.method.trim().to_ascii_lowercase();
     let name = req.name.trim().to_string();
 
-    if action != "login" && action != "create" {
+    if action != "login" && action != "create" && action != "auto" {
         return (
             StatusCode::BAD_REQUEST,
             axum::Json(WebAuthSetResp::Err {
                 message: "bad action".to_string(),
+            }),
+        );
+    }
+
+    if action == "auto" && method != "google" && method != "oidc" {
+        return (
+            StatusCode::BAD_REQUEST,
+            axum::Json(WebAuthSetResp::Err {
+                message: "auto action requires google or oidc".to_string(),
             }),
         );
     }
@@ -901,7 +910,7 @@ async fn google_auth_callback(
             file_pending = Some(pending);
         }
         Err(_) => {
-            web_pending = st.oauth.web_pending_google.lock().await.remove(state_code);
+            web_pending = st.oauth.web_pending_google.lock().await.get(state_code).cloned();
             if web_pending.is_none() {
                 return (
                     axum::http::StatusCode::NOT_FOUND,
@@ -1118,6 +1127,9 @@ async fn google_auth_callback(
                 created_unix: now_unix,
             },
         );
+        // Consume the one-time web state after successful completion.
+        let mut pending = st.oauth.web_pending_google.lock().await;
+        pending.remove(state_code);
     }
 
     oauth_popup(true, "ok")
@@ -1239,7 +1251,7 @@ async fn oidc_auth_callback(
             .into_response();
     };
 
-    let pending = st.oauth.web_pending_oidc.lock().await.remove(state_code);
+    let pending = st.oauth.web_pending_oidc.lock().await.get(state_code).cloned();
     let Some(pending) = pending else {
         return (
             axum::http::StatusCode::NOT_FOUND,
@@ -1363,6 +1375,8 @@ async fn oidc_auth_callback(
             },
         );
     }
+    // Consume the one-time web state after successful completion.
+    st.oauth.web_pending_oidc.lock().await.remove(state_code);
 
     oauth_popup(true, "ok")
 }

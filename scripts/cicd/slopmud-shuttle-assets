@@ -41,6 +41,20 @@ from_s3=""
 from_file=""
 rewrite_unit="0"
 
+wait_for_listen() {
+  local port="$1"
+  local label="$2"
+  local i
+  for i in $(seq 1 40); do
+    if ss -lnt | grep -qE ":${port}\\b"; then
+      return 0
+    fi
+    sleep 0.25
+  done
+  echo "not listening on ${label}" >&2
+  return 1
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --env)
@@ -298,7 +312,7 @@ systemctl restart "${service_name}"
 
 port="${bind##*:}"
 echo "Listening check (port ${port})"
-ss -lnt | grep -qE ":${port}\\b" || { echo "not listening on ${port}" >&2; exit 1; }
+wait_for_listen "${port}" "${port}"
 
 if [[ -x "$bin_shard_src" ]]; then
   shard_unit_path="/etc/systemd/system/${shard_service_name}.service"
@@ -341,7 +355,7 @@ EOF
 
   shard_port="${shard_bind##*:}"
   echo "Listening check (shard port ${shard_port})"
-  ss -lnt | grep -qE ":${shard_port}\\b" || { echo "not listening on ${shard_port}" >&2; exit 1; }
+  wait_for_listen "${shard_port}" "${shard_port}"
 fi
 
 echo "OK: ${service_name} deployed (sha=${sha})"

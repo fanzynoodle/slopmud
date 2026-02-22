@@ -338,27 +338,32 @@ def main():
             _set_input_name(d, "password2", pw, timeout_s=10.0)
             _wait_el(d, "css selector", "button[type='submit']", timeout_s=10.0).click()
 
-            # Redirect back to slopmud_web /play.html and open the connect dialog (hash gets cleared).
+            # Redirect back to slopmud_web /play.html.
             # (We may briefly hit /auth/oidc/callback before being redirected to /play.html.)
             _wait_url_contains(d, web_bind, timeout_s=14.0)
             _wait_url_path_endswith(d, "/play.html", timeout_s=14.0)
-            _wait_dialog_open(d, "dlg-connect", timeout_s=12.0)
 
-            # SSO status should show we're signed in via oidc.
-            deadline = time.time() + 12.0
+            # New flow: after OAuth return, client auto-connects and broker either:
+            # - prompts for in-game name (first-time SSO link/create), or
+            # - resumes directly at step 2+ for an existing link.
+            deadline = time.time() + 18.0
+            term = ""
             while time.time() < deadline:
-                sso = d.find_element("id", "sso-status").text
-                if "Signed in (oidc)" in sso:
+                term = _term_text(d)
+                if "character creation (step 2/4)" in term:
+                    break
+                if "\nname: " in term or term.rstrip().endswith("name:"):
                     break
                 time.sleep(0.05)
             else:
-                raise TimeoutError(f"timeout waiting for Signed in (oidc); got {sso!r}")
+                raise TimeoutError(f"timeout waiting for auto-connect prompt; got:\n{term[-2000:]}")
 
-            # Create slopmud account bound to this SSO identity, then connect.
-            name = f"SsoReg{run_id[-6:]}"
-            _wait_el(d, "id", "auth-name", timeout_s=10.0).send_keys(name)
-            _wait_enabled_id(d, "btn-auth-create-sso", timeout_s=10.0)
-            _click_id(d, "btn-auth-create-sso", timeout_s=10.0)
+            if "name: name:" in term:
+                raise RuntimeError(f"duplicate name prompt detected:\n{term[-2000:]}")
+
+            if "character creation (step 2/4)" not in term:
+                name = f"SsoReg{run_id[-6:]}"
+                _send_line(d, name)
 
             run_sso_create_flow(d)
 
