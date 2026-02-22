@@ -31,9 +31,50 @@ env:
   CARGO_TARGET_DIR: ${{ github.workspace }}/target
 
 jobs:
+  runner_check:
+    name: Check mud self-hosted runner availability
+    runs-on: ubuntu-latest
+    outputs:
+      runner_name: ${{ steps.find_runner.outputs.runner_name }}
+      runner_count: ${{ steps.find_runner.outputs.runner_count }}
+
+    steps:
+      - name: Find available mud runner
+        id: find_runner
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          runner_names="$(
+            gh api repos/${{ github.repository }}/actions/runners --paginate \
+              --jq '[.runners[]
+                | select(
+                  .status=="online" and
+                  (.labels | map(.name) | index("self-hosted")) != null and
+                  (.labels | map(.name) | index("Linux")) != null and
+                  (.labels | map(.name) | index("mud")) != null
+                )
+                | .name] | sort | unique | join(",")'
+          )"
+          runner_count="$(printf "%s" "$runner_names" | awk -F',' '{print (NF==1 && $1=="" ? 0 : NF)}')"
+
+          if [ "$runner_count" -eq 0 ]; then
+            echo "::error::No online self-hosted runner matching labels [self-hosted, Linux, mud] was found."
+            echo "Available runners:"
+            gh api repos/${{ github.repository }}/actions/runners --paginate --jq '.runners[] | "\(.name): status=\(.status) busy=\(.busy) labels=\(.labels | map(.name) | join(\",\"))"' || true
+            exit 1
+          fi
+
+          echo "runner_name=$runner_names" >> "$GITHUB_OUTPUT"
+          echo "runner_count=$runner_count" >> "$GITHUB_OUTPUT"
+          echo "::notice::Using mud runner(s): $runner_names"
+
   build:
     name: Build + Store Asset
-    runs-on: [self-hosted, Linux]
+    needs: runner_check
+    runs-on: [self-hosted, Linux, mud]
     timeout-minutes: 60
 
     outputs:
@@ -231,7 +272,7 @@ jobs:
 
   deploy_sandbox:
     name: Deploy to sandbox (pre-dev smoke)
-    runs-on: [self-hosted, Linux]
+    runs-on: [self-hosted, Linux, mud]
     timeout-minutes: 20
     needs: build
     if: needs.build.outputs.deploy_env == 'dev'
@@ -290,7 +331,7 @@ jobs:
 
   e2e-core-local:
     name: E2E (core local, fast)
-    runs-on: [self-hosted, Linux]
+    runs-on: [self-hosted, Linux, mud]
     timeout-minutes: 25
     needs: [build, deploy_sandbox]
     if: >
@@ -330,7 +371,7 @@ jobs:
 
   e2e-core-party:
     name: E2E (core party, fast)
-    runs-on: [self-hosted, Linux]
+    runs-on: [self-hosted, Linux, mud]
     timeout-minutes: 25
     needs: [build, deploy_sandbox]
     if: >
@@ -370,7 +411,7 @@ jobs:
 
   e2e-ws:
     name: E2E (ws gateway)
-    runs-on: [self-hosted, Linux]
+    runs-on: [self-hosted, Linux, mud]
     timeout-minutes: 25
     needs: [build, deploy_sandbox]
     if: >
@@ -411,7 +452,7 @@ jobs:
 
   deploy:
     name: Deploy To ${{ needs.build.outputs.deploy_env }}
-    runs-on: [self-hosted, Linux]
+    runs-on: [self-hosted, Linux, mud]
     timeout-minutes: 20
     needs: [build, deploy_sandbox, e2e-core-local, e2e-core-party, e2e-ws]
     if: |
@@ -481,7 +522,7 @@ jobs:
 
   promote_prod:
     name: Promote To Prod
-    runs-on: [self-hosted, Linux]
+    runs-on: [self-hosted, Linux, mud]
     timeout-minutes: 30
     needs: [build, deploy]
     if: needs.build.outputs.deploy_env == 'stg'
