@@ -54,7 +54,7 @@ jobs:
           )"; then
             echo "::warning::Runner inventory check is unavailable for the CI token; continuing without hard fail."
             echo "runner_name=unknown" >> "$GITHUB_OUTPUT"
-            echo "runner_count=-1" >> "$GITHUB_OUTPUT"
+            echo "runner_count=0" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           runner_names="$(
@@ -89,6 +89,7 @@ jobs:
   build:
     name: Build + Store Asset
     needs: runner_check
+    if: fromJSON(needs.runner_check.outputs.runner_count) > 0
     runs-on: [self-hosted, Linux, mud]
     timeout-minutes: 60
 
