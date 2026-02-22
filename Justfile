@@ -22,6 +22,11 @@ py-check:
   python3 -m compileall -q scripts
 
 check:
+  just check-core
+  just check-e2e
+
+# Everything that doesn't require a local TCP stack.
+check-core:
   just fmt-check
   just py-check
   RUSTFLAGS='-D warnings' cargo build -q --workspace --all-targets
@@ -29,6 +34,9 @@ check:
   just world-validate
   just proto-lint
   just proto-coverage
+
+# End-to-end checks (require local TCP sockets / port binding).
+check-e2e:
   # Some sandboxed/dev environments block `socket()` syscalls (EPERM), which makes
   # local end-to-end tests impossible even on 127.0.0.1. In that case, skip e2e.
   if python3 -c $'import errno, socket, sys\ntry:\n    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n    s.close()\nexcept OSError as e:\n    if e.errno == errno.EPERM:\n        sys.exit(10)\n    print(f\"error: socket probe failed: {e}\", file=sys.stderr)\n    sys.exit(11)\nsys.exit(0)\n'; then just e2e-local; just e2e-party; just e2e-ws; just e2e-groups; else rc=$?; if [ $rc -eq 10 ]; then echo "skipping e2e (TCP sockets not permitted in this environment)"; else exit $rc; fi; fi
