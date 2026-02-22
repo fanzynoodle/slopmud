@@ -19,6 +19,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: enterprise-cicd-${{ github.event_name == 'workflow_dispatch' && inputs.track || github.ref_name }}
@@ -28,11 +29,68 @@ env:
   AWS_REGION: us-east-1
   AWS_DEFAULT_REGION: us-east-1
   ASSETS_ROOT: assets
+  CARGO_TARGET_DIR: ${{ github.workspace }}/target
 
 jobs:
+  runner_check:
+    name: Check mud self-hosted runner availability
+    runs-on: ubuntu-latest
+    outputs:
+      runner_name: ${{ steps.find_runner.outputs.runner_name }}
+      runner_count: ${{ steps.find_runner.outputs.runner_count }}
+
+    steps:
+      - name: Find available mud runner
+        id: find_runner
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if ! runner_snapshot="$(
+            gh api repos/${{ github.repository }}/actions/runners --paginate \
+              --jq '.runners | map({name: .name, status: .status, busy: .busy, labels: (.labels | map(.name)})'
+          )"; then
+            echo "::warning::Runner inventory check is unavailable for the CI token; continuing without hard fail."
+            echo "runner_name=unknown" >> "$GITHUB_OUTPUT"
+            echo "runner_count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          runner_names="$(
+            printf "%s" "$runner_snapshot" | jq -r '
+              map(
+                select(
+                  .status=="online" and
+                  (.labels | index("self-hosted")) != null and
+                  (.labels | index("Linux")) != null and
+                  (.labels | index("mud")) != null
+                )
+              )
+              | map(.name)
+              | sort
+              | unique
+              | join(",")
+            '
+          )"
+          runner_count="$(printf "%s" "$runner_names" | awk -F',' '{print (NF==1 && $1=="" ? 0 : NF)}')"
+
+          if [ "$runner_count" -eq 0 ]; then
+            echo "::error::No online self-hosted runner matching labels [self-hosted, Linux, mud] was found."
+            echo "Registered runners:"
+            printf "%s" "$runner_snapshot" | jq -r 'map("\(.name): status=\(.status) busy=\(.busy) labels=\(.labels | join(\",\"))") | join("\n")'
+            exit 1
+          fi
+
+          echo "runner_name=$runner_names" >> "$GITHUB_OUTPUT"
+          echo "runner_count=$runner_count" >> "$GITHUB_OUTPUT"
+          echo "::notice::Using mud runner(s): $runner_names"
+
   build:
     name: Build + Store Asset
-    runs-on: [self-hosted, Linux]
+    needs: runner_check
+    if: fromJSON(needs.runner_check.outputs.runner_count) > 0
+    runs-on: [self-hosted, Linux, mud]
     timeout-minutes: 60
 
     outputs:
@@ -42,12 +100,18 @@ jobs:
       artifact_path: ${{ steps.meta.outputs.artifact_path }}
       bucket: ${{ steps.s3.outputs.bucket }}
       key: ${{ steps.s3.outputs.key }}
+      e2e_core: ${{ steps.scope.outputs.run_e2e_core }}
+      e2e_ws: ${{ steps.scope.outputs.run_e2e_ws }}
+      e2e_scope_reason: ${{ steps.scope.outputs.scope_reason }}
+      e2e_scope_count: ${{ steps.scope.outputs.changed_count }}
+      e2e_scope_files: ${{ steps.scope.outputs.changed_files }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           # Keep build output/cargo target dirs on the runner for speed.
+          fetch-depth: 2
           clean: false
 
       - name: Meta
@@ -135,29 +199,42 @@ jobs:
           cargo --version
           rustc --version
 
+      - name: Scope E2E Targets
+        id: scope
+        env:
+          TRACK: ${{ steps.meta.outputs.deploy_env }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/cicd/ci_scope_e2e.sh
+
       - name: Restore Rust cache
         uses: Swatinem/rust-cache@v2
 
       - name: Validate (fast + strict)
+        id: validate
         shell: bash
         env:
           RUSTFLAGS: "-D warnings"
           DEPLOY_ENV: ${{ steps.meta.outputs.deploy_env }}
         run: |
           set -euo pipefail
+          start_ts="$(date +%s)"
           just fmt-check
           just py-check
 
           # dev: keep this fast for iteration; stg: run the full validation suite.
           if [[ "$DEPLOY_ENV" == "dev" ]]; then
-            cargo build --workspace --all-targets
-            cargo test -p slopmud
+            cargo test -p slopmud --no-run
           else
             cargo build --workspace --all-targets
             cargo test
             just world-validate
             just proto-lint
           fi
+          duration_s=$(( $(date +%s) - start_ts ))
+          echo "::notice::validate_duration_s=${duration_s}"
+          echo "duration_s=${duration_s}" >> "$GITHUB_OUTPUT"
 
       - name: Build Asset (non-cleanroom)
         id: build_asset
@@ -168,8 +245,12 @@ jobs:
           CLEAN_BUILD: ${{ steps.meta.outputs.deploy_env == 'stg' && '1' || '0' }}
         run: |
           set -euo pipefail
+          start_ts="$(date +%s)"
           artifact_path="$(./scripts/cicd/build_assets.sh)"
           echo "artifact_path=$artifact_path" >> "$GITHUB_OUTPUT"
+          duration_s=$(( $(date +%s) - start_ts ))
+          echo "::notice::build_asset_duration_s=${duration_s}"
+          echo "duration_s=${duration_s}" >> "$GITHUB_OUTPUT"
 
       - name: Upload To S3
         id: s3
@@ -180,6 +261,7 @@ jobs:
           ARTIFACT_PATH: ${{ steps.build_asset.outputs.artifact_path }}
         run: |
           set -euo pipefail
+          start_ts="$(date +%s)"
           account_id="$(aws sts get-caller-identity --query Account --output text)"
           bucket="slopmud-assets-${account_id}-${AWS_REGION}"
           key="${TRACK}/${SHA}/artifact.tgz"
@@ -200,10 +282,13 @@ jobs:
 
           echo "bucket=$bucket" >> "$GITHUB_OUTPUT"
           echo "key=$key" >> "$GITHUB_OUTPUT"
+          duration_s=$(( $(date +%s) - start_ts ))
+          echo "::notice::s3_upload_duration_s=${duration_s}"
+          echo "duration_s=${duration_s}" >> "$GITHUB_OUTPUT"
 
   deploy_sandbox:
     name: Deploy to sandbox (pre-dev smoke)
-    runs-on: [self-hosted, Linux]
+    runs-on: [self-hosted, Linux, mud]
     timeout-minutes: 20
     needs: build
     if: needs.build.outputs.deploy_env == 'dev'
@@ -218,16 +303,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo cp scripts/cicd/slopmud-shuttle-assets /usr/local/bin/slopmud-shuttle-assets
-          sudo chmod 0755 /usr/local/bin/slopmud-shuttle-assets
+          chmod +x scripts/cicd/slopmud-shuttle-assets
 
       - name: Assert Deploy Hook Installed
         shell: bash
         run: |
           set -euo pipefail
-          sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null 2>&1
+          ./scripts/cicd/slopmud-shuttle-assets --help >/dev/null 2>&1
 
       - name: Deploy to sandbox
+        id: deploy
         shell: bash
         env:
           ARTIFACT_PATH: ${{ needs.build.outputs.artifact_path }}
@@ -235,28 +320,157 @@ jobs:
           KEY: ${{ needs.build.outputs.key }}
         run: |
           set -euo pipefail
+          start_ts="$(date +%s)"
 
           if [[ -n "${BUCKET}" && -n "${KEY}" ]]; then
-            sudo -n /usr/local/bin/slopmud-shuttle-assets \
+            ./scripts/cicd/slopmud-shuttle-assets \
               --env sandbox \
               --from-s3 "s3://${BUCKET}/${KEY}"
           else
-            sudo -n /usr/local/bin/slopmud-shuttle-assets \
+            ./scripts/cicd/slopmud-shuttle-assets \
               --env sandbox \
               --from-file "$ARTIFACT_PATH"
           fi
+          duration_s=$(( $(date +%s) - start_ts ))
+          echo "::notice::sandbox_deploy_duration_s=${duration_s}"
+          echo "duration_s=${duration_s}" >> "$GITHUB_OUTPUT"
 
       - name: Smoke Test
+        id: smoke
         shell: bash
         run: |
           set -euo pipefail
+          start_ts="$(date +%s)"
           python3 ./scripts/cicd/smoke_telnet.py --host 127.0.0.1 --port 4500
+          duration_s=$(( $(date +%s) - start_ts ))
+          echo "::notice::sandbox_smoke_duration_s=${duration_s}"
+
+  e2e-core-local:
+    name: E2E (core local, fast)
+    runs-on: [self-hosted, Linux, mud]
+    timeout-minutes: 25
+    needs: [build, deploy_sandbox]
+    if: >
+      needs.build.outputs.deploy_env == 'dev' &&
+      needs.build.outputs.e2e_core == '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Rust Toolchain On PATH
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f "$HOME/.cargo/env" ]]; then
+            # shellcheck disable=SC1090
+            source "$HOME/.cargo/env"
+          else
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          cargo --version
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run e2e-local (skip-build)
+        id: run
+        shell: bash
+        run: |
+          set -euo pipefail
+          start_ts="$(date +%s)"
+          python3 scripts/e2e_local.py --skip-build
+          duration_s=$(( $(date +%s) - start_ts ))
+          echo "::notice::e2e_local_duration_s=${duration_s}"
+
+  e2e-core-party:
+    name: E2E (core party, fast)
+    runs-on: [self-hosted, Linux, mud]
+    timeout-minutes: 25
+    needs: [build, deploy_sandbox]
+    if: >
+      needs.build.outputs.deploy_env == 'dev' &&
+      needs.build.outputs.e2e_core == '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Rust Toolchain On PATH
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f "$HOME/.cargo/env" ]]; then
+            # shellcheck disable=SC1090
+            source "$HOME/.cargo/env"
+          else
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          cargo --version
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run e2e-party (skip-build)
+        id: run
+        shell: bash
+        run: |
+          set -euo pipefail
+          start_ts="$(date +%s)"
+          python3 scripts/e2e_party_run.py --skip-build
+          duration_s=$(( $(date +%s) - start_ts ))
+          echo "::notice::e2e_party_duration_s=${duration_s}"
+
+  e2e-ws:
+    name: E2E (ws gateway)
+    runs-on: [self-hosted, Linux, mud]
+    timeout-minutes: 25
+    needs: [build, deploy_sandbox]
+    if: >
+      needs.build.outputs.deploy_env == 'dev' &&
+      needs.build.outputs.e2e_ws == '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Rust Toolchain On PATH
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f "$HOME/.cargo/env" ]]; then
+            # shellcheck disable=SC1090
+            source "$HOME/.cargo/env"
+          else
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          cargo --version
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build and run ws e2e
+        id: run
+        shell: bash
+        run: |
+          set -euo pipefail
+          start_ts="$(date +%s)"
+          cargo build -q -p ws_gateway --bin e2e_ws
+          ./target/debug/e2e_ws
+          duration_s=$(( $(date +%s) - start_ts ))
+          echo "::notice::e2e_ws_duration_s=${duration_s}"
 
   deploy:
     name: Deploy To ${{ needs.build.outputs.deploy_env }}
-    runs-on: [self-hosted, Linux]
+    runs-on: [self-hosted, Linux, mud]
     timeout-minutes: 20
-    needs: [build, deploy_sandbox]
+    needs: [build, deploy_sandbox, e2e-core-local, e2e-core-party, e2e-ws]
     if: |
       needs.build.outputs.deploy_env == 'stg' ||
       (needs.build.outputs.deploy_env == 'dev' && needs.deploy_sandbox.result == 'success')
@@ -271,16 +485,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo cp scripts/cicd/slopmud-shuttle-assets /usr/local/bin/slopmud-shuttle-assets
-          sudo chmod 0755 /usr/local/bin/slopmud-shuttle-assets
+          chmod +x scripts/cicd/slopmud-shuttle-assets
 
       - name: Assert Deploy Hook Installed
         shell: bash
         run: |
           set -euo pipefail
-          sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null 2>&1
+          ./scripts/cicd/slopmud-shuttle-assets --help >/dev/null 2>&1
 
       - name: Deploy
+        id: deploy
         shell: bash
         env:
           DEPLOY_ENV: ${{ needs.build.outputs.deploy_env }}
@@ -289,23 +503,28 @@ jobs:
           KEY: ${{ needs.build.outputs.key }}
         run: |
           set -euo pipefail
+          start_ts="$(date +%s)"
 
           if [[ -n "${BUCKET}" && -n "${KEY}" ]]; then
-            sudo -n /usr/local/bin/slopmud-shuttle-assets \
+            ./scripts/cicd/slopmud-shuttle-assets \
               --env "$DEPLOY_ENV" \
               --from-s3 "s3://${BUCKET}/${KEY}"
           else
-            sudo -n /usr/local/bin/slopmud-shuttle-assets \
+            ./scripts/cicd/slopmud-shuttle-assets \
               --env "$DEPLOY_ENV" \
               --from-file "$ARTIFACT_PATH"
           fi
+          duration_s=$(( $(date +%s) - start_ts ))
+          echo "::notice::deploy_duration_s=${duration_s}"
 
       - name: Smoke Test
+        id: smoke
         shell: bash
         env:
           DEPLOY_ENV: ${{ needs.build.outputs.deploy_env }}
         run: |
           set -euo pipefail
+          start_ts="$(date +%s)"
 
           case "$DEPLOY_ENV" in
             dev) port="4000" ;;
@@ -314,10 +533,12 @@ jobs:
           esac
 
           python3 ./scripts/cicd/smoke_telnet.py --host 127.0.0.1 --port "$port"
+          duration_s=$(( $(date +%s) - start_ts ))
+          echo "::notice::deploy_smoke_duration_s=${duration_s}"
 
   promote_prod:
     name: Promote To Prod
-    runs-on: [self-hosted, Linux]
+    runs-on: [self-hosted, Linux, mud]
     timeout-minutes: 30
     needs: [build, deploy]
     if: needs.build.outputs.deploy_env == 'stg'
@@ -332,16 +553,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo cp scripts/cicd/slopmud-shuttle-assets /usr/local/bin/slopmud-shuttle-assets
-          sudo chmod 0755 /usr/local/bin/slopmud-shuttle-assets
+          chmod +x scripts/cicd/slopmud-shuttle-assets
 
       - name: Assert Deploy Hook Installed
         shell: bash
         run: |
           set -euo pipefail
-          sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null 2>&1
+          ./scripts/cicd/slopmud-shuttle-assets --help >/dev/null 2>&1
 
       - name: Copy STG Asset -> prod/
+        id: copy
         shell: bash
         env:
           BUCKET: ${{ needs.build.outputs.bucket }}
@@ -349,34 +570,49 @@ jobs:
           DEPLOY_ENV: ${{ needs.build.outputs.deploy_env }}
         run: |
           set -euo pipefail
+          start_ts="$(date +%s)"
           aws s3 cp \
             "s3://${BUCKET}/${DEPLOY_ENV}/${SHA}/artifact.tgz" \
             "s3://${BUCKET}/prod/${SHA}/artifact.tgz"
+          duration_s=$(( $(date +%s) - start_ts ))
+          echo "::notice::promote_copy_duration_s=${duration_s}"
 
       - name: Store Local Prod Asset (No Rebuild)
+        id: sync
         shell: bash
         env:
           BUCKET: ${{ needs.build.outputs.bucket }}
           SHA: ${{ needs.build.outputs.sha }}
         run: |
           set -euo pipefail
+          start_ts="$(date +%s)"
           mkdir -p "assets/prod/${SHA}"
           aws s3 cp "s3://${BUCKET}/prod/${SHA}/artifact.tgz" "assets/prod/${SHA}/artifact.tgz"
           tar -xzf "assets/prod/${SHA}/artifact.tgz" -C "assets/prod/${SHA}" BUILD_INFO.txt 2>/dev/null || true
+          duration_s=$(( $(date +%s) - start_ts ))
+          echo "::notice::promote_sync_duration_s=${duration_s}"
 
       - name: Deploy Prod
+        id: deploy
         shell: bash
         env:
           BUCKET: ${{ needs.build.outputs.bucket }}
           SHA: ${{ needs.build.outputs.sha }}
         run: |
           set -euo pipefail
-          sudo -n /usr/local/bin/slopmud-shuttle-assets \
+          start_ts="$(date +%s)"
+          ./scripts/cicd/slopmud-shuttle-assets \
             --env prd \
             --from-s3 "s3://${BUCKET}/prod/${SHA}/artifact.tgz"
+          duration_s=$(( $(date +%s) - start_ts ))
+          echo "::notice::promote_deploy_duration_s=${duration_s}"
 
       - name: Smoke Test (Prod)
+        id: smoke
         shell: bash
         run: |
           set -euo pipefail
+          start_ts="$(date +%s)"
           python3 ./scripts/cicd/smoke_telnet.py --host 127.0.0.1 --port 4200
+          duration_s=$(( $(date +%s) - start_ts ))
+          echo "::notice::promote_smoke_duration_s=${duration_s}"

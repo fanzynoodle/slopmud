@@ -147,6 +147,27 @@ def cargo_build_quiet(env, build_log: Path, pkg: str):
         raise subprocess.CalledProcessError(p.returncode, cmd)
 
 
+def ensure_built(env, build_log: Path, skip_build: bool = False) -> None:
+    target_root = Path("target/debug")
+    missing = []
+    for pkg in ["shard_01", "slopmud"]:
+        if not (target_root / pkg).exists():
+            missing.append(pkg)
+
+    if not skip_build:
+        missing = ["shard_01", "slopmud"]
+
+    if skip_build and not missing:
+        return
+
+    if skip_build:
+        print(
+            f"e2e-party: skip-build requested but missing {', '.join(missing)}; building now"
+        )
+
+    for pkg in missing:
+        cargo_build_quiet(env, build_log, pkg)
+
 def _alloc_port_block(port_range: str, stride: int, offsets: str) -> int:
     alloc = Path(__file__).with_name("alloc_port_block.py")
     if not alloc.exists():
@@ -172,6 +193,7 @@ def main():
     ap.add_argument("--base-port", type=int, default=0)
     ap.add_argument("--port-range", default="4950-5990")
     ap.add_argument("--stride", type=int, default=5)
+    ap.add_argument("--skip-build", action="store_true")
     args = ap.parse_args()
 
     if not _tcp_allowed():
@@ -199,8 +221,7 @@ def main():
     shard_f = open(shard_log, "wb")
     broker_f = open(broker_log, "wb")
 
-    cargo_build_quiet(env, build_log, "shard_01")
-    cargo_build_quiet(env, build_log, "slopmud")
+    ensure_built(env, build_log, args.skip_build)
 
     shard = subprocess.Popen(
         ["target/debug/shard_01"],
