@@ -29,6 +29,22 @@ Env files:
 
 Port layout is documented in `docs/gaia_ports.md`.
 
+## One Stack, Split Web Lifecycles
+
+Production keeps a single infrastructure stack/host (`mudbox`) but separates web service lifecycles:
+
+- Landing site (`slopmud.com`/`www`) runs as `slopmud-landing` from `env/prd_landing.env`.
+- Web portal/service (`mud.slopmud.com` path and auth endpoints) runs as `slopmud-web` from `env/prd.env`.
+- Game broker/shard lifecycle remains independent from landing deploys.
+
+Shared deploy entrypoint (local + CI):
+
+```bash
+./scripts/deploy_web_target.sh landing prd
+./scripts/deploy_web_target.sh webportal prd
+./scripts/deploy_web_target.sh both prd
+```
+
 ## Fast Deploys (Code Only)
 
 For quick "hot" deploys that reuse the same asset tarball + install logic as CI (broker + shard), use:

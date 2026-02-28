@@ -1,0 +1,46 @@
+name: Deploy Web Services
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which web service lifecycle to deploy"
+        required: true
+        default: "landing"
+        type: choice
+        options:
+          - landing
+          - webportal
+          - both
+      env:
+        description: "Environment prefix (expects env/<env>.env and env/<env>_landing.env)"
+        required: true
+        default: "prd"
+        type: choice
+        options:
+          - prd
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-web-services-${{ inputs.env }}-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.target }} (${{ inputs.env }})
+    runs-on: [self-hosted, Linux, mud]
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Deploy target
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/deploy_web_target.sh "${{ inputs.target }}" "${{ inputs.env }}"

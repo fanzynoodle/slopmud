@@ -1,11 +1,9 @@
 (() => {
-  // prd: `mud.slopmud.com` serves the homepage on :443 but runs OAuth on :4242.
-  // Redirect play/connect flows to the OAuth origin so Google SSO uses the right redirect_uri.
-  if (location.hostname === "mud.slopmud.com" && location.port !== "4242") {
-    const to = new URL(location.href);
-    to.protocol = "https:";
-    to.port = "4242";
-    location.replace(to.toString());
+  const GAME_ORIGIN = "https://mud.slopmud.com:4242";
+  // Ensure the web client always runs from the OAuth/game web origin.
+  if (location.origin !== GAME_ORIGIN) {
+    const to = `${GAME_ORIGIN}${location.pathname}${location.search}${location.hash}`;
+    location.replace(to);
     return;
   }
 

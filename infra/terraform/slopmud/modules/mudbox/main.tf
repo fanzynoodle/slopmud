@@ -404,18 +404,25 @@ resource "aws_key_pair" "this" {
   tags = local.tags
 }
 
-resource "aws_instance" "this" {
+resource "aws_launch_template" "this" {
   count = var.enable_compute ? 1 : 0
 
-  ami                         = local.ami_id
-  instance_type               = var.instance_type
-  subnet_id                   = element(local.subnet_ids, 0)
-  vpc_security_group_ids      = [aws_security_group.this[0].id]
-  iam_instance_profile        = aws_iam_instance_profile.ssm[0].name
-  associate_public_ip_address = var.associate_public_ip_address
-  key_name                    = var.ssh_public_key_path != "" ? aws_key_pair.this[0].key_name : null
+  name_prefix   = "${var.name_prefix}-"
+  image_id      = local.ami_id
+  instance_type = var.instance_type
+  key_name      = var.ssh_public_key_path != "" ? aws_key_pair.this[0].key_name : null
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ssm[0].name
+  }
+
+  network_interfaces {
+    associate_public_ip_address = var.associate_public_ip_address
+    security_groups             = [aws_security_group.this[0].id]
+  }
+
   user_data = var.dns_admin_enabled && (var.create_hosted_zone || var.dns_admin_zone_id != "") ? (
-    <<EOT
+    base64encode(<<EOT
     #!/usr/bin/env bash
     set -euxo pipefail
 
@@ -491,8 +498,8 @@ resource "aws_instance" "this" {
     chmod 0755 /var/lib/cloud/scripts/per-boot/90-${var.name_prefix}-reregister-dns.sh
     /var/lib/cloud/scripts/per-boot/90-${var.name_prefix}-reregister-dns.sh || true
 EOT
+    )
   ) : null
-  user_data_replace_on_change = true
 
   instance_market_options {
     market_type = "spot"
@@ -510,14 +517,84 @@ EOT
     http_put_response_hop_limit = 1
   }
 
-  root_block_device {
-    volume_type           = "gp3"
-    volume_size           = var.root_volume_gib
-    delete_on_termination = true
-    encrypted             = true
+  block_device_mappings {
+    device_name = "/dev/sda1"
+
+    ebs {
+      volume_type           = "gp3"
+      volume_size           = var.root_volume_gib
+      delete_on_termination = true
+      encrypted             = true
+    }
   }
 
-  tags = merge(local.tags, { Name = var.name_prefix })
+  tag_specifications {
+    resource_type = "instance"
+    tags          = merge(local.tags, { Name = var.name_prefix })
+  }
+
+  tag_specifications {
+    resource_type = "volume"
+    tags          = local.tags
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_autoscaling_group" "this" {
+  count = var.enable_compute ? 1 : 0
+
+  name_prefix         = "${var.name_prefix}-"
+  min_size            = 1
+  max_size            = 1
+  desired_capacity    = 1
+  health_check_type   = "EC2"
+  vpc_zone_identifier = [element(local.subnet_ids, 0)]
+  force_delete        = false
+
+  launch_template {
+    id      = aws_launch_template.this[0].id
+    version = "$Latest"
+  }
+
+  tag {
+    key                 = "Name"
+    value               = var.name_prefix
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "ManagedBy"
+    value               = "terraform"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Stack"
+    value               = var.name_prefix
+    propagate_at_launch = true
+  }
+
+  depends_on = [aws_launch_template.this]
+}
+
+data "aws_instances" "asg_instances" {
+  count = var.enable_compute ? 1 : 0
+
+  instance_state_names = ["pending", "running"]
+
+  filter {
+    name   = "tag:aws:autoscaling:groupName"
+    values = [aws_autoscaling_group.this[0].name]
+  }
+}
+
+data "aws_instance" "active" {
+  count = var.enable_compute ? 1 : 0
+
+  instance_id = sort(data.aws_instances.asg_instances[0].ids)[0]
 }
 
 resource "aws_route53_zone" "this" {
@@ -532,20 +609,16 @@ locals {
 }
 
 resource "aws_route53_record" "mud_cname" {
-  # Count cannot depend on resource attributes. If compute is enabled, we create the record
-  # and let the target resolve to the instance's public DNS after apply.
   count = var.create_hosted_zone && (var.enable_compute || var.cname_target != "") ? 1 : 0
 
   zone_id = local.hosted_zone_id
   name    = "${var.record_name}.${trim(var.zone_name, ".")}"
   type    = "CNAME"
   ttl     = 60
-  records = [var.cname_target != "" ? var.cname_target : aws_instance.this[0].public_dns]
+  records = [var.cname_target != "" ? var.cname_target : data.aws_instance.active[0].public_dns]
 }
 
 resource "aws_route53_record" "www_cname" {
-  # Count cannot depend on resource attributes. If compute is enabled, we create the record
-  # and let the target resolve to the instance's public DNS after apply.
   count = var.create_hosted_zone && (var.enable_compute || var.cname_target != "" || var.www_cname_target != "") ? 1 : 0
 
   zone_id = local.hosted_zone_id
@@ -553,7 +626,7 @@ resource "aws_route53_record" "www_cname" {
   type    = "CNAME"
   ttl     = 60
   records = [
-    var.www_cname_target != "" ? var.www_cname_target : (var.cname_target != "" ? var.cname_target : aws_instance.this[0].public_dns),
+    var.www_cname_target != "" ? var.www_cname_target : (var.cname_target != "" ? var.cname_target : data.aws_instance.active[0].public_dns),
   ]
 }
 
@@ -564,7 +637,7 @@ resource "aws_route53_record" "extra_cnames" {
   name    = "${var.extra_cname_record_names[count.index]}.${trim(var.zone_name, ".")}"
   type    = "CNAME"
   ttl     = 60
-  records = [var.cname_target != "" ? var.cname_target : aws_instance.this[0].public_dns]
+  records = [var.cname_target != "" ? var.cname_target : data.aws_instance.active[0].public_dns]
 }
 
 resource "aws_route53_record" "apex_a" {
@@ -574,7 +647,7 @@ resource "aws_route53_record" "apex_a" {
   name    = trim(var.zone_name, ".")
   type    = "A"
   ttl     = 60
-  records = [aws_instance.this[0].public_ip]
+  records = [data.aws_instance.active[0].public_ip]
 }
 
 resource "aws_route53_record" "sbc_enable_a" {

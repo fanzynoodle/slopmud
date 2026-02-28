@@ -1,16 +1,12 @@
 (() => {
-  // prd: `mud.slopmud.com` serves the homepage on :443 but runs OAuth on :4242.
-  // Redirect only the connect/play pages so SSO uses the right redirect_uri without moving the homepage.
+  const GAME_ORIGIN = "https://mud.slopmud.com:4242";
+  // Keep landing and game web lifecycles split: selected pages must always run from the game origin.
   const p = String(location.pathname || "");
-  if (
-    location.hostname === "mud.slopmud.com" &&
-    location.port !== "4242" &&
-    (p === "/connect.html" || p === "/play.html")
-  ) {
-    const to = new URL(location.href);
-    to.protocol = "https:";
-    to.port = "4242";
-    location.replace(to.toString());
+  const mustUseGameOrigin =
+    p === "/connect.html" || p === "/play.html" || p === "/auth.html" || p === "/protocol.html";
+  if (mustUseGameOrigin && location.origin !== GAME_ORIGIN) {
+    const to = `${GAME_ORIGIN}${p}${location.search}${location.hash}`;
+    location.replace(to);
     return;
   }
 

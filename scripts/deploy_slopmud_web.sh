@@ -251,16 +251,37 @@ ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
 "
 
 http_port="${HTTP_BIND##*:}"
-echo "Waiting for health check (http) ..."
-for _ in {1..40}; do
-  if curl -fsS -H "Host: ${DOMAIN}" "http://${HOST}:${http_port}/healthz" >/dev/null 2>&1; then
-    break
-  fi
-  sleep 0.25
-done
+http_host="${HTTP_BIND%:*}"
+if [[ "${http_host}" == "127.0.0.1" || "${http_host}" == "localhost" ]]; then
+  echo "Waiting for health check over SSH (loopback bind ${HTTP_BIND}) ..."
+  for _ in {1..40}; do
+    if ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" \
+      "curl -fsS -H 'Host: ${DOMAIN}' 'http://${HTTP_BIND}/healthz'" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 0.25
+  done
+else
+  echo "Waiting for health check (http) ..."
+  for _ in {1..40}; do
+    if curl -fsS -H "Host: ${DOMAIN}" "http://${HOST}:${http_port}/healthz" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 0.25
+  done
+fi
 
-echo "Smoke test (direct IP, Host header = ${DOMAIN}, port = ${http_port})"
-curl -fsSL -H "Host: ${DOMAIN}" "http://${HOST}:${http_port}/" | sed -n '1,25p'
+if [[ "${http_host}" == "127.0.0.1" || "${http_host}" == "localhost" ]]; then
+  echo "Smoke test over SSH (loopback bind ${HTTP_BIND}, Host header = ${DOMAIN})"
+  ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" \
+    "curl -fsSL -H 'Host: ${DOMAIN}' 'http://${HTTP_BIND}/' | sed -n '1,25p'"
+  echo "Health check over SSH (http)"
+  ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" \
+    "curl -fsSL -H 'Host: ${DOMAIN}' 'http://${HTTP_BIND}/healthz'" || true
+else
+  echo "Smoke test (direct IP, Host header = ${DOMAIN}, port = ${http_port})"
+  curl -fsSL -H "Host: ${DOMAIN}" "http://${HOST}:${http_port}/" | sed -n '1,25p'
 
-echo "Health check (http)"
-curl -fsSL -H "Host: ${DOMAIN}" "http://${HOST}:${http_port}/healthz" || true
+  echo "Health check (http)"
+  curl -fsSL -H "Host: ${DOMAIN}" "http://${HOST}:${http_port}/healthz" || true
+fi
