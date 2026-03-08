@@ -910,7 +910,13 @@ async fn google_auth_callback(
             file_pending = Some(pending);
         }
         Err(_) => {
-            web_pending = st.oauth.web_pending_google.lock().await.get(state_code).cloned();
+            web_pending = st
+                .oauth
+                .web_pending_google
+                .lock()
+                .await
+                .get(state_code)
+                .cloned();
             if web_pending.is_none() {
                 return (
                     axum::http::StatusCode::NOT_FOUND,
@@ -1251,7 +1257,13 @@ async fn oidc_auth_callback(
             .into_response();
     };
 
-    let pending = st.oauth.web_pending_oidc.lock().await.get(state_code).cloned();
+    let pending = st
+        .oauth
+        .web_pending_oidc
+        .lock()
+        .await
+        .get(state_code)
+        .cloned();
     let Some(pending) = pending else {
         return (
             axum::http::StatusCode::NOT_FOUND,

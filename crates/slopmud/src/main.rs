@@ -702,7 +702,11 @@ impl Scrollback {
             let Some(id) = LineId::decode(&l.id) else {
                 continue;
             };
-            sb.push_line(id, l.ts_unix_ms, clamp_chars(&l.text, SCROLLBACK_MAX_LINE_CHARS));
+            sb.push_line(
+                id,
+                l.ts_unix_ms,
+                clamp_chars(&l.text, SCROLLBACK_MAX_LINE_CHARS),
+            );
         }
         sb
     }
@@ -753,7 +757,10 @@ impl SessionCheckpointStore {
         if f.v != 1 {
             return None;
         }
-        Some(Scrollback::from_snapshot_lines(SCROLLBACK_MAX_LINES, &f.lines))
+        Some(Scrollback::from_snapshot_lines(
+            SCROLLBACK_MAX_LINES,
+            &f.lines,
+        ))
     }
 
     async fn save_snapshot(&self, name: &str, lines: Vec<ScrollLineSnapshot>, now_ms: u64) {
@@ -2169,7 +2176,9 @@ async fn route_resp(
                             let sb = si.scrollback.lock().await;
                             sb.snapshot_lines()
                         };
-                        checkpoint_store.save_snapshot(&name, snapshot, now_ms).await;
+                        checkpoint_store
+                            .save_snapshot(&name, snapshot, now_ms)
+                            .await;
                     }
                 }
 
@@ -2249,7 +2258,9 @@ async fn route_resp(
                             let sb = si.scrollback.lock().await;
                             sb.snapshot_lines()
                         };
-                        checkpoint_store.save_snapshot(&name, snapshot, now_ms).await;
+                        checkpoint_store
+                            .save_snapshot(&name, snapshot, now_ms)
+                            .await;
                     }
                 }
 
@@ -3021,13 +3032,8 @@ async fn handle_conn(
     telnet_hello.extend_from_slice(&telnet_do(TELNET_OPT_TTYPE));
     telnet_hello.extend_from_slice(&telnet_do(TELNET_OPT_NAWS));
     telnet_hello.extend_from_slice(&telnet_will(TELNET_OPT_SGA));
-    write_tx
-        .send(Bytes::from(telnet_hello))
-        .await
-        .ok();
-    write_tx.send(intro_screen(false))
-        .await
-        .ok();
+    write_tx.send(Bytes::from(telnet_hello)).await.ok();
+    write_tx.send(intro_screen(false)).await.ok();
 
     let mut buf = [0u8; 4096];
     'read: loop {
@@ -4369,9 +4375,7 @@ async fn handle_conn(
                     let v = line.to_ascii_lowercase();
                     if !is_agree_ack(&v) {
                         let _ = write_tx
-                            .send(Bytes::from_static(
-                                b"type: agree (or yes)\r\n> ",
-                            ))
+                            .send(Bytes::from_static(b"type: agree (or yes)\r\n> "))
                             .await;
                         continue;
                     }
@@ -4394,9 +4398,7 @@ async fn handle_conn(
                     let v = line.to_ascii_lowercase();
                     if !is_agree_ack(&v) {
                         let _ = write_tx
-                            .send(Bytes::from_static(
-                                b"type: agree (or yes)\r\n> ",
-                            ))
+                            .send(Bytes::from_static(b"type: agree (or yes)\r\n> "))
                             .await;
                         continue;
                     }
@@ -4678,7 +4680,12 @@ async fn handle_conn(
                 break 'read;
             }
 
-            if lc == "color" || lc == "colour" || lc == "color on" || lc == "color off" || lc == "color toggle" {
+            if lc == "color"
+                || lc == "colour"
+                || lc == "color on"
+                || lc == "color off"
+                || lc == "color toggle"
+            {
                 let desired = match lc.as_str() {
                     "color on" => Some(true),
                     "color off" => Some(false),

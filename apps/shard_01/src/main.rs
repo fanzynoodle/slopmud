@@ -1143,12 +1143,12 @@ fn hands_drill_object(room_id: &str, target: &str) -> Option<String> {
 
     let t = target.trim().to_ascii_lowercase();
     match t.as_str() {
-        "bin" | "sealed bin" | "box" | "container" | "tool bin" => Some(
-            "a sealed training bin with a spring latch.\r\ntry: open bin\r\n".to_string(),
-        ),
-        "table" | "steel table" => Some(
-            "a scarred steel table with glove marks and old gouges.\r\n".to_string(),
-        ),
+        "bin" | "sealed bin" | "box" | "container" | "tool bin" => {
+            Some("a sealed training bin with a spring latch.\r\ntry: open bin\r\n".to_string())
+        }
+        "table" | "steel table" => {
+            Some("a scarred steel table with glove marks and old gouges.\r\n".to_string())
+        }
         "placard" | "sign" | "board" | "cartoon" | "hand" => Some(
             "placard:\r\n  1) open bin\r\n  2) inventory (or: i)\r\n  3) wield sword\r\n"
                 .to_string(),
@@ -1218,7 +1218,12 @@ fn render_hands_drill_status(p: &Character) -> String {
     s
 }
 
-fn try_hands_drill_interact(world: &mut World, session: SessionId, room_id: &str, token: &str) -> Option<String> {
+fn try_hands_drill_interact(
+    world: &mut World,
+    session: SessionId,
+    room_id: &str,
+    token: &str,
+) -> Option<String> {
     if room_id != ROOM_SCHOOL_HANDS_DRILL || !hands_drill_bin_target(token) {
         return None;
     }
@@ -1257,7 +1262,12 @@ fn try_hands_drill_interact(world: &mut World, session: SessionId, room_id: &str
     Some(msg)
 }
 
-fn try_equipment_storage_take(world: &mut World, session: SessionId, room_id: &str, token: &str) -> Option<String> {
+fn try_equipment_storage_take(
+    world: &mut World,
+    session: SessionId,
+    room_id: &str,
+    token: &str,
+) -> Option<String> {
     if room_id != "R_NS_LABS_08" {
         return None;
     }
@@ -1278,7 +1288,12 @@ fn try_equipment_storage_take(world: &mut World, session: SessionId, room_id: &s
     Some("you take the cracked helmet from the top shelf.\r\n".to_string())
 }
 
-fn try_prep_bay_take(world: &mut World, session: SessionId, room_id: &str, token: &str) -> Option<String> {
+fn try_prep_bay_take(
+    world: &mut World,
+    session: SessionId,
+    room_id: &str,
+    token: &str,
+) -> Option<String> {
     if room_id != "R_NS_LABS_02" {
         return None;
     }
@@ -3003,7 +3018,10 @@ impl World {
                         self.occupants.remove(&cur_room);
                     }
                 }
-                self.occupants.entry(room_id.clone()).or_default().insert(cid);
+                self.occupants
+                    .entry(room_id.clone())
+                    .or_default()
+                    .insert(cid);
                 if let Some(c) = self.chars.get_mut(&cid) {
                     c.room_id = room_id;
                 }
@@ -3078,7 +3096,10 @@ impl World {
                         members,
                     },
                 );
-                self.party_memberships.entry(leader).or_default().insert(pid);
+                self.party_memberships
+                    .entry(leader)
+                    .or_default()
+                    .insert(pid);
                 self.party_of.insert(leader, pid);
             }
             ShardLogTagged::PartyMemberSet {
@@ -3091,7 +3112,10 @@ impl World {
                 };
                 if present {
                     p.members.insert(member);
-                    self.party_memberships.entry(member).or_default().insert(pid);
+                    self.party_memberships
+                        .entry(member)
+                        .or_default()
+                        .insert(pid);
                     self.party_of.insert(member, pid);
                 } else {
                     p.members.remove(&member);
@@ -4406,10 +4430,12 @@ fn render_objective_hint(p: &Character) -> String {
                 .to_string();
         }
         "R_NS_LABS_06" => {
-            return "objective: proceed north to sim yard and finish onboarding route.\r\n".to_string();
+            return "objective: proceed north to sim yard and finish onboarding route.\r\n"
+                .to_string();
         }
         "R_NS_SIMYARD_01" => {
-            return "objective: town handoff is north. continue to corridor and gate.\r\n".to_string();
+            return "objective: town handoff is north. continue to corridor and gate.\r\n"
+                .to_string();
         }
         "R_NS_EXIT_01" | "P_NS_TOWN" => {
             return "objective: enter town by going north.\r\n".to_string();
@@ -4474,7 +4500,8 @@ fn journal_newbie_school(p: &Character) -> (bool, String) {
     let consider_done = p.quest.contains_key(QUEST_CONSIDER_LEARNED);
     let assist_done = p.quest.contains_key(QUEST_ASSIST_LEARNED);
     let recovery_done = p.quest.contains_key(QUEST_RECOVERY_DONE);
-    let completed = hands_done && first_kill && reached_town && consider_done && assist_done && recovery_done;
+    let completed =
+        hands_done && first_kill && reached_town && consider_done && assist_done && recovery_done;
     let status = if completed { "COMPLETED" } else { "ACTIVE" };
 
     let mut s = String::new();
@@ -10572,7 +10599,10 @@ async fn handle_event(
                         .get(&attacker_id)
                         .map(|dc| dc.max_hp)
                         .unwrap_or(1);
-                    world.raft_append_and_apply(ShardLogTagged::CharHpSet { cid: attacker_id, hp });
+                    world.raft_append_and_apply(ShardLogTagged::CharHpSet {
+                        cid: attacker_id,
+                        hp,
+                    });
                     world.raft_append_and_apply(ShardLogTagged::CharCombatSet {
                         cid: attacker_id,
                         autoattack: false,
@@ -10588,11 +10618,11 @@ async fn handle_event(
                         .await;
                     return Ok(());
                 }
-                if let Some(tank_id) = world
-                    .party_of
-                    .iter()
-                    .find_map(|(cid, pid)| (*pid == world.party_of.get(&attacker_id).copied().unwrap_or(0) && *cid != attacker_id).then_some(*cid))
-                {
+                if let Some(tank_id) = world.party_of.iter().find_map(|(cid, pid)| {
+                    (*pid == world.party_of.get(&attacker_id).copied().unwrap_or(0)
+                        && *cid != attacker_id)
+                        .then_some(*cid)
+                }) {
                     let phase = world
                         .chars
                         .get(&tank_id)
@@ -10607,7 +10637,8 @@ async fn handle_event(
                                 cid: tank_id,
                                 hp: healed,
                             });
-                            let now_hp = world.chars.get(&tank_id).map(|pc| pc.hp).unwrap_or(before);
+                            let now_hp =
+                                world.chars.get(&tank_id).map(|pc| pc.hp).unwrap_or(before);
                             if now_hp > before {
                                 let _ = world
                                     .broadcast_room(
@@ -10993,10 +11024,9 @@ async fn apply_damage_to_mob(
                         .get(&pid)
                         .and_then(|pp| {
                             pp.members.iter().copied().find(|mid| {
-                                world
-                                    .chars
-                                    .get(mid)
-                                    .is_some_and(|c| c.controller.is_some() && !is_bearded_docent(c))
+                                world.chars.get(mid).is_some_and(|c| {
+                                    c.controller.is_some() && !is_bearded_docent(c)
+                                })
                             })
                         })
                         .unwrap_or(attacker_id)
