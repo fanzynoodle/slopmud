@@ -19,7 +19,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
 swapfile_path="${RUNNER_SWAPFILE_PATH:-/swapfile}"
-swapfile_mb="${RUNNER_SWAPFILE_MB:-2048}"
+swapfile_mb="${RUNNER_SWAPFILE_MB:-1024}"
 
 echo "Installing system packages (Debian/Ubuntu)"
 sudo apt-get update -y

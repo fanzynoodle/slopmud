@@ -238,6 +238,18 @@ jobs:
           echo "::notice::validate_duration_s=${duration_s}"
           echo "duration_s=${duration_s}" >> "$GITHUB_OUTPUT"
 
+      - name: Reclaim disk before dev artifact build
+        if: steps.meta.outputs.deploy_env == 'dev'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Disk before dev artifact cleanup"
+          df -h /
+          rm -rf "$GITHUB_WORKSPACE/target"
+          find /opt/actions-runner/_diag -type f -name '*.log' -mtime +1 -delete || true
+          echo "Disk after dev artifact cleanup"
+          df -h /
+
       - name: Build Asset (non-cleanroom)
         id: build_asset
         shell: bash

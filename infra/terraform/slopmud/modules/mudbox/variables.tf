@@ -53,7 +53,7 @@ variable "ssh_public_key_path" {
 variable "root_volume_gib" {
   type        = number
   description = "Root EBS volume size (GiB)."
-  default     = 8
+  default     = 10
 }
 
 variable "zone_name" {
