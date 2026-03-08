@@ -583,14 +583,18 @@ deploy env="prd":
     fi; \
   '
 
+deploy-landing env="prd":
+  ./scripts/deploy_web_target.sh landing "{{env}}"
+
+deploy-webportal env="prd":
+  ./scripts/deploy_web_target.sh webportal "{{env}}"
+
+deploy-web-target target="both" env="prd":
+  ./scripts/deploy_web_target.sh "{{target}}" "{{env}}"
+
 # Deploy web with OAuth endpoints (slopmud_web). Uses the same env file keys as deploy_static_web.sh.
 deploy-web-sso env="prd":
-  bash -ceu ' \
-    set -o pipefail; \
-    set -a; source "env/{{env}}.env"; set +a; \
-    if [ "${ENABLED:-1}" != "1" ]; then echo "{{env}} disabled (ENABLED=${ENABLED:-})"; exit 0; fi; \
-    ./scripts/deploy_slopmud_web.sh "env/{{env}}.env"; \
-  '
+  ./scripts/deploy_web_target.sh webportal "{{env}}"
 
 web-install env="prd":
   just deploy {{env}}
@@ -599,28 +603,31 @@ web-restart env="prd":
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
-    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" "sudo systemctl restart slopmud-web"; \
+    svc="${WEB_SERVICE_NAME:-slopmud-web}"; \
+    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" "sudo systemctl restart ${svc}"; \
   '
 
 web-logs env="prd":
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
-    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" "sudo journalctl -u slopmud-web -f --no-pager"; \
+    svc="${WEB_SERVICE_NAME:-slopmud-web}"; \
+    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" "sudo journalctl -u ${svc} -f --no-pager"; \
   '
 
 deploy-status env="prd":
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
+    svc="${WEB_SERVICE_NAME:-slopmud-web}"; \
     ssh {{ssh_opts}} ${SSH_USER}@${HOST} -p ${SSH_PORT} " \
-      sudo systemctl status slopmud-web --no-pager || true; \
+      sudo systemctl status ${svc} --no-pager || true; \
       echo; \
       sudo ss -lntp | sed -n \"1,12p\"; \
       echo; \
       sudo ss -lntp | grep -n \":80\\b\" || true; \
       echo; \
-      sudo journalctl -u slopmud-web -n 50 --no-pager || true; \
+      sudo journalctl -u ${svc} -n 50 --no-pager || true; \
     "; \
   '
 

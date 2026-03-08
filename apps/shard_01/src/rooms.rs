@@ -220,6 +220,13 @@ impl Rooms {
         self.dyn_rooms.contains_key(room_id) || self.rooms.contains_key(room_id)
     }
 
+    pub fn room_description(&self, room_id: &str) -> Option<&str> {
+        self.dyn_rooms
+            .get(room_id)
+            .or_else(|| self.rooms.get(room_id))
+            .map(|r| r.description.as_str())
+    }
+
     pub fn clear_dyn_rooms_with_prefix(&mut self, prefix: &str) -> usize {
         let p = if prefix.ends_with('.') {
             prefix.to_string()

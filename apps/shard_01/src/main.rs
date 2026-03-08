@@ -350,7 +350,7 @@ fn render_job_board_for(p: &Character) -> String {
     s
 }
 
-fn q2_room_enter(p: &mut Character, room_id: &str) -> Option<String> {
+fn q2_room_enter(p: &Character, room_id: &str) -> (Option<String>, Vec<(String, Option<String>)>) {
     fn truthy(p: &Character, key: &str) -> bool {
         // Keep this consistent with movement gates.
         eval_gate_expr(p, key)
@@ -364,14 +364,14 @@ fn q2_room_enter(p: &mut Character, room_id: &str) -> Option<String> {
             .clamp(0, 3)
     }
 
-    fn set_contracts_done(p: &mut Character, v: i64) {
-        p.quest.insert(
+    fn set_contracts_done(deltas: &mut Vec<(String, Option<String>)>, v: i64) {
+        deltas.push((
             "q.q2_job_board.contracts_done".to_string(),
-            v.clamp(0, 3).to_string(),
-        );
+            Some(v.clamp(0, 3).to_string()),
+        ));
     }
 
-    fn set_state_for_done(p: &mut Character, done: i64) {
+    fn set_state_for_done(p: &Character, deltas: &mut Vec<(String, Option<String>)>, done: i64) {
         let cur = p
             .quest
             .get("q.q2_job_board.state")
@@ -387,60 +387,73 @@ fn q2_room_enter(p: &mut Character, room_id: &str) -> Option<String> {
             2 => "contract_2",
             _ => "contract_3",
         };
-        p.quest
-            .insert("q.q2_job_board.state".to_string(), st.to_string());
+        deltas.push(("q.q2_job_board.state".to_string(), Some(st.to_string())));
     }
 
-    fn complete_contract(p: &mut Character, contract_key: &str) -> Option<i64> {
+    fn complete_contract(
+        p: &Character,
+        deltas: &mut Vec<(String, Option<String>)>,
+        contract_key: &str,
+    ) -> Option<i64> {
         if truthy(p, contract_key) {
             return None;
         }
-        p.quest.insert(contract_key.to_string(), "1".to_string());
+        deltas.push((contract_key.to_string(), Some("1".to_string())));
         let done = (contracts_done(p) + 1).clamp(0, 3);
-        set_contracts_done(p, done);
-        set_state_for_done(p, done);
+        set_contracts_done(deltas, done);
+        set_state_for_done(p, deltas, done);
         Some(done)
     }
 
+    let mut deltas = Vec::new();
     match room_id {
         "R_MEADOW_PEST_02" => {
-            let done = complete_contract(p, "q.q2_job_board.contract_a")?;
+            let Some(done) = complete_contract(p, &mut deltas, "q.q2_job_board.contract_a") else {
+                return (None, deltas);
+            };
             let mut msg = format!("contract A complete. (contracts done: {done}/3)\r\n");
             if done >= 3 && !truthy(p, "q.q2_job_board.repeatables_unlocked") {
                 msg.push_str("return to the job board. (try: look board)\r\n");
             }
-            Some(msg)
+            (Some(msg), deltas)
         }
         "R_ORCHARD_NEST_01" => {
-            let done = complete_contract(p, "q.q2_job_board.contract_b")?;
+            let Some(done) = complete_contract(p, &mut deltas, "q.q2_job_board.contract_b") else {
+                return (None, deltas);
+            };
             let mut msg = format!("contract B complete. (contracts done: {done}/3)\r\n");
             if done >= 3 && !truthy(p, "q.q2_job_board.repeatables_unlocked") {
                 msg.push_str("return to the job board. (try: look board)\r\n");
             }
-            Some(msg)
+            (Some(msg), deltas)
         }
         "R_TOWN_CLINIC_01" => {
             if truthy(p, "q.q2_job_board.contract_c_clinic") {
-                return None;
+                return (None, deltas);
             }
-            p.quest.insert(
+            deltas.push((
                 "q.q2_job_board.contract_c_clinic".to_string(),
-                "1".to_string(),
-            );
-            Some("clinic: a medic stamps a slip with brisk disinterest.\r\n".to_string())
+                Some("1".to_string()),
+            ));
+            (
+                Some("clinic: a medic stamps a slip with brisk disinterest.\r\n".to_string()),
+                deltas,
+            )
         }
         "R_TOWN_EDGE_01" => {
             if !truthy(p, "q.q2_job_board.contract_c_clinic") {
-                return None;
+                return (None, deltas);
             }
-            let done = complete_contract(p, "q.q2_job_board.contract_c")?;
+            let Some(done) = complete_contract(p, &mut deltas, "q.q2_job_board.contract_c") else {
+                return (None, deltas);
+            };
             let mut msg = format!("contract C complete. (contracts done: {done}/3)\r\n");
             if done >= 3 && !truthy(p, "q.q2_job_board.repeatables_unlocked") {
                 msg.push_str("return to the job board. (try: look board)\r\n");
             }
-            Some(msg)
+            (Some(msg), deltas)
         }
-        _ => None,
+        _ => (None, deltas),
     }
 }
 
@@ -1216,9 +1229,7 @@ fn try_hands_drill_interact(world: &mut World, session: SessionId, room_id: &str
         .get(&cid)
         .is_some_and(|c| c.quest.contains_key(QUEST_HANDS_BIN));
     if !opened_before {
-        if let Some(pc) = world.chars.get_mut(&cid) {
-            pc.quest.insert(QUEST_HANDS_BIN.to_string(), "1".to_string());
-        }
+        world.raft_set_quest(cid, QUEST_HANDS_BIN, Some("1".to_string()));
         let has_gloves_inv = world
             .chars
             .get(&cid)
@@ -1263,10 +1274,7 @@ fn try_equipment_storage_take(world: &mut World, session: SessionId, room_id: &s
         return Some("the cracked helmet has already been checked out.\r\n".to_string());
     }
     world.inv_add(cid, "cracked helmet", 1);
-    if let Some(pc) = world.chars.get_mut(&cid) {
-        pc.quest
-            .insert(QUEST_LABS_HELMET_TAKEN.to_string(), "1".to_string());
-    }
+    world.raft_set_quest(cid, QUEST_LABS_HELMET_TAKEN, Some("1".to_string()));
     Some("you take the cracked helmet from the top shelf.\r\n".to_string())
 }
 
@@ -1290,23 +1298,13 @@ fn try_prep_bay_take(world: &mut World, session: SessionId, room_id: &str, token
         return Some("the dispenser is empty for now.\r\n".to_string());
     }
     world.inv_add(cid, "disposable healing pack", 1);
-    if let Some(pc) = world.chars.get_mut(&cid) {
-        pc.quest
-            .insert(QUEST_PREP_BAY_PACK_TAKEN.to_string(), "1".to_string());
-    }
+    world.raft_set_quest(cid, QUEST_PREP_BAY_PACK_TAKEN, Some("1".to_string()));
     Some("the dispenser drops a disposable healing pack into your hand.\r\n".to_string())
 }
 
 fn spawn_bearded_docent(world: &mut World, room_id: &str) -> CharacterId {
     let cid = world.spawn_mob(room_id.to_string(), "bearded docent".to_string());
-    if let Some(c) = world.chars.get_mut(&cid) {
-        c.level = 8;
-        c.hp = 120;
-        c.max_hp = 120;
-        c.mana = 120;
-        c.max_mana = 120;
-        c.autoassist = true;
-    }
+    world.raft_set_progress(cid, 0, 8, 0, 120, 120, 120, 120, 0, 0, true);
     cid
 }
 
@@ -1581,12 +1579,84 @@ struct Party {
     members: HashSet<CharacterId>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct PartyInvite {
     party_id: PartyId,
     inviter: CharacterId,
     // Soft expiry (best-effort).
     expires_ms: u64,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+enum ShardLogEntry {
+    LegacyGroup(groups::GroupLogEntry),
+    Tagged(ShardLogTagged),
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "t")]
+enum ShardLogTagged {
+    Group {
+        entry: groups::GroupLogEntry,
+    },
+    QuestSet {
+        cid: CharacterId,
+        key: String,
+        value: Option<String>,
+    },
+    PartyInviteSet {
+        invitee: CharacterId,
+        invite: Option<PartyInvite>,
+    },
+    CharRoomSet {
+        cid: CharacterId,
+        room_id: String,
+    },
+    CharHpSet {
+        cid: CharacterId,
+        hp: i32,
+    },
+    CharProgressSet {
+        cid: CharacterId,
+        xp: u32,
+        level: u32,
+        skill_points: u32,
+        max_hp: i32,
+        hp: i32,
+        max_mana: i32,
+        mana: i32,
+        max_stamina: i32,
+        stamina: i32,
+        autoassist: bool,
+    },
+    CharCombatSet {
+        cid: CharacterId,
+        autoattack: bool,
+        target: Option<CharacterId>,
+        next_ready_ms: u64,
+    },
+    InventoryDelta {
+        cid: CharacterId,
+        item: String,
+        delta: i32,
+    },
+    PartyCreate {
+        pid: PartyId,
+        leader: CharacterId,
+    },
+    PartyMemberSet {
+        pid: PartyId,
+        member: CharacterId,
+        present: bool,
+    },
+    PartyLeaderSet {
+        pid: PartyId,
+        leader: CharacterId,
+    },
+    PartyDisband {
+        pid: PartyId,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2678,7 +2748,7 @@ struct World {
     bartender_emote_ms: u64,
     mob_wander_ms: u64,
     bosses: HashMap<CharacterId, BossState>,
-    raft: raftlog::RaftLog<groups::GroupLogEntry>,
+    raft: raftlog::RaftLog<ShardLogEntry>,
     raft_watch: HashSet<CharacterId>,
     groups: groups::GroupStore,
 }
@@ -2702,7 +2772,11 @@ impl World {
 
         let mut groups = groups::GroupStore::default();
         for env in replay {
-            groups.apply(&env.entry);
+            match env.entry {
+                ShardLogEntry::LegacyGroup(entry) => groups.apply(&entry),
+                ShardLogEntry::Tagged(ShardLogTagged::Group { entry }) => groups.apply(&entry),
+                ShardLogEntry::Tagged(_) => {}
+            }
         }
 
         let mut w = Self {
@@ -2827,10 +2901,234 @@ impl World {
     fn raft_append_group(
         &mut self,
         entry: groups::GroupLogEntry,
-    ) -> anyhow::Result<raftlog::RaftEnvelope<groups::GroupLogEntry>> {
-        let env = self.raft.append(self.now_ms(), entry.clone())?;
+    ) -> anyhow::Result<raftlog::RaftEnvelope<ShardLogEntry>> {
+        let env = self.raft.append(
+            self.now_ms(),
+            ShardLogEntry::Tagged(ShardLogTagged::Group {
+                entry: entry.clone(),
+            }),
+        )?;
         self.groups.apply(&entry);
         Ok(env)
+    }
+
+    fn raft_set_quest(&mut self, cid: CharacterId, key: &str, value: Option<String>) {
+        self.raft_append_and_apply(ShardLogTagged::QuestSet {
+            cid,
+            key: key.to_string(),
+            value: value.clone(),
+        });
+    }
+
+    fn raft_set_party_invite(&mut self, invitee: CharacterId, invite: Option<PartyInvite>) {
+        self.raft_append_and_apply(ShardLogTagged::PartyInviteSet {
+            invitee,
+            invite: invite.clone(),
+        });
+    }
+
+    fn raft_set_progress(
+        &mut self,
+        cid: CharacterId,
+        xp: u32,
+        level: u32,
+        skill_points: u32,
+        max_hp: i32,
+        hp: i32,
+        max_mana: i32,
+        mana: i32,
+        max_stamina: i32,
+        stamina: i32,
+        autoassist: bool,
+    ) {
+        self.raft_append_and_apply(ShardLogTagged::CharProgressSet {
+            cid,
+            xp,
+            level,
+            skill_points,
+            max_hp,
+            hp,
+            max_mana,
+            mana,
+            max_stamina,
+            stamina,
+            autoassist,
+        });
+    }
+
+    fn raft_append_and_apply(&mut self, entry: ShardLogTagged) {
+        let wrap = ShardLogEntry::Tagged(entry.clone());
+        if self.raft.append(self.now_ms(), wrap).is_err() {
+            warn!("raft append failed for shard state update");
+            return;
+        }
+        self.apply_shard_log(entry);
+    }
+
+    fn apply_shard_log(&mut self, entry: ShardLogTagged) {
+        match entry {
+            ShardLogTagged::Group { entry } => {
+                self.groups.apply(&entry);
+            }
+            ShardLogTagged::QuestSet { cid, key, value } => {
+                if let Some(c) = self.chars.get_mut(&cid) {
+                    match value {
+                        Some(v) => {
+                            c.quest.insert(key, v);
+                        }
+                        None => {
+                            c.quest.remove(&key);
+                        }
+                    }
+                }
+            }
+            ShardLogTagged::PartyInviteSet { invitee, invite } => match invite {
+                Some(inv) => {
+                    self.party_invites.insert(invitee, inv);
+                }
+                None => {
+                    self.party_invites.remove(&invitee);
+                }
+            },
+            ShardLogTagged::CharRoomSet { cid, room_id } => {
+                let Some(cur_room) = self.chars.get(&cid).map(|c| c.room_id.clone()) else {
+                    return;
+                };
+                if cur_room == room_id {
+                    return;
+                }
+                if let Some(s) = self.occupants.get_mut(&cur_room) {
+                    s.remove(&cid);
+                    if s.is_empty() {
+                        self.occupants.remove(&cur_room);
+                    }
+                }
+                self.occupants.entry(room_id.clone()).or_default().insert(cid);
+                if let Some(c) = self.chars.get_mut(&cid) {
+                    c.room_id = room_id;
+                }
+            }
+            ShardLogTagged::CharHpSet { cid, hp } => {
+                if let Some(c) = self.chars.get_mut(&cid) {
+                    c.hp = hp.clamp(0, c.max_hp.max(1));
+                }
+            }
+            ShardLogTagged::CharProgressSet {
+                cid,
+                xp,
+                level,
+                skill_points,
+                max_hp,
+                hp,
+                max_mana,
+                mana,
+                max_stamina,
+                stamina,
+                autoassist,
+            } => {
+                if let Some(c) = self.chars.get_mut(&cid) {
+                    c.xp = xp;
+                    c.level = level;
+                    c.skill_points = skill_points;
+                    c.max_hp = max_hp.max(1);
+                    c.hp = hp.clamp(0, c.max_hp.max(1));
+                    c.max_mana = max_mana.max(0);
+                    c.mana = mana.clamp(0, c.max_mana);
+                    c.max_stamina = max_stamina.max(0);
+                    c.stamina = stamina.clamp(0, c.max_stamina);
+                    c.autoassist = autoassist;
+                }
+            }
+            ShardLogTagged::CharCombatSet {
+                cid,
+                autoattack,
+                target,
+                next_ready_ms,
+            } => {
+                if let Some(c) = self.chars.get_mut(&cid) {
+                    c.combat.autoattack = autoattack;
+                    c.combat.target = target;
+                    c.combat.next_ready_ms = next_ready_ms;
+                }
+            }
+            ShardLogTagged::InventoryDelta { cid, item, delta } => {
+                if delta == 0 {
+                    return;
+                }
+                let Some(c) = self.chars.get_mut(&cid) else {
+                    return;
+                };
+                let k = item;
+                let cur = c.inv.get(&k).copied().unwrap_or(0) as i64;
+                let next = (cur + delta as i64).max(0) as u32;
+                if next == 0 {
+                    c.inv.remove(&k);
+                } else {
+                    c.inv.insert(k, next);
+                }
+            }
+            ShardLogTagged::PartyCreate { pid, leader } => {
+                let mut members = HashSet::new();
+                members.insert(leader);
+                self.parties.insert(
+                    pid,
+                    Party {
+                        id: pid,
+                        leader,
+                        members,
+                    },
+                );
+                self.party_memberships.entry(leader).or_default().insert(pid);
+                self.party_of.insert(leader, pid);
+            }
+            ShardLogTagged::PartyMemberSet {
+                pid,
+                member,
+                present,
+            } => {
+                let Some(p) = self.parties.get_mut(&pid) else {
+                    return;
+                };
+                if present {
+                    p.members.insert(member);
+                    self.party_memberships.entry(member).or_default().insert(pid);
+                    self.party_of.insert(member, pid);
+                } else {
+                    p.members.remove(&member);
+                    if let Some(xs) = self.party_memberships.get_mut(&member) {
+                        xs.remove(&pid);
+                        if xs.is_empty() {
+                            self.party_memberships.remove(&member);
+                        }
+                    }
+                    if self.party_of.get(&member).copied() == Some(pid) {
+                        self.party_of.remove(&member);
+                    }
+                }
+            }
+            ShardLogTagged::PartyLeaderSet { pid, leader } => {
+                if let Some(p) = self.parties.get_mut(&pid) {
+                    p.leader = leader;
+                }
+            }
+            ShardLogTagged::PartyDisband { pid } => {
+                let Some(p) = self.parties.remove(&pid) else {
+                    return;
+                };
+                for mid in p.members {
+                    if let Some(xs) = self.party_memberships.get_mut(&mid) {
+                        xs.remove(&pid);
+                        if xs.is_empty() {
+                            self.party_memberships.remove(&mid);
+                        }
+                    }
+                    if self.party_of.get(&mid).copied() == Some(pid) {
+                        self.party_of.remove(&mid);
+                    }
+                }
+                self.party_invites.retain(|_, inv| inv.party_id != pid);
+            }
+        }
     }
 
     fn effective_caps_for(&self, c: &Character) -> HashSet<groups::Capability> {
@@ -2998,7 +3296,7 @@ impl World {
         for cid in ss.controlled {
             self.raft_watch.remove(&cid);
             // Remove from parties and clear invites (best-effort).
-            self.party_invites.remove(&cid);
+            self.raft_set_party_invite(cid, None);
             self.party_leave(cid);
             if let Some(c) = self.chars.remove(&cid) {
                 if let Some(s) = self.occupants.get_mut(&c.room_id) {
@@ -3096,52 +3394,70 @@ impl World {
 
     fn spawn_stenchworm(&mut self, room_id: String) -> CharacterId {
         let cid = self.spawn_mob(room_id.clone(), "stenchworm".to_string());
-        if let Some(m) = self.chars.get_mut(&cid) {
-            m.hp = 9;
-            m.max_hp = 9;
+        if let Some(m) = self.chars.get(&cid).cloned() {
+            self.raft_set_progress(
+                cid,
+                m.xp,
+                m.level,
+                m.skill_points,
+                9,
+                9,
+                m.max_mana,
+                m.mana,
+                m.max_stamina,
+                m.stamina,
+                m.autoassist,
+            );
         }
         cid
     }
 
     fn inv_add(&mut self, cid: CharacterId, item: &str, n: u32) {
-        let Some(c) = self.chars.get_mut(&cid) else {
+        if n == 0 {
             return;
-        };
-        let e = c.inv.entry(item.to_string()).or_insert(0);
-        *e = (*e).saturating_add(n);
+        }
+        self.raft_append_and_apply(ShardLogTagged::InventoryDelta {
+            cid,
+            item: item.to_string(),
+            delta: n as i32,
+        });
     }
 
     fn inv_take_one(&mut self, cid: CharacterId, item: &str) -> bool {
-        let Some(c) = self.chars.get_mut(&cid) else {
-            return false;
-        };
-        let k = item.to_string();
-        let Some(v) = c.inv.get_mut(&k) else {
-            return false;
-        };
-        if *v == 0 {
-            c.inv.remove(&k);
+        let have = self
+            .chars
+            .get(&cid)
+            .and_then(|c| c.inv.get(item))
+            .copied()
+            .unwrap_or(0);
+        if have == 0 {
             return false;
         }
-        *v -= 1;
-        if *v == 0 {
-            c.inv.remove(&k);
-        }
+        self.raft_append_and_apply(ShardLogTagged::InventoryDelta {
+            cid,
+            item: item.to_string(),
+            delta: -1,
+        });
         true
     }
 
     fn inv_take_n(&mut self, cid: CharacterId, item: &str, n: u32) -> u32 {
-        let Some(c) = self.chars.get_mut(&cid) else {
+        if n == 0 {
             return 0;
-        };
-        let k = item.to_string();
-        let Some(v) = c.inv.get_mut(&k) else {
-            return 0;
-        };
-        let take = (*v).min(n);
-        *v -= take;
-        if *v == 0 {
-            c.inv.remove(&k);
+        }
+        let have = self
+            .chars
+            .get(&cid)
+            .and_then(|c| c.inv.get(item))
+            .copied()
+            .unwrap_or(0);
+        let take = have.min(n);
+        if take > 0 {
+            self.raft_append_and_apply(ShardLogTagged::InventoryDelta {
+                cid,
+                item: item.to_string(),
+                delta: -(take as i32),
+            });
         }
         take
     }
@@ -3224,12 +3540,15 @@ impl World {
     }
 
     fn start_combat(&mut self, attacker_id: CharacterId, target_id: CharacterId) {
-        let Some(a) = self.chars.get_mut(&attacker_id) else {
+        if !self.chars.contains_key(&attacker_id) {
             return;
-        };
-        a.combat.autoattack = true;
-        a.combat.target = Some(target_id);
-        a.combat.next_ready_ms = self.now_ms;
+        }
+        self.raft_append_and_apply(ShardLogTagged::CharCombatSet {
+            cid: attacker_id,
+            autoattack: true,
+            target: Some(target_id),
+            next_ready_ms: self.now_ms,
+        });
         self.schedule_at_ms(self.now_ms, EventKind::CombatAct { attacker_id });
 
         // If you start combat with a mob, it retaliates.
@@ -3244,11 +3563,12 @@ impl World {
         let allow_player_retaliate = target_is_player && self.can_pvp_ids(attacker_id, target_id);
 
         if target_is_mob || allow_player_retaliate {
-            if let Some(m) = self.chars.get_mut(&target_id) {
-                m.combat.autoattack = true;
-                m.combat.target = Some(attacker_id);
-                m.combat.next_ready_ms = self.now_ms;
-            }
+            self.raft_append_and_apply(ShardLogTagged::CharCombatSet {
+                cid: target_id,
+                autoattack: true,
+                target: Some(attacker_id),
+                next_ready_ms: self.now_ms,
+            });
             self.schedule_at_ms(
                 self.now_ms,
                 EventKind::CombatAct {
@@ -3270,33 +3590,77 @@ impl World {
             "stenchworm" => Some(self.spawn_stenchworm(room_id)),
             "dummy" | "training_dummy" => {
                 let cid = self.spawn_mob(room_id, "dummy".to_string());
-                if let Some(m) = self.chars.get_mut(&cid) {
-                    m.hp = 120;
-                    m.max_hp = 120;
+                if let Some(m) = self.chars.get(&cid).cloned() {
+                    self.raft_set_progress(
+                        cid,
+                        m.xp,
+                        m.level,
+                        m.skill_points,
+                        120,
+                        120,
+                        m.max_mana,
+                        m.mana,
+                        m.max_stamina,
+                        m.stamina,
+                        m.autoassist,
+                    );
                 }
                 Some(cid)
             }
             "rat" => {
                 let cid = self.spawn_mob(room_id, "rat".to_string());
-                if let Some(m) = self.chars.get_mut(&cid) {
-                    m.hp = 5;
-                    m.max_hp = 5;
+                if let Some(m) = self.chars.get(&cid).cloned() {
+                    self.raft_set_progress(
+                        cid,
+                        m.xp,
+                        m.level,
+                        m.skill_points,
+                        5,
+                        5,
+                        m.max_mana,
+                        m.mana,
+                        m.max_stamina,
+                        m.stamina,
+                        m.autoassist,
+                    );
                 }
                 Some(cid)
             }
             "spitter" => {
                 let cid = self.spawn_mob(room_id, "spitter".to_string());
-                if let Some(m) = self.chars.get_mut(&cid) {
-                    m.hp = 7;
-                    m.max_hp = 7;
+                if let Some(m) = self.chars.get(&cid).cloned() {
+                    self.raft_set_progress(
+                        cid,
+                        m.xp,
+                        m.level,
+                        m.skill_points,
+                        7,
+                        7,
+                        m.max_mana,
+                        m.mana,
+                        m.max_stamina,
+                        m.stamina,
+                        m.autoassist,
+                    );
                 }
                 Some(cid)
             }
             "grease_king" => {
                 let cid = self.spawn_mob(room_id.clone(), "grease_king".to_string());
-                if let Some(m) = self.chars.get_mut(&cid) {
-                    m.hp = 60;
-                    m.max_hp = 60;
+                if let Some(m) = self.chars.get(&cid).cloned() {
+                    self.raft_set_progress(
+                        cid,
+                        m.xp,
+                        m.level,
+                        m.skill_points,
+                        60,
+                        60,
+                        m.max_mana,
+                        m.mana,
+                        m.max_stamina,
+                        m.stamina,
+                        m.autoassist,
+                    );
                 }
                 self.bosses.insert(
                     cid,
@@ -3311,9 +3675,20 @@ impl World {
             }
             _ => {
                 let cid = self.spawn_mob(room_id, t.to_string());
-                if let Some(m) = self.chars.get_mut(&cid) {
-                    m.hp = 10;
-                    m.max_hp = 10;
+                if let Some(m) = self.chars.get(&cid).cloned() {
+                    self.raft_set_progress(
+                        cid,
+                        m.xp,
+                        m.level,
+                        m.skill_points,
+                        10,
+                        10,
+                        m.max_mana,
+                        m.mana,
+                        m.max_stamina,
+                        m.stamina,
+                        m.autoassist,
+                    );
                 }
                 Some(cid)
             }
@@ -3369,7 +3744,7 @@ impl World {
     }
 
     fn remove_char(&mut self, cid: CharacterId) -> Option<Character> {
-        self.party_invites.remove(&cid);
+        self.raft_set_party_invite(cid, None);
         self.party_leave(cid);
         let c = self.chars.remove(&cid)?;
         if let Some(s) = self.occupants.get_mut(&c.room_id) {
@@ -3649,10 +4024,10 @@ impl World {
         xp: u32,
         party: bool,
     ) {
-        let Some(c) = self.chars.get_mut(&cid) else {
+        let Some(cur) = self.chars.get(&cid).cloned() else {
             return;
         };
-        if let Some(sid) = c.controller {
+        if let Some(sid) = cur.controller {
             let msg = if party {
                 format!("party xp: +{}.\r\n", xp)
             } else {
@@ -3660,30 +4035,51 @@ impl World {
             };
             let _ = write_resp_async(fw, RESP_OUTPUT, sid, msg.as_bytes()).await;
         }
-        c.xp = c.xp.saturating_add(xp);
+        let mut new_xp = cur.xp.saturating_add(xp);
+        let mut new_level = cur.level;
+        let mut new_skill_points = cur.skill_points;
+        let mut new_max_hp = cur.max_hp;
+        let mut new_hp = cur.hp;
+        let mut new_max_mana = cur.max_mana;
+        let mut new_mana = cur.mana;
+        let mut new_max_stamina = cur.max_stamina;
+        let mut new_stamina = cur.stamina;
 
-        while c.xp >= xp_needed_for_next(c.level) {
-            let need = xp_needed_for_next(c.level);
-            c.xp -= need;
-            c.level = c.level.saturating_add(1);
-            c.skill_points = c.skill_points.saturating_add(1);
-            c.max_hp = (c.max_hp + 2).max(1);
-            c.hp = c.max_hp;
-            if let Some(class) = c.class {
-                c.max_mana = compute_max_mana(class, &c.stats, c.level).max(0);
-                c.mana = c.mana.min(c.max_mana).max(0);
-                c.max_stamina = compute_max_stamina(class, &c.stats, c.level).max(0);
-                c.stamina = c.stamina.min(c.max_stamina).max(0);
+        while new_xp >= xp_needed_for_next(new_level) {
+            let need = xp_needed_for_next(new_level);
+            new_xp -= need;
+            new_level = new_level.saturating_add(1);
+            new_skill_points = new_skill_points.saturating_add(1);
+            new_max_hp = (new_max_hp + 2).max(1);
+            new_hp = new_max_hp;
+            if let Some(class) = cur.class {
+                new_max_mana = compute_max_mana(class, &cur.stats, new_level).max(0);
+                new_mana = new_mana.min(new_max_mana).max(0);
+                new_max_stamina = compute_max_stamina(class, &cur.stats, new_level).max(0);
+                new_stamina = new_stamina.min(new_max_stamina).max(0);
             }
 
-            if let Some(sid) = c.controller {
+            if let Some(sid) = cur.controller {
                 let msg = format!(
                     "level up! you are now level {}. (+1 skill point)\r\n",
-                    c.level
+                    new_level
                 );
                 let _ = write_resp_async(fw, RESP_OUTPUT, sid, msg.as_bytes()).await;
             }
         }
+        self.raft_set_progress(
+            cid,
+            new_xp,
+            new_level,
+            new_skill_points,
+            new_max_hp,
+            new_hp,
+            new_max_mana,
+            new_mana,
+            new_max_stamina,
+            new_stamina,
+            cur.autoassist,
+        );
     }
 
     async fn party_send(
@@ -3725,64 +4121,53 @@ impl World {
     fn party_create(&mut self, leader: CharacterId) -> PartyId {
         let pid = self.next_party_id;
         self.next_party_id = self.next_party_id.saturating_add(1);
-        let mut members = HashSet::new();
-        members.insert(leader);
-        self.parties.insert(
-            pid,
-            Party {
-                id: pid,
-                leader,
-                members,
-            },
-        );
-        self.party_memberships.entry(leader).or_default().insert(pid);
-        self.party_of.insert(leader, pid);
+        self.raft_append_and_apply(ShardLogTagged::PartyCreate { pid, leader });
         pid
     }
 
     fn party_leave(&mut self, cid: CharacterId) {
-        let Some(pid) = self.party_of.remove(&cid) else {
+        let Some(pid) = self.party_of.get(&cid).copied() else {
             return;
         };
-        if let Some(xs) = self.party_memberships.get_mut(&cid) {
-            xs.remove(&pid);
-            if xs.is_empty() {
-                self.party_memberships.remove(&cid);
-            }
-        }
-        let Some(p) = self.parties.get_mut(&pid) else {
+        let Some(p) = self.parties.get(&pid).cloned() else {
             return;
         };
+        self.raft_append_and_apply(ShardLogTagged::PartyMemberSet {
+            pid,
+            member: cid,
+            present: false,
+        });
 
-        p.members.remove(&cid);
-
-        if p.members.is_empty() {
-            self.parties.remove(&pid);
+        let remaining = self
+            .parties
+            .get(&pid)
+            .map(|pp| pp.members.len())
+            .unwrap_or(0);
+        if remaining == 0 {
+            self.raft_append_and_apply(ShardLogTagged::PartyDisband { pid });
             return;
         }
 
         // If leader left, promote an arbitrary remaining member.
         if p.leader == cid {
-            if let Some(&new_leader) = p.members.iter().next() {
-                p.leader = new_leader;
+            if let Some(&new_leader) = self
+                .parties
+                .get(&pid)
+                .and_then(|pp| pp.members.iter().next())
+            {
+                self.raft_append_and_apply(ShardLogTagged::PartyLeaderSet {
+                    pid,
+                    leader: new_leader,
+                });
             }
         }
     }
 
     fn party_disband(&mut self, pid: PartyId) {
-        let Some(p) = self.parties.remove(&pid) else {
+        if !self.parties.contains_key(&pid) {
             return;
-        };
-        for mid in p.members {
-            if let Some(xs) = self.party_memberships.get_mut(&mid) {
-                xs.remove(&pid);
-                if xs.is_empty() {
-                    self.party_memberships.remove(&mid);
-                }
-            }
-            self.party_of.remove(&mid);
         }
-        self.party_invites.retain(|_, inv| inv.party_id != pid);
+        self.raft_append_and_apply(ShardLogTagged::PartyDisband { pid });
     }
 
     fn find_player_by_prefix(&self, token: &str) -> Option<CharacterId> {
@@ -5668,10 +6053,7 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                 if let Some(rest) = line.strip_prefix("consider ") {
                     let s = render_consider(&world, &p, rest);
                     if !s.starts_with("huh?") {
-                        if let Some(pc) = world.active_char_mut(session) {
-                            pc.quest
-                                .insert(QUEST_CONSIDER_LEARNED.to_string(), "1".to_string());
-                        }
+                        world.raft_set_quest(p.id, QUEST_CONSIDER_LEARNED, Some("1".to_string()));
                     }
                     write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
                     continue;
@@ -5957,26 +6339,24 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                             }
                         };
 
-                        if let Some(c) = world.active_char_mut(session) {
-                            c.quest
-                                .insert("q.q2_job_board.faction".to_string(), faction.to_string());
-                            c.quest.insert(
-                                "q.q2_job_board.repeatables_unlocked".to_string(),
-                                "1".to_string(),
-                            );
-                            c.quest
-                                .insert("gate.job_board.repeatables".to_string(), "1".to_string());
-                            if faction == "civic" || faction == "industrial" {
-                                c.quest.insert("gate.sewers.entry".to_string(), "1".to_string());
-                            }
-                            if faction == "industrial" || faction == "green" {
-                                c.quest.insert("gate.quarry.entry".to_string(), "1".to_string());
-                            }
-                            c.quest.insert(
-                                "q.q2_job_board.state".to_string(),
-                                "repeatables".to_string(),
-                            );
+                        world.raft_set_quest(p.id, "q.q2_job_board.faction", Some(faction.to_string()));
+                        world.raft_set_quest(
+                            p.id,
+                            "q.q2_job_board.repeatables_unlocked",
+                            Some("1".to_string()),
+                        );
+                        world.raft_set_quest(p.id, "gate.job_board.repeatables", Some("1".to_string()));
+                        if faction == "civic" || faction == "industrial" {
+                            world.raft_set_quest(p.id, "gate.sewers.entry", Some("1".to_string()));
                         }
+                        if faction == "industrial" || faction == "green" {
+                            world.raft_set_quest(p.id, "gate.quarry.entry", Some("1".to_string()));
+                        }
+                        world.raft_set_quest(
+                            p.id,
+                            "q.q2_job_board.state",
+                            Some("repeatables".to_string()),
+                        );
 
                         let msg = format!(
                             "board clerk: stamped. contact set to {faction}.\r\n(sewers access may now be unsealed.)\r\n"
@@ -6124,17 +6504,21 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         continue;
                     }
                     let now = world.now_ms();
+                    let mut hp_after = None;
                     if let Some(pc) = world.chars.get_mut(&cid) {
                         pc.class = Some(class);
                         pc.stats = assign_core_stats_for_class(class);
                         pc.max_hp = compute_max_hp(class, &pc.stats).max(1);
-                        pc.hp = pc.max_hp;
+                        hp_after = Some(pc.max_hp);
                         pc.max_mana = compute_max_mana(class, &pc.stats, pc.level).max(0);
                         pc.mana = pc.max_mana;
                         pc.max_stamina = compute_max_stamina(class, &pc.stats, pc.level).max(0);
                         pc.stamina = pc.max_stamina;
                         pc.last_mana_regen_ms = now;
                         pc.last_stamina_regen_ms = now;
+                    }
+                    if let Some(hp) = hp_after {
+                        world.raft_append_and_apply(ShardLogTagged::CharHpSet { cid, hp });
                     }
                     let msg = format!("trainer: welcome, {}.\r\n", class.as_str());
                     write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
@@ -6469,15 +6853,17 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                             .await?;
                         continue;
                     }
-                    if let Some(dc) = world.chars.get_mut(&docent_id) {
-                        dc.hp = dc.max_hp;
+                    if let Some(dc) = world.chars.get(&docent_id) {
+                        world.raft_append_and_apply(ShardLogTagged::CharHpSet {
+                            cid: docent_id,
+                            hp: dc.max_hp,
+                        });
                     }
-                    if let Some(pc) = world.chars.get_mut(&p.id) {
-                        pc.quest.insert(
-                            QUEST_PARTY_PLAYER_HEALED_DOCENT.to_string(),
-                            "1".to_string(),
-                        );
-                    }
+                    world.raft_set_quest(
+                        p.id,
+                        QUEST_PARTY_PLAYER_HEALED_DOCENT,
+                        Some("1".to_string()),
+                    );
                     write_resp_async(
                         &mut fw,
                         RESP_OUTPUT,
@@ -6678,10 +7064,12 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                                             .await?
                                         };
                                         if killed {
-                                            if let Some(a) = world.chars.get_mut(&attacker_id) {
-                                                a.combat.target = None;
-                                                a.combat.autoattack = false;
-                                            }
+                                            world.raft_append_and_apply(ShardLogTagged::CharCombatSet {
+                                                cid: attacker_id,
+                                                autoattack: false,
+                                                target: None,
+                                                next_ready_ms: world.now_ms(),
+                                            });
                                         } else {
                                             let stun_ms = skill_stun_ms(def);
                                             if stun_ms > 0 {
@@ -6692,13 +7080,15 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                                         }
                                     }
                                     SkillTarget::SelfOnly => {
-                                        let healed = if let Some(pc) = world.chars.get_mut(&attacker_id) {
+                                        let healed = if let Some(pc) = world.chars.get(&attacker_id) {
                                             let before = pc.hp;
-                                            pc.hp = (pc.hp + amount).min(pc.max_hp);
-                                            pc.hp - before
-                                        } else {
-                                            0
-                                        };
+                                            let after = (pc.hp + amount).min(pc.max_hp);
+                                            world.raft_append_and_apply(ShardLogTagged::CharHpSet {
+                                                cid: attacker_id,
+                                                hp: after,
+                                            });
+                                            after - before
+                                        } else { 0 };
                                         let msg = format!("you use {}. (+{} hp)\r\n", def.id, healed);
                                         write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
                                         let room_msg = format!("* {} uses {}.", p.name, def.id);
@@ -6820,10 +7210,14 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                             }
 
                             let mut healed = 0i32;
-                            if let Some(pc) = world.chars.get_mut(&attacker_id) {
+                            if let Some(pc) = world.chars.get(&attacker_id) {
                                 let before = pc.hp;
-                                pc.hp = (pc.hp + heal).min(pc.max_hp);
-                                healed = pc.hp - before;
+                                let after = (pc.hp + heal).min(pc.max_hp);
+                                world.raft_append_and_apply(ShardLogTagged::CharHpSet {
+                                    cid: attacker_id,
+                                    hp: after,
+                                });
+                                healed = after - before;
                             }
                             let msg = format!("you use {}. (+{} hp)\r\n", def.name, healed);
                             write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
@@ -6872,12 +7266,11 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     let s = render_inventory(&p);
                     write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
                     if p.room_id == ROOM_SCHOOL_HANDS_DRILL {
-                        let mut newly_marked = false;
-                        if let Some(pc) = world.active_char_mut(session) {
-                            if !pc.quest.contains_key(QUEST_HANDS_INV) {
-                                pc.quest.insert(QUEST_HANDS_INV.to_string(), "1".to_string());
-                                newly_marked = true;
-                            }
+                        let newly_marked = world
+                            .active_char(session)
+                            .is_some_and(|pc| !pc.quest.contains_key(QUEST_HANDS_INV));
+                        if newly_marked {
+                            world.raft_set_quest(p.id, QUEST_HANDS_INV, Some("1".to_string()));
                         }
                         if newly_marked {
                             write_resp_async(
@@ -7089,12 +7482,11 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         .broadcast_room(&mut fw, &p.room_id, &room_msg)
                         .await;
                     if p.room_id == ROOM_SCHOOL_HANDS_DRILL && slot == items::EquipSlot::Wield {
-                        let mut newly_marked = false;
-                        if let Some(pc) = world.active_char_mut(session) {
-                            if !pc.quest.contains_key(QUEST_HANDS_WIELD) {
-                                pc.quest.insert(QUEST_HANDS_WIELD.to_string(), "1".to_string());
-                                newly_marked = true;
-                            }
+                        let newly_marked = world
+                            .active_char(session)
+                            .is_some_and(|pc| !pc.quest.contains_key(QUEST_HANDS_WIELD));
+                        if newly_marked {
+                            world.raft_set_quest(p.id, QUEST_HANDS_WIELD, Some("1".to_string()));
                         }
                         if newly_marked {
                             let complete = world
@@ -7267,10 +7659,12 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         .get(&attacker_id)
                         .is_some_and(|c| c.combat.autoattack);
                     if on {
-                        if let Some(a) = world.chars.get_mut(&attacker_id) {
-                            a.combat.autoattack = false;
-                            a.combat.target = None;
-                        }
+                        world.raft_append_and_apply(ShardLogTagged::CharCombatSet {
+                            cid: attacker_id,
+                            autoattack: false,
+                            target: None,
+                            next_ready_ms: world.now_ms(),
+                        });
                         write_resp_async(&mut fw, RESP_OUTPUT, session, b"autoattack off\r\n").await?;
                     } else {
                         write_resp_async(
@@ -7504,10 +7898,12 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         .get(&attacker_id)
                         .is_some_and(|a| a.combat.autoattack && a.combat.target == Some(target_id));
                     if toggled_off {
-                        if let Some(a) = world.chars.get_mut(&attacker_id) {
-                            a.combat.autoattack = false;
-                            a.combat.target = None;
-                        }
+                        world.raft_append_and_apply(ShardLogTagged::CharCombatSet {
+                            cid: attacker_id,
+                            autoattack: false,
+                            target: None,
+                            next_ready_ms: world.now_ms(),
+                        });
                         write_resp_async(&mut fw, RESP_OUTPUT, session, b"autoattack off\r\n").await?;
                         process_due_events(&mut world, &mut fw).await?;
                         continue;
@@ -8282,8 +8678,8 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
 
                     if let Some(pc) = world.active_char_mut(session) {
                         pc.autoassist = on;
-                        pc.quest.insert(QUEST_ASSIST_LEARNED.to_string(), "1".to_string());
                     }
+                    world.raft_set_quest(p.id, QUEST_ASSIST_LEARNED, Some("1".to_string()));
                     let msg = if on {
                         b"assist: on\r\n" as &[u8]
                     } else {
@@ -8638,9 +9034,10 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         write_resp_async(&mut fw, RESP_OUTPUT, session, b"party: ok\r\n").await?;
                         continue;
                     }
-                    if let Some(pp) = world.parties.get_mut(&pid) {
-                        pp.leader = new_leader;
-                    }
+                    world.raft_append_and_apply(ShardLogTagged::PartyLeaderSet {
+                        pid,
+                        leader: new_leader,
+                    });
                     let name = world
                         .chars
                         .get(&new_leader)
@@ -8757,15 +9154,11 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                             .await?;
                             continue;
                         }
-                        if let Some(pp) = world.parties.get_mut(&pid) {
-                            pp.members.insert(invitee_id);
-                        }
-                        world
-                            .party_memberships
-                            .entry(invitee_id)
-                            .or_default()
-                            .insert(pid);
-                        world.party_of.insert(invitee_id, pid);
+                        world.raft_append_and_apply(ShardLogTagged::PartyMemberSet {
+                            pid,
+                            member: invitee_id,
+                            present: true,
+                        });
                         let _ = world.broadcast_room(
                             &mut fw,
                             &p.room_id,
@@ -8782,13 +9175,13 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         continue;
                     }
 
-                    world.party_invites.insert(
+                    world.raft_set_party_invite(
                         invitee_id,
-                        PartyInvite {
+                        Some(PartyInvite {
                             party_id: pid,
                             inviter: inviter_id,
                             expires_ms: world.now_ms().saturating_add(60_000),
-                        },
+                        }),
                     );
 
                     let msg = format!(
@@ -8815,7 +9208,7 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                 }
                 if lc == "party accept" {
                     let invitee_id = p.id;
-                    let Some(inv) = world.party_invites.remove(&invitee_id) else {
+                    let Some(inv) = world.party_invites.get(&invitee_id).cloned() else {
                         write_resp_async(
                             &mut fw,
                             RESP_OUTPUT,
@@ -8826,6 +9219,7 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         continue;
                     };
                     if inv.expires_ms < world.now_ms() {
+                        world.raft_set_party_invite(invitee_id, None);
                         write_resp_async(
                             &mut fw,
                             RESP_OUTPUT,
@@ -8835,7 +9229,8 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         .await?;
                         continue;
                     }
-                    let Some(party) = world.parties.get_mut(&inv.party_id) else {
+                    let Some(_party) = world.parties.get(&inv.party_id) else {
+                        world.raft_set_party_invite(invitee_id, None);
                         write_resp_async(
                             &mut fw,
                             RESP_OUTPUT,
@@ -8845,13 +9240,17 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         .await?;
                         continue;
                     };
-                    party.members.insert(invitee_id);
-                    world
-                        .party_memberships
-                        .entry(invitee_id)
-                        .or_default()
-                        .insert(inv.party_id);
-                    world.party_of.insert(invitee_id, inv.party_id);
+                    world.raft_append_and_apply(ShardLogTagged::PartyMemberSet {
+                        pid: inv.party_id,
+                        member: invitee_id,
+                        present: true,
+                    });
+                    let member_ids = world
+                        .parties
+                        .get(&inv.party_id)
+                        .map(|pp| pp.members.iter().copied().collect::<Vec<_>>())
+                        .unwrap_or_default();
+                    world.raft_set_party_invite(invitee_id, None);
                     let msg = format!("party: joined (id={})\r\n", inv.party_id);
                     write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
 
@@ -8862,8 +9261,7 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         .map(|c| c.name.as_str())
                         .unwrap_or("someone");
                     let msg2 = format!("party: {join_name} joined\r\n");
-                    let member_sids = party
-                        .members
+                    let member_sids = member_ids
                         .iter()
                         .filter_map(|mid| world.chars.get(mid).and_then(|c| c.controller))
                         .collect::<Vec<_>>();
@@ -9352,9 +9750,7 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         .await?;
                         continue;
                     };
-                    if let Some(c) = world.active_char_mut(session) {
-                        c.quest.insert(key.to_string(), value.to_string());
-                    }
+                    world.raft_set_quest(p.id, key, Some(value.to_string()));
                     let s = format!("quest: set {key}={value}\r\n");
                     write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
                     continue;
@@ -9372,9 +9768,11 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         continue;
                     }
                     let removed = world
-                        .active_char_mut(session)
-                        .and_then(|c| c.quest.remove(key))
-                        .is_some();
+                        .active_char(session)
+                        .is_some_and(|c| c.quest.contains_key(key));
+                    if removed {
+                        world.raft_set_quest(p.id, key, None);
+                    }
                     let s = if removed {
                         format!("quest: del {key}\r\n")
                     } else {
@@ -9422,39 +9820,38 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     }
 
                     let key_done = format!("q.q3_sewer_valves.valve_{}", valve_ix.unwrap());
+                    let Some(cid) = world.active_char_id(session) else {
+                        write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n").await?;
+                        continue;
+                    };
                     let (opened, already) = {
-                        let Some(c) = world.active_char_mut(session) else {
+                        let Some(c) = world.chars.get(&cid) else {
                             write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n").await?;
                             continue;
                         };
-
                         let already = c
                             .quest
                             .get(&key_done)
                             .map(|v| v.trim())
                             .is_some_and(|v| !v.is_empty() && v != "0" && v != "false");
-                        if already {
-                            let opened = c
-                                .quest
-                                .get("q.q3_sewer_valves.valves_opened")
-                                .and_then(|v| v.trim().parse::<i64>().ok())
-                                .unwrap_or(0)
-                                .clamp(0, 3);
-                            (opened, true)
-                        } else {
-                            c.quest.insert(key_done, "1".to_string());
-                            let mut opened = c
-                                .quest
-                                .get("q.q3_sewer_valves.valves_opened")
-                                .and_then(|v| v.trim().parse::<i64>().ok())
-                                .unwrap_or(0)
-                                .clamp(0, 3);
-                            opened = (opened + 1).clamp(0, 3);
-                            c.quest
-                                .insert("q.q3_sewer_valves.valves_opened".to_string(), opened.to_string());
-                            (opened, false)
-                        }
+                        let opened = c
+                            .quest
+                            .get("q.q3_sewer_valves.valves_opened")
+                            .and_then(|v| v.trim().parse::<i64>().ok())
+                            .unwrap_or(0)
+                            .clamp(0, 3);
+                        (opened, already)
                     };
+                    if !already {
+                        world.raft_set_quest(cid, &key_done, Some("1".to_string()));
+                        let next_opened = (opened + 1).clamp(0, 3);
+                        world.raft_set_quest(
+                            cid,
+                            "q.q3_sewer_valves.valves_opened",
+                            Some(next_opened.to_string()),
+                        );
+                    }
+                    let opened = if already { opened } else { (opened + 1).clamp(0, 3) };
 
                     if already {
                         let msg = format!("the valve is already open. (valves opened: {opened}/3)\r\n");
@@ -9510,8 +9907,12 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         }
 
                         let key_done = format!("q.q6_hillfort_signal.pylon_{}", pylon_ix.unwrap());
+                        let Some(cid) = world.active_char_id(session) else {
+                            write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n").await?;
+                            continue;
+                        };
                         let (lit, already) = {
-                            let Some(c) = world.active_char_mut(session) else {
+                            let Some(c) = world.chars.get(&cid) else {
                                 write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n").await?;
                                 continue;
                             };
@@ -9520,31 +9921,24 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                                 .get(&key_done)
                                 .map(|v| v.trim())
                                 .is_some_and(|v| !v.is_empty() && v != "0" && v != "false");
-
-                            if already {
-                                let lit = c
-                                    .quest
-                                    .get("q.q6_hillfort_signal.pylons_lit")
-                                    .and_then(|v| v.trim().parse::<i64>().ok())
-                                    .unwrap_or(0)
-                                    .clamp(0, 3);
-                                (lit, true)
-                            } else {
-                                c.quest.insert(key_done, "1".to_string());
-                                let mut lit = c
-                                    .quest
-                                    .get("q.q6_hillfort_signal.pylons_lit")
-                                    .and_then(|v| v.trim().parse::<i64>().ok())
-                                    .unwrap_or(0)
-                                    .clamp(0, 3);
-                                lit = (lit + 1).clamp(0, 3);
-                                c.quest.insert(
-                                    "q.q6_hillfort_signal.pylons_lit".to_string(),
-                                    lit.to_string(),
-                                );
-                                (lit, false)
-                            }
+                            let lit = c
+                                .quest
+                                .get("q.q6_hillfort_signal.pylons_lit")
+                                .and_then(|v| v.trim().parse::<i64>().ok())
+                                .unwrap_or(0)
+                                .clamp(0, 3);
+                            (lit, already)
                         };
+                        if !already {
+                            world.raft_set_quest(cid, &key_done, Some("1".to_string()));
+                            let next_lit = (lit + 1).clamp(0, 3);
+                            world.raft_set_quest(
+                                cid,
+                                "q.q6_hillfort_signal.pylons_lit",
+                                Some(next_lit.to_string()),
+                            );
+                        }
+                        let lit = if already { lit } else { (lit + 1).clamp(0, 3) };
 
                         if already {
                             let msg = format!("the pylon is already lit. (pylons lit: {lit}/3)\r\n");
@@ -9619,8 +10013,13 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
 
                         match kind {
                             PullLeverKind::SewersBypass => {
+                                let Some(cid) = world.active_char_id(session) else {
+                                    write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n")
+                                        .await?;
+                                    continue;
+                                };
                                 let (valves_opened, already) = {
-                                    let Some(c) = world.active_char_mut(session) else {
+                                    let Some(c) = world.chars.get(&cid) else {
                                         write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n")
                                             .await?;
                                         continue;
@@ -9631,18 +10030,16 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                                         .and_then(|v| v.trim().parse::<i64>().ok())
                                         .unwrap_or(0)
                                         .clamp(0, 3);
-
                                     let already = eval_gate_expr(c, "gate.sewers.shortcut_to_quarry");
-
-                                    if !already && valves_opened >= 3 {
-                                        c.quest.insert(
-                                            "gate.sewers.shortcut_to_quarry".to_string(),
-                                            "1".to_string(),
-                                        );
-                                    }
-
                                     (valves_opened, already)
                                 };
+                                if !already && valves_opened >= 3 {
+                                    world.raft_set_quest(
+                                        cid,
+                                        "gate.sewers.shortcut_to_quarry",
+                                        Some("1".to_string()),
+                                    );
+                                }
 
                                 if valves_opened < 3 {
                                     write_resp_async(
@@ -9678,8 +10075,13 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                                 continue;
                             }
                             PullLeverKind::RailSwitch1 | PullLeverKind::RailSwitch2 => {
-                                let (pulled, already, unlocked_now) = {
-                                    let Some(c) = world.active_char_mut(session) else {
+                                let Some(cid) = world.active_char_id(session) else {
+                                    write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n")
+                                        .await?;
+                                    continue;
+                                };
+                                let (pulled, already, unlocked_now, key, label) = {
+                                    let Some(c) = world.chars.get(&cid) else {
                                         write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n")
                                             .await?;
                                         continue;
@@ -9690,25 +10092,33 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                                         _ => unreachable!(),
                                     };
                                     let already = eval_gate_expr(c, key);
-                                    if !already {
-                                        c.quest.insert(key.to_string(), "1".to_string());
-                                    }
-
                                     let l1 = eval_gate_expr(c, "e.e17.lever_1") as i64;
                                     let l2 = eval_gate_expr(c, "e.e17.lever_2") as i64;
-                                    let pulled = (l1 + l2).clamp(0, 2);
+                                    let pulled_before = (l1 + l2).clamp(0, 2);
+                                    let pulled = if already {
+                                        pulled_before
+                                    } else {
+                                        (pulled_before + 1).clamp(0, 2)
+                                    };
                                     let has_pass = eval_gate_expr(c, "gate.rail_spur.pass");
                                     let unlocked_now = !has_pass && pulled >= 2;
-                                    if unlocked_now {
-                                        c.quest.insert("gate.rail_spur.pass".to_string(), "1".to_string());
-                                    }
-                                    // Keep a short state key so `quest list` is readable in dev.
-                                    c.quest.insert(
-                                        "e.e17.last_lever".to_string(),
-                                        label.to_string(),
-                                    );
-                                    (pulled, already, unlocked_now)
+                                    (pulled, already, unlocked_now, key, label)
                                 };
+                                if !already {
+                                    world.raft_set_quest(cid, key, Some("1".to_string()));
+                                }
+                                if unlocked_now {
+                                    world.raft_set_quest(
+                                        cid,
+                                        "gate.rail_spur.pass",
+                                        Some("1".to_string()),
+                                    );
+                                }
+                                world.raft_set_quest(
+                                    cid,
+                                    "e.e17.last_lever",
+                                    Some(label.to_string()),
+                                );
 
                                 if already {
                                     let msg = format!(
@@ -9759,11 +10169,8 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         continue;
                     }
                     let _cid = spawn_bearded_docent(&mut world, &p.room_id);
-                    if let Some(pc) = world.active_char_mut(session) {
-                        pc.quest
-                            .insert(QUEST_PARTY_LESSON_PHASE.to_string(), "1".to_string());
-                        pc.quest.remove(QUEST_PARTY_PLAYER_HEALED_DOCENT);
-                    }
+                    world.raft_set_quest(p.id, QUEST_PARTY_LESSON_PHASE, Some("1".to_string()));
+                    world.raft_set_quest(p.id, QUEST_PARTY_PLAYER_HEALED_DOCENT, None);
                     world.inv_add(p.id, ITEM_DOCENT_RESTORE_KIT, 1);
                     let _ = world
                         .broadcast_room(
@@ -9833,14 +10240,22 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     let phase = parse_party_lesson_phase(&p).max(1);
                     let aura_until = world.now_ms().saturating_add(25_000);
                     let mob_id = world.spawn_mob(p.room_id.clone(), "curriculum brute".to_string());
-                    if let Some(m) = world.chars.get_mut(&mob_id) {
-                        m.hp = 16;
-                        m.max_hp = 16;
-                        m.level = 3;
+                    if let Some(m) = world.chars.get(&mob_id).cloned() {
+                        world.raft_set_progress(
+                            mob_id,
+                            m.xp,
+                            3,
+                            m.skill_points,
+                            16,
+                            16,
+                            m.max_mana,
+                            m.mana,
+                            m.max_stamina,
+                            m.stamina,
+                            m.autoassist,
+                        );
                     }
-                    if let Some(pc) = world.chars.get_mut(&p.id) {
-                        pc.quest.remove(QUEST_PARTY_PLAYER_HEALED_DOCENT);
-                    }
+                    world.raft_set_quest(p.id, QUEST_PARTY_PLAYER_HEALED_DOCENT, None);
                     match phase {
                         1 => {
                             world.start_combat(docent_id, mob_id);
@@ -9850,23 +10265,21 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                             world.start_combat(p.id, mob_id);
                             world.start_combat(mob_id, p.id);
                             world.start_combat(docent_id, mob_id);
-                            if let Some(pc) = world.chars.get_mut(&p.id) {
-                                pc.quest.insert(
-                                    QUEST_PARTY_AURA_UNTIL_MS.to_string(),
-                                    aura_until.to_string(),
-                                );
-                            }
+                            world.raft_set_quest(
+                                p.id,
+                                QUEST_PARTY_AURA_UNTIL_MS,
+                                Some(aura_until.to_string()),
+                            );
                         }
                         3 => {
                             world.start_combat(p.id, mob_id);
                             world.start_combat(mob_id, p.id);
                             world.start_combat(docent_id, mob_id);
-                            if let Some(pc) = world.chars.get_mut(&p.id) {
-                                pc.quest.insert(
-                                    QUEST_PARTY_AURA_UNTIL_MS.to_string(),
-                                    aura_until.to_string(),
-                                );
-                            }
+                            world.raft_set_quest(
+                                p.id,
+                                QUEST_PARTY_AURA_UNTIL_MS,
+                                Some(aura_until.to_string()),
+                            );
                         }
                         _ => {
                             world.start_combat(docent_id, mob_id);
@@ -10085,17 +10498,21 @@ async fn handle_event(
             }
 
             let Some(tgt) = world.chars.get(&target_id).cloned() else {
-                if let Some(a) = world.chars.get_mut(&attacker_id) {
-                    a.combat.target = None;
-                    a.combat.autoattack = false;
-                }
+                world.raft_append_and_apply(ShardLogTagged::CharCombatSet {
+                    cid: attacker_id,
+                    autoattack: false,
+                    target: None,
+                    next_ready_ms: world.now_ms(),
+                });
                 return Ok(());
             };
             if tgt.room_id != att.room_id {
-                if let Some(a) = world.chars.get_mut(&attacker_id) {
-                    a.combat.target = None;
-                    a.combat.autoattack = false;
-                }
+                world.raft_append_and_apply(ShardLogTagged::CharCombatSet {
+                    cid: attacker_id,
+                    autoattack: false,
+                    target: None,
+                    next_ready_ms: world.now_ms(),
+                });
                 return Ok(());
             }
 
@@ -10119,11 +10536,18 @@ async fn handle_event(
                         "* bearded docent smites the threat in one blow.".to_string(),
                     )
                     .await?;
-                    if let Some(dc) = world.chars.get_mut(&attacker_id) {
-                        dc.hp = dc.max_hp;
-                        dc.combat.autoattack = false;
-                        dc.combat.target = None;
-                    }
+                    let hp = world
+                        .chars
+                        .get(&attacker_id)
+                        .map(|dc| dc.max_hp)
+                        .unwrap_or(1);
+                    world.raft_append_and_apply(ShardLogTagged::CharHpSet { cid: attacker_id, hp });
+                    world.raft_append_and_apply(ShardLogTagged::CharCombatSet {
+                        cid: attacker_id,
+                        autoattack: false,
+                        target: None,
+                        next_ready_ms: world.now_ms(),
+                    });
                     let _ = world
                         .broadcast_room(
                             fw,
@@ -10146,8 +10570,14 @@ async fn handle_event(
                     if phase == 3 {
                         if let Some(pc) = world.chars.get_mut(&tank_id) {
                             let before = pc.hp;
-                            pc.hp = (pc.hp + 7).min(pc.max_hp);
-                            if pc.hp > before {
+                            let healed = (pc.hp + 7).min(pc.max_hp);
+                            let _ = pc;
+                            world.raft_append_and_apply(ShardLogTagged::CharHpSet {
+                                cid: tank_id,
+                                hp: healed,
+                            });
+                            let now_hp = world.chars.get(&tank_id).map(|pc| pc.hp).unwrap_or(before);
+                            if now_hp > before {
                                 let _ = world
                                     .broadcast_room(
                                         fw,
@@ -10166,18 +10596,22 @@ async fn handle_event(
 
             // No mob-vs-mob combat for now.
             if !att_is_player && !tgt_is_player {
-                if let Some(a) = world.chars.get_mut(&attacker_id) {
-                    a.combat.target = None;
-                    a.combat.autoattack = false;
-                }
+                world.raft_append_and_apply(ShardLogTagged::CharCombatSet {
+                    cid: attacker_id,
+                    autoattack: false,
+                    target: None,
+                    next_ready_ms: world.now_ms(),
+                });
                 return Ok(());
             }
             // PvP is opt-in and only allowed in designated rooms.
             if att_is_player && tgt_is_player && !world.can_pvp_ids(attacker_id, target_id) {
-                if let Some(a) = world.chars.get_mut(&attacker_id) {
-                    a.combat.target = None;
-                    a.combat.autoattack = false;
-                }
+                world.raft_append_and_apply(ShardLogTagged::CharCombatSet {
+                    cid: attacker_id,
+                    autoattack: false,
+                    target: None,
+                    next_ready_ms: world.now_ms(),
+                });
                 return Ok(());
             }
 
@@ -10194,17 +10628,22 @@ async fn handle_event(
                 apply_damage_to_mob(world, fw, attacker_id, target_id, dmg, msg).await?
             };
             if killed {
-                if let Some(a) = world.chars.get_mut(&attacker_id) {
-                    a.combat.target = None;
-                    a.combat.autoattack = false;
-                }
+                world.raft_append_and_apply(ShardLogTagged::CharCombatSet {
+                    cid: attacker_id,
+                    autoattack: false,
+                    target: None,
+                    next_ready_ms: world.now_ms(),
+                });
                 return Ok(());
             }
 
             let next = world.now_ms().saturating_add(1_000);
-            if let Some(a) = world.chars.get_mut(&attacker_id) {
-                a.combat.next_ready_ms = next;
-            }
+            world.raft_append_and_apply(ShardLogTagged::CharCombatSet {
+                cid: attacker_id,
+                autoattack: true,
+                target: Some(target_id),
+                next_ready_ms: next,
+            });
             world.schedule_at_ms(next, EventKind::CombatAct { attacker_id });
         }
         EventKind::BossTelegraph { boss_id } => {
@@ -10341,9 +10780,10 @@ async fn handle_event(
                     .entry(start_room.clone())
                     .or_default()
                     .insert(mid);
-                if let Some(mm) = world.chars.get_mut(&mid) {
-                    mm.room_id = start_room.clone();
-                }
+                world.raft_append_and_apply(ShardLogTagged::CharRoomSet {
+                    cid: mid,
+                    room_id: start_room.clone(),
+                });
             }
 
             let _ = world
@@ -10387,21 +10827,10 @@ async fn handle_event(
             let to = ex.to.clone();
             let dir = ex.dir.clone();
 
-            // Update occupancy.
-            if let Some(s) = world.occupants.get_mut(&from) {
-                s.remove(&mob_id);
-                if s.is_empty() {
-                    world.occupants.remove(&from);
-                }
-            }
-            world
-                .occupants
-                .entry(to.clone())
-                .or_default()
-                .insert(mob_id);
-            if let Some(mm) = world.chars.get_mut(&mob_id) {
-                mm.room_id = to.clone();
-            }
+            world.raft_append_and_apply(ShardLogTagged::CharRoomSet {
+                cid: mob_id,
+                room_id: to.clone(),
+            });
 
             let _ = world
                 .broadcast_room(fw, &from, &format!("* {} wanders {dir}.", m.name))
@@ -10492,13 +10921,15 @@ async fn apply_damage_to_mob(
             dmg
         }
     };
-    let dead = {
-        let Some(t) = world.chars.get_mut(&target_id) else {
-            return Ok(false);
-        };
-        t.hp -= final_dmg;
-        t.hp <= 0
+    let Some(cur_hp) = world.chars.get(&target_id).map(|t| t.hp) else {
+        return Ok(false);
     };
+    let new_hp = cur_hp - final_dmg;
+    world.raft_append_and_apply(ShardLogTagged::CharHpSet {
+        cid: target_id,
+        hp: new_hp,
+    });
+    let dead = new_hp <= 0;
     if !dead {
         return Ok(false);
     }
@@ -10540,7 +10971,7 @@ async fn apply_damage_to_mob(
                         .unwrap_or(attacker_id)
                 };
                 let mut next_msg = None::<&'static str>;
-                if let Some(pc) = world.chars.get_mut(&trainee_id) {
+                if let Some(pc) = world.chars.get(&trainee_id) {
                     let phase = parse_party_lesson_phase(pc);
                     let done_heal = pc
                         .quest
@@ -10548,29 +10979,41 @@ async fn apply_damage_to_mob(
                         .is_some_and(|v| v == "1");
                     match phase {
                         1 => {
-                            pc.quest
-                                .insert(QUEST_PARTY_LESSON_PHASE.to_string(), "2".to_string());
+                            world.raft_set_quest(
+                                trainee_id,
+                                QUEST_PARTY_LESSON_PHASE,
+                                Some("2".to_string()),
+                            );
                             next_msg = Some(
                                 "* lesson complete: now tank while the docent dpses. use `lesson start`.",
                             );
                         }
                         2 => {
-                            pc.quest
-                                .insert(QUEST_PARTY_LESSON_PHASE.to_string(), "3".to_string());
+                            world.raft_set_quest(
+                                trainee_id,
+                                QUEST_PARTY_LESSON_PHASE,
+                                Some("3".to_string()),
+                            );
                             next_msg = Some(
                                 "* lesson complete: now tank while the docent heals. use `lesson start`.",
                             );
                         }
                         3 => {
-                            pc.quest
-                                .insert(QUEST_PARTY_LESSON_PHASE.to_string(), "4".to_string());
+                            world.raft_set_quest(
+                                trainee_id,
+                                QUEST_PARTY_LESSON_PHASE,
+                                Some("4".to_string()),
+                            );
                             next_msg = Some(
                                 "* lesson complete: now heal the docent while he tanks. use `lesson start` and `aid docent`.",
                             );
                         }
                         4 if done_heal => {
-                            pc.quest
-                                .insert(QUEST_PARTY_LESSON_PHASE.to_string(), "5".to_string());
+                            world.raft_set_quest(
+                                trainee_id,
+                                QUEST_PARTY_LESSON_PHASE,
+                                Some("5".to_string()),
+                            );
                             next_msg = Some("* party curriculum complete.");
                         }
                         4 => {
@@ -10626,13 +11069,15 @@ async fn apply_damage_to_player(
     let room_id = att.room_id.clone();
     let _ = world.broadcast_room(fw, &room_id, &msg).await;
 
-    let dead = {
-        let Some(t) = world.chars.get_mut(&target_id) else {
-            return Ok(false);
-        };
-        t.hp -= dmg;
-        t.hp <= 0
+    let Some(cur_hp) = world.chars.get(&target_id).map(|t| t.hp) else {
+        return Ok(false);
     };
+    let new_hp = cur_hp - dmg;
+    world.raft_append_and_apply(ShardLogTagged::CharHpSet {
+        cid: target_id,
+        hp: new_hp,
+    });
+    let dead = new_hp <= 0;
     if !dead {
         return Ok(false);
     }
@@ -10653,28 +11098,29 @@ async fn send_to_graveyard(
     let Some(c) = world.chars.get(&cid).cloned() else {
         return Ok(());
     };
-    let from = c.room_id.clone();
     let to = if world.rooms.has_room(graveyard_room_id()) {
         graveyard_room_id().to_string()
     } else {
         world.rooms.start_room().to_string()
     };
 
-    if let Some(s) = world.occupants.get_mut(&from) {
-        s.remove(&cid);
-        if s.is_empty() {
-            world.occupants.remove(&from);
-        }
-    }
-    world.occupants.entry(to.clone()).or_default().insert(cid);
-
-    if let Some(cc) = world.chars.get_mut(&cid) {
-        cc.room_id = to.clone();
-        cc.hp = cc.max_hp.max(1);
-        cc.combat.autoattack = false;
-        cc.combat.target = None;
-        cc.quest.insert(QUEST_DEATH_SEEN.to_string(), "1".to_string());
-    }
+    world.raft_append_and_apply(ShardLogTagged::CharRoomSet {
+        cid,
+        room_id: to.clone(),
+    });
+    let heal_to = world
+        .chars
+        .get(&cid)
+        .map(|cc| cc.max_hp.max(1))
+        .unwrap_or(1);
+    world.raft_append_and_apply(ShardLogTagged::CharHpSet { cid, hp: heal_to });
+    world.raft_append_and_apply(ShardLogTagged::CharCombatSet {
+        cid,
+        autoattack: false,
+        target: None,
+        next_ready_ms: world.now_ms(),
+    });
+    world.raft_set_quest(cid, QUEST_DEATH_SEEN, Some("1".to_string()));
 
     let _ = world
         .broadcast_room(fw, &to, &format!("* {} arrives, shivering.", c.name))
@@ -10832,30 +11278,35 @@ async fn try_move(
         .broadcast_room(fw, &from, &format!("* {} goes {dir}", p.name))
         .await?;
 
-    // Update occupancy.
-    if let Some(s) = world.occupants.get_mut(&from) {
-        s.remove(&cid);
-        if s.is_empty() {
-            world.occupants.remove(&from);
-        }
+    let mut completed_recovery = false;
+    if from == graveyard_room_id()
+        && world
+            .chars
+            .get(&cid)
+            .is_some_and(|pp| pp.quest.contains_key(QUEST_DEATH_SEEN))
+    {
+        completed_recovery = true;
     }
-    world.occupants.entry(to.clone()).or_default().insert(cid);
-
-    if let Some(pp) = world.chars.get_mut(&cid) {
-        pp.room_id = to.clone();
-        if from == graveyard_room_id() && pp.quest.contains_key(QUEST_DEATH_SEEN) {
-            pp.quest.insert(QUEST_RECOVERY_DONE.to_string(), "1".to_string());
-        }
+    world.raft_append_and_apply(ShardLogTagged::CharRoomSet {
+        cid,
+        room_id: to.clone(),
+    });
+    if completed_recovery {
+        world.raft_set_quest(cid, QUEST_RECOVERY_DONE, Some("1".to_string()));
     }
 
     world
         .broadcast_room(fw, &to, &format!("* {} arrives", p.name))
         .await?;
 
-    let q2_msg = world
+    let (q2_msg, q2_deltas) = world
         .chars
-        .get_mut(&cid)
-        .and_then(|pp| q2_room_enter(pp, &to));
+        .get(&cid)
+        .map(|c| q2_room_enter(c, &to))
+        .unwrap_or((None, Vec::new()));
+    for (k, v) in q2_deltas {
+        world.raft_set_quest(cid, &k, v);
+    }
 
     let s = world.render_room_for(&to, session);
     write_resp_async(fw, RESP_OUTPUT, session, s.as_bytes()).await?;
@@ -10894,17 +11345,10 @@ async fn try_move(
             }
 
             for (mid, msid) in followers {
-                // Update occupancy.
-                if let Some(s) = world.occupants.get_mut(&from) {
-                    s.remove(&mid);
-                    if s.is_empty() {
-                        world.occupants.remove(&from);
-                    }
-                }
-                world.occupants.entry(to.clone()).or_default().insert(mid);
-                if let Some(mm) = world.chars.get_mut(&mid) {
-                    mm.room_id = to.clone();
-                }
+                world.raft_append_and_apply(ShardLogTagged::CharRoomSet {
+                    cid: mid,
+                    room_id: to.clone(),
+                });
                 if let Some(msid) = msid {
                     let _ = world
                         .broadcast_room(
@@ -11144,16 +11588,10 @@ async fn teleport_to(
         .broadcast_room(fw, &from, &format!("* {} {verb}", p.name))
         .await?;
 
-    if let Some(s) = world.occupants.get_mut(&from) {
-        s.remove(&cid);
-        if s.is_empty() {
-            world.occupants.remove(&from);
-        }
-    }
-    world.occupants.entry(to.clone()).or_default().insert(cid);
-    if let Some(pp) = world.chars.get_mut(&cid) {
-        pp.room_id = to.clone();
-    }
+    world.raft_append_and_apply(ShardLogTagged::CharRoomSet {
+        cid,
+        room_id: to.clone(),
+    });
 
     let s = world.render_room_for(&to, session);
     write_resp_async(fw, RESP_OUTPUT, session, s.as_bytes()).await?;

@@ -44,9 +44,21 @@ The broker prints the auth URL using `SLOPMUD_GOOGLE_AUTH_BASE_URL`, which shoul
 
 ### prd-gaia
 
-- Static web HTTPS: `443` (`https://prd-gaia.slopmud.com/`) (vanity port)
-- OAuth web HTTPS: `4242` (`https://prd-gaia.slopmud.com:4242/`)
-- OAuth callback (register in Google): `https://prd-gaia.slopmud.com:4242/auth/google/callback`
+Prod is special because the shared host already uses:
+
+- `:443` for the public landing site (`slopmud.com` / `www.slopmud.com`)
+- `:4242` as the authorized prod OAuth callback port
+
+So `prd-gaia` stays in the prod `42xx` block, but only the static side gets its own
+port. Prod OAuth stays canonical on the mud portal:
+
+- Static web HTTPS: `4243` (`https://prd-gaia.slopmud.com:4243/`)
+- Canonical prod OAuth HTTPS: `4242` (`https://mud.slopmud.com:4242/`)
+- Canonical prod OAuth callback: `https://mud.slopmud.com:4242/auth/google/callback`
+
+Note: if multiple prod hostnames need to use `:4242` on one machine, solve that
+with shared service/cert/routing decisions, not by silently changing the callback
+port in env files.
 
 ## Local Dev OAuth Port
 

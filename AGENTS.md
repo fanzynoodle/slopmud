@@ -26,6 +26,30 @@ Unless the user explicitly instructs otherwise, do local development work in a d
     - `base+3` web (static_web) when used instead of slopmud_web
     - `base+4` internal_oidc
 
+### Local Development Workflow (Fast Loop)
+
+Use this loop for gameplay/debug work before deploying remotely.
+
+1. Allocate a port block:
+   - `base=$(python3 scripts/alloc_port_block.py --range 4950-5990 --stride 5 --offsets 0,1,2,4 | tail -n1)`
+2. Create a temporary env file:
+   - `cat > /tmp/agent/local-fast.env <<EOF`
+   - `SLOPMUD_BIND=127.0.0.1:${base}`
+   - `SHARD_BIND=127.0.0.1:$((base+1))`
+   - `SHARD_ADDR=127.0.0.1:$((base+1))`
+   - `SESSION_TCP_ADDR=127.0.0.1:${base}`
+   - `SLOPMUD_ADMIN_BIND=127.0.0.1:$((base+4))`
+   - `SLOPMUD_ACCOUNTS_PATH=/tmp/agent/slopmud_accounts_localfast.json`
+   - `SLOPMUD_BANS_PATH=/tmp/agent/bans_localfast.json`
+   - `SLOPMUD_GOOGLE_OAUTH_DIR=/tmp/agent/google_oauth_localfast`
+   - `SLOPMUD_GOOGLE_AUTH_BASE_URL=http://127.0.0.1:$((base+2))`
+   - `EOF`
+3. Run local broker + shard:
+   - `just local-run /tmp/agent/local-fast.env`
+4. In another shell, test as a player:
+   - `nc 127.0.0.1 ${base}`
+5. Iterate locally, then deploy once behavior is confirmed.
+
 ## HTTPS (Certbot + Route53 DNS-01, No Nginx)
 
 When the user asks to "get certbot working" or "enable HTTPS" for `slopmud.com`/`www.slopmud.com`, use the EC2 instance role + `certbot-dns-route53` (DNS-01) and the repo's `static_web` server (it serves TLS directly on `:443`).

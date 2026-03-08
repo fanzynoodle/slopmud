@@ -28,6 +28,7 @@ Env files:
 - OAuth web: `env/<track>-gaia-oauth.env` (sources the static env file and overrides only the web bind ports/binary)
 
 Port layout is documented in `docs/gaia_ports.md`.
+Short version: `dev-gaia` uses `4042/4043`, `stg-gaia` uses `4142/4143`, and `prd-gaia` uses its own static port while reusing the canonical prod OAuth target at `mud.slopmud.com:4242`.
 
 ## One Stack, Split Web Lifecycles
 

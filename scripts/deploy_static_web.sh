@@ -128,8 +128,16 @@ ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
 "
 
 http_port="${HTTP_BIND##*:}"
-echo "Smoke test (direct IP, Host header = ${DOMAIN}, port = ${http_port})"
-curl -fsSL -H "Host: ${DOMAIN}" "http://${HOST}:${http_port}/" | sed -n '1,25p'
+http_host="${HTTP_BIND%:*}"
+smoke_host="${http_host}"
+if [[ -z "${smoke_host}" || "${smoke_host}" == "0.0.0.0" || "${smoke_host}" == "::" || "${smoke_host}" == "[::]" || "${smoke_host}" == "localhost" ]]; then
+  smoke_host="127.0.0.1"
+fi
 
-echo "Health check"
-curl -fsSL -H "Host: ${DOMAIN}" "http://${HOST}:${http_port}/healthz" || true
+echo "Smoke test over SSH (${smoke_host}:${http_port}, Host header = ${DOMAIN})"
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" \
+  "curl -fsSL -H 'Host: ${DOMAIN}' 'http://${smoke_host}:${http_port}/' | sed -n '1,25p'"
+
+echo "Health check over SSH"
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" \
+  "curl -fsSL -H 'Host: ${DOMAIN}' 'http://${smoke_host}:${http_port}/healthz'" || true

@@ -37,6 +37,8 @@
 /locks/**/*.lock
 /locks/nearline_scrollback/
 /locks/nearline_scrollback/**
+/locks/session_checkpoints/
+/locks/session_checkpoints/**
 
 # Local runtime state (not committed)
 /var/
