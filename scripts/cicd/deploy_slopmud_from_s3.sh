@@ -38,6 +38,8 @@ set +a
 : "${SSH_PORT:?missing SSH_PORT in env file}"
 : "${SLOPMUD_BIND:?missing SLOPMUD_BIND in env file}"
 
+SSH_HOST="${SSH_HOST:-${DOMAIN:-$HOST}}"
+
 case "$ENV_NAME" in
   prd) track="prod" ;;
   dev|stg|sandbox) track="$ENV_NAME" ;;
@@ -71,15 +73,15 @@ fi
 ssh_opts=(-o StrictHostKeyChecking=accept-new)
 ssh_port_opt=(-p "$SSH_PORT")
 
-echo "Deploying ${s3_uri} to ${ENV_NAME} on ${HOST}"
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+echo "Deploying ${s3_uri} to ${ENV_NAME} on ${SSH_HOST}"
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" "\
   set -euo pipefail; \
   sudo /usr/local/bin/slopmud-shuttle-assets --env \"${ENV_NAME}\" --from-s3 \"${s3_uri}\"; \
 "
 
 port="${SLOPMUD_BIND##*:}"
 echo "Listening check (port ${port})"
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" "\
   set -euo pipefail; \
   sudo ss -lnt | grep -qE ':${port}([[:space:]]|$)'; \
 "

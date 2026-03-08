@@ -24,6 +24,8 @@ set +a
 : "${OIDC_CLIENT_SECRET:?missing OIDC_CLIENT_SECRET in env file}"
 : "${OIDC_ED25519_SEED_B64:?missing OIDC_ED25519_SEED_B64 in env file}"
 
+SSH_HOST="${SSH_HOST:-${DOMAIN:-$HOST}}"
+
 ssh_opts=(-o StrictHostKeyChecking=accept-new)
 ssh_port_opt=(-p "$SSH_PORT")
 scp_port_opt=(-P "$SSH_PORT")
@@ -40,7 +42,7 @@ if [[ ! -x "$bin_src" ]]; then
 fi
 
 echo "Provisioning remote directories + system user"
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" "\
   set -euo pipefail; \
   if command -v apt-get >/dev/null 2>&1; then \
     sudo DEBIAN_FRONTEND=noninteractive apt-get update -y; \
@@ -57,9 +59,9 @@ ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
   sudo chown -R slopmud:slopmud \"${REMOTE_ROOT}\" \
 "
 
-echo "Uploading binary -> ${SSH_USER}@${HOST}:${OIDC_REMOTE_BIN}"
-scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$bin_src" "${SSH_USER}@${HOST}:/tmp/internal_oidc"
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+echo "Uploading binary -> ${SSH_USER}@${SSH_HOST}:${OIDC_REMOTE_BIN}"
+scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$bin_src" "${SSH_USER}@${SSH_HOST}:/tmp/internal_oidc"
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" "\
   set -euo pipefail; \
   sudo install -m 0755 -o root -g root /tmp/internal_oidc \"${OIDC_REMOTE_BIN}\"; \
   sudo rm -f /tmp/internal_oidc \
@@ -106,8 +108,8 @@ EOF
 unit_name="${OIDC_APP_NAME}.service"
 
 echo "Installing systemd unit (${unit_name})"
-scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$tmp_unit" "${SSH_USER}@${HOST}:/tmp/${unit_name}"
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$tmp_unit" "${SSH_USER}@${SSH_HOST}:/tmp/${unit_name}"
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" "\
   set -euo pipefail; \
   sudo mv \"/tmp/${unit_name}\" \"/etc/systemd/system/${unit_name}\"; \
   sudo systemctl daemon-reload; \
@@ -118,7 +120,7 @@ ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
 
 port="${OIDC_BIND##*:}"
 echo "Listening check (port ${port})"
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" "\
   set -euo pipefail; \
   sudo ss -lntp | grep -n \":${port}\\\\b\" || { echo 'not listening'; exit 1; } \
 "

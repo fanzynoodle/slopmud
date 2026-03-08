@@ -18,13 +18,15 @@ set +a
 : "${REMOTE_WEB:?missing REMOTE_WEB in env file}"
 : "${DOMAIN:?missing DOMAIN in env file}"
 
+SSH_HOST="${SSH_HOST:-${DOMAIN:-$HOST}}"
+
 ssh_opts=(-o StrictHostKeyChecking=accept-new)
 ssh_port_opt=(-p "$SSH_PORT")
 scp_port_opt=(-P "$SSH_PORT")
 
-echo "Deploying web_homepage -> ${SSH_USER}@${HOST}:${REMOTE_WEB}"
+echo "Deploying web_homepage -> ${SSH_USER}@${SSH_HOST}:${REMOTE_WEB}"
 
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" "\
   set -euo pipefail; \
   if command -v apt-get >/dev/null 2>&1; then \
     sudo DEBIAN_FRONTEND=noninteractive apt-get update -y; \
@@ -39,7 +41,7 @@ ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
   sudo chown -R \"${SSH_USER}:${SSH_USER}\" \"${REMOTE_WEB}\" \
 "
 
-rsync -az --delete --exclude README.md -e "ssh ${ssh_opts[*]} ${ssh_port_opt[*]}" web_homepage/ "${SSH_USER}@${HOST}:${REMOTE_WEB}/"
+rsync -az --delete --exclude README.md -e "ssh ${ssh_opts[*]} ${ssh_port_opt[*]}" web_homepage/ "${SSH_USER}@${SSH_HOST}:${REMOTE_WEB}/"
 
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
@@ -59,9 +61,9 @@ server {
 }
 EOF
 
-scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$tmp" "${SSH_USER}@${HOST}:/tmp/slopmud.nginx"
+scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$tmp" "${SSH_USER}@${SSH_HOST}:/tmp/slopmud.nginx"
 
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" "\
   set -euo pipefail; \
   sudo mv /tmp/slopmud.nginx /etc/nginx/sites-available/slopmud; \
   sudo ln -sf /etc/nginx/sites-available/slopmud /etc/nginx/sites-enabled/slopmud; \
@@ -71,8 +73,9 @@ ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
   sudo systemctl reload nginx \
 "
 
-echo "Smoke test (direct IP, Host header = ${DOMAIN})"
-curl -fsSL -H "Host: ${DOMAIN}" "http://${HOST}/" | sed -n '1,20p'
+echo "Smoke test (remote bind, Host header = ${DOMAIN})"
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" \
+  "curl -fsSL -H 'Host: ${DOMAIN}' 'http://127.0.0.1/' | sed -n '1,20p'"
 
 echo "Smoke test (DNS if delegated)"
 curl -fsSL "http://${DOMAIN}/" | sed -n '1,20p' || true

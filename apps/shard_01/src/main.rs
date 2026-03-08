@@ -10310,9 +10310,9 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         continue;
                     }
                     let home_room = if world.rooms.has_room(ROOM_TOWN_GATE) {
-                        ROOM_TOWN_GATE
+                        ROOM_TOWN_GATE.to_string()
                     } else {
-                        world.rooms.start_room()
+                        world.rooms.start_room().to_string()
                     };
                     if p.room_id == home_room {
                         write_resp_async(
@@ -10323,7 +10323,7 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         )
                         .await?;
                     } else {
-                        teleport_to(&mut world, &mut fw, session, home_room, "heads home")
+                        teleport_to(&mut world, &mut fw, session, &home_room, "heads home")
                             .await?;
                     }
                     continue;

@@ -55,7 +55,8 @@ certbot-install env="prd":
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
-    just certbot-install-host "${HOST}" "${SSH_USER}" "${SSH_PORT}"; \
+    ssh_host="${SSH_HOST:-${DOMAIN:-${HOST}}}"; \
+    just certbot-install-host "${ssh_host}" "${SSH_USER}" "${SSH_PORT}"; \
   '
 
 certbot-install-host host ssh_user="admin" ssh_port="22":
@@ -84,7 +85,8 @@ certbot-issue email env="prd" domain="":
     set -a; source "env/{{env}}.env"; set +a; \
     domain="{{domain}}"; \
     if [ -z "${domain}" ]; then domain="${DOMAIN}"; fi; \
-    just certbot-issue-host "${HOST}" "${domain}" "{{email}}" "${SSH_USER}" "${SSH_PORT}"; \
+    ssh_host="${SSH_HOST:-${DOMAIN:-${HOST}}}"; \
+    just certbot-issue-host "${ssh_host}" "${domain}" "{{email}}" "${SSH_USER}" "${SSH_PORT}"; \
   '
 
 certbot-issue-host host domain email ssh_user="admin" ssh_port="22":
@@ -107,6 +109,7 @@ certbot-issue-web email="" env="prd" domain="" staging="0":
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
+    ssh_host="${SSH_HOST:-${DOMAIN:-${HOST}}}"; \
     base="{{domain}}"; \
     if [ -z "${base}" ]; then base="${DOMAIN}"; fi; \
     email="{{email}}"; \
@@ -131,7 +134,7 @@ certbot-issue-web email="" env="prd" domain="" staging="0":
       install -o slopmud -g slopmud -m 0640 \"${RENEWED_LINEAGE}/privkey.pem\" \"${dst}/privkey.pem\"; \
       systemctl restart \"${svc}\" 2>/dev/null || true; \
     '\''"; \
-    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" " \
+    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${ssh_host}" " \
       set -euo pipefail; \
       sudo certbot certonly --dns-route53 \
         ${dargs} \
@@ -154,6 +157,7 @@ certbot-hook-install env="prd":
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
+    ssh_host="${SSH_HOST:-${DOMAIN:-${HOST}}}"; \
     dst_dir="${TLS_DST_DIR:-/etc/slopmud/tls}"; \
     svc="${WEB_SERVICE_NAME:-slopmud-web}"; \
     cert_name="${CERTBOT_CERT_NAME:-${DOMAIN}}"; \
@@ -171,9 +175,9 @@ certbot-hook-install env="prd":
       printf "%s\\n" "export WEB_SERVICE_NAME=${svc}"; \
       printf "%s\\n" "exec /usr/local/bin/slopmud-certbot-hook"; \
     } >"${wrapper_hook}"; \
-    scp -P "${SSH_PORT}" {{ssh_opts}} "${base_hook}" "${SSH_USER}@${HOST}:/tmp/slopmud-certbot-hook"; \
-    scp -P "${SSH_PORT}" {{ssh_opts}} "${wrapper_hook}" "${SSH_USER}@${HOST}:/tmp/${hook_name}"; \
-    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" " \
+    scp -P "${SSH_PORT}" {{ssh_opts}} "${base_hook}" "${SSH_USER}@${ssh_host}:/tmp/slopmud-certbot-hook"; \
+    scp -P "${SSH_PORT}" {{ssh_opts}} "${wrapper_hook}" "${SSH_USER}@${ssh_host}:/tmp/${hook_name}"; \
+    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${ssh_host}" " \
       set -euo pipefail; \
       if ! id -u slopmud >/dev/null 2>&1; then \
         sudo useradd --system --home \"${REMOTE_ROOT}\" --create-home --shell /usr/sbin/nologin slopmud; \
@@ -191,12 +195,13 @@ certbot-tls-sync env="prd" domain="":
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
+    ssh_host="${SSH_HOST:-${DOMAIN:-${HOST}}}"; \
     base="{{domain}}"; \
     if [ -z "${base}" ]; then base="${DOMAIN}"; fi; \
     dst_dir="${TLS_DST_DIR:-/etc/slopmud/tls}"; \
     svc="${WEB_SERVICE_NAME:-slopmud-web}"; \
     cert_name="${CERTBOT_CERT_NAME:-${base}}"; \
-    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" " \
+    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${ssh_host}" " \
       set -euo pipefail; \
       if ! id -u slopmud >/dev/null 2>&1; then \
         sudo useradd --system --home \"${REMOTE_ROOT}\" --create-home --shell /usr/sbin/nologin slopmud; \
@@ -214,7 +219,8 @@ certbot-renew env="prd" dry_run="0":
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
-    just certbot-renew-host "${HOST}" "${SSH_USER}" "${SSH_PORT}" "{{dry_run}}"; \
+    ssh_host="${SSH_HOST:-${DOMAIN:-${HOST}}}"; \
+    just certbot-renew-host "${ssh_host}" "${SSH_USER}" "${SSH_PORT}" "{{dry_run}}"; \
   '
 
 certbot-renew-host host ssh_user="admin" ssh_port="22" dry_run="0":
@@ -231,7 +237,8 @@ certbot-status env="prd":
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
-    just certbot-status-host "${HOST}" "${SSH_USER}" "${SSH_PORT}"; \
+    ssh_host="${SSH_HOST:-${DOMAIN:-${HOST}}}"; \
+    just certbot-status-host "${ssh_host}" "${SSH_USER}" "${SSH_PORT}"; \
   '
 
 certbot-status-host host ssh_user="admin" ssh_port="22":
@@ -695,7 +702,8 @@ sbc-status env="prd":
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
-    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" " \
+    ssh_host="${SSH_HOST:-${DOMAIN:-${HOST}}}"; \
+    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${ssh_host}" " \
       sudo systemctl status sbc-raftd --no-pager || true; \
       echo; \
       sudo systemctl status sbc-metricsd --no-pager || true; \
@@ -710,7 +718,8 @@ sbc-logs env="prd" unit="sbc-enforcerd":
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
-    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" "sudo journalctl -u {{unit}} -f --no-pager"; \
+    ssh_host="${SSH_HOST:-${DOMAIN:-${HOST}}}"; \
+    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${ssh_host}" "sudo journalctl -u {{unit}} -f --no-pager"; \
   '
 
 # --- Deploy: internal_oidc service (prd) ---
@@ -727,7 +736,8 @@ deploy-slopmud-status env="prd":
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
-    ssh {{ssh_opts}} ${SSH_USER}@${HOST} -p ${SSH_PORT} " \
+    ssh_host="${SSH_HOST:-${DOMAIN:-${HOST}}}"; \
+    ssh {{ssh_opts}} ${SSH_USER}@${ssh_host} -p ${SSH_PORT} " \
       sudo systemctl status ${SLOPMUD_APP_NAME}.service --no-pager || true; \
       echo; \
       sudo ss -lntp | grep -n \":${SLOPMUD_BIND##*:}\\\\b\" || true; \
@@ -745,7 +755,8 @@ gha-runner-install url token env="prd" name="" labels="" runner_dir="/opt/action
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
-    just gha-runner-install-host "${HOST}" "{{env}}" "{{url}}" "{{token}}" "{{name}}" "{{labels}}" "${SSH_USER}" "${SSH_PORT}" "{{runner_dir}}" "{{runner_user}}"; \
+    ssh_host="${SSH_HOST:-${DOMAIN:-${HOST}}}"; \
+    just gha-runner-install-host "${ssh_host}" "{{env}}" "{{url}}" "{{token}}" "{{name}}" "{{labels}}" "${SSH_USER}" "${SSH_PORT}" "{{runner_dir}}" "{{runner_user}}"; \
   '
 
 gha-runner-install-host host env_name url token name labels ssh_user="admin" ssh_port="22" runner_dir="/opt/actions-runner" runner_user="ghrunner":
@@ -815,7 +826,8 @@ gha-runner-status env="prd" runner_dir="/opt/actions-runner":
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
-    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" " \
+    ssh_host="${SSH_HOST:-${DOMAIN:-${HOST}}}"; \
+    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${ssh_host}" " \
       set -euo pipefail; \
       cd {{runner_dir}} 2>/dev/null || { echo \"missing runner dir: {{runner_dir}}\"; exit 2; }; \
       sudo ./svc.sh status || true; \
@@ -828,7 +840,8 @@ gha-runner-logs env="prd":
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
-    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" " \
+    ssh_host="${SSH_HOST:-${DOMAIN:-${HOST}}}"; \
+    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${ssh_host}" " \
       set -euo pipefail; \
       systemctl list-units \"actions.runner*\" --no-pager || true; \
       echo; \

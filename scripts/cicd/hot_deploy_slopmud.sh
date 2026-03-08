@@ -36,6 +36,8 @@ set +a
 : "${SSH_USER:?missing SSH_USER in env file}"
 : "${SSH_PORT:?missing SSH_PORT in env file}"
 
+SSH_HOST="${SSH_HOST:-${DOMAIN:-$HOST}}"
+
 if [[ "${ENABLED:-1}" != "1" ]]; then
   echo "${ENV_NAME} disabled (ENABLED=${ENABLED:-})"
   exit 0
@@ -61,11 +63,11 @@ ssh_opts=(-o StrictHostKeyChecking=accept-new)
 ssh_port_opt=(-p "$SSH_PORT")
 scp_port_opt=(-P "$SSH_PORT")
 
-echo "Uploading artifact -> ${SSH_USER}@${HOST}:${remote_artifact}"
-scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$artifact_path" "${SSH_USER}@${HOST}:${remote_artifact}"
+echo "Uploading artifact -> ${SSH_USER}@${SSH_HOST}:${remote_artifact}"
+scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$artifact_path" "${SSH_USER}@${SSH_HOST}:${remote_artifact}"
 
 echo "Deploying on host via slopmud-shuttle-assets (env=${ENV_NAME})"
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" "\
   set -euo pipefail; \
   sudo /usr/local/bin/slopmud-shuttle-assets --env \"${ENV_NAME}\" --from-file \"${remote_artifact}\"; \
   rm -f \"${remote_artifact}\"; \

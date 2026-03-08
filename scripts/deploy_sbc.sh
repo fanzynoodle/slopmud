@@ -17,6 +17,8 @@ set +a
 : "${SSH_PORT:?missing SSH_PORT in env file}"
 : "${REMOTE_ROOT:?missing REMOTE_ROOT in env file}"
 
+SSH_HOST="${SSH_HOST:-${DOMAIN:-$HOST}}"
+
 ssh_opts=(-o StrictHostKeyChecking=accept-new)
 ssh_port_opt=(-p "$SSH_PORT")
 scp_port_opt=(-P "$SSH_PORT")
@@ -29,7 +31,7 @@ for pkg in sbc_raftd sbc_enforcerd sbc_metricsd sbc_deciderd; do
 done
 
 echo "Provisioning remote directories + system user"
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" "\
   set -euo pipefail; \
   if command -v apt-get >/dev/null 2>&1; then \
     sudo DEBIAN_FRONTEND=noninteractive apt-get update -y; \
@@ -47,7 +49,7 @@ ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
 "
 
 echo "Stopping any existing SBC processes/units (best-effort)"
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" "\
   set -euo pipefail; \
   sudo systemctl disable --now sbc-enforcerd sbc-raftd sbc-metricsd sbc-deciderd 2>/dev/null || true; \
   sudo pkill -x sbc_enforcerd 2>/dev/null || true; \
@@ -56,24 +58,24 @@ ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
   sudo pkill -x sbc_deciderd 2>/dev/null || true; \
 "
 
-echo "Uploading SBC binaries -> ${SSH_USER}@${HOST}:${remote_bin_dir}"
+echo "Uploading SBC binaries -> ${SSH_USER}@${SSH_HOST}:${remote_bin_dir}"
 for bin in sbc_raftd sbc_enforcerd sbc_metricsd sbc_deciderd; do
   src="target/release/${bin}"
   if [[ ! -x "$src" ]]; then
     echo "ERROR: expected binary at $src" >&2
     exit 2
   fi
-  scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$src" "${SSH_USER}@${HOST}:/tmp/${bin}"
-  ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+  scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$src" "${SSH_USER}@${SSH_HOST}:/tmp/${bin}"
+  ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" "\
     set -euo pipefail; \
     sudo install -m 0755 -o root -g root \"/tmp/${bin}\" \"${remote_bin_dir}/${bin}\"; \
     sudo rm -f \"/tmp/${bin}\" \
   "
 done
 
-echo "Uploading exempt prefixes -> ${SSH_USER}@${HOST}:${REMOTE_ROOT}/sbc_exempt_prefixes.txt"
-scp "${ssh_opts[@]}" "${scp_port_opt[@]}" reference/sbc_exempt_prefixes.txt "${SSH_USER}@${HOST}:/tmp/sbc_exempt_prefixes.txt"
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+echo "Uploading exempt prefixes -> ${SSH_USER}@${SSH_HOST}:${REMOTE_ROOT}/sbc_exempt_prefixes.txt"
+scp "${ssh_opts[@]}" "${scp_port_opt[@]}" reference/sbc_exempt_prefixes.txt "${SSH_USER}@${SSH_HOST}:/tmp/sbc_exempt_prefixes.txt"
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" "\
   set -euo pipefail; \
   sudo install -m 0644 -o slopmud -g slopmud /tmp/sbc_exempt_prefixes.txt \"${REMOTE_ROOT}/sbc_exempt_prefixes.txt\"; \
   sudo rm -f /tmp/sbc_exempt_prefixes.txt \
@@ -159,12 +161,12 @@ sed -i \
   "$tmp_met"
 
 echo "Installing SBC systemd units"
-scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$tmp_raft" "${SSH_USER}@${HOST}:/tmp/sbc-raftd.service"
-scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$tmp_met" "${SSH_USER}@${HOST}:/tmp/sbc-metricsd.service"
-scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$tmp_dec" "${SSH_USER}@${HOST}:/tmp/sbc-deciderd.service"
-scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$tmp_enf" "${SSH_USER}@${HOST}:/tmp/sbc-enforcerd.service"
+scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$tmp_raft" "${SSH_USER}@${SSH_HOST}:/tmp/sbc-raftd.service"
+scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$tmp_met" "${SSH_USER}@${SSH_HOST}:/tmp/sbc-metricsd.service"
+scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$tmp_dec" "${SSH_USER}@${SSH_HOST}:/tmp/sbc-deciderd.service"
+scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$tmp_enf" "${SSH_USER}@${SSH_HOST}:/tmp/sbc-enforcerd.service"
 
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" "\
   set -euo pipefail; \
   sudo mv /tmp/sbc-raftd.service /etc/systemd/system/sbc-raftd.service; \
   sudo mv /tmp/sbc-metricsd.service /etc/systemd/system/sbc-metricsd.service; \
@@ -180,4 +182,4 @@ ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
 "
 
 echo "SBC enforcer status"
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "curl -fsSL http://${SBC_STATUS_HTTP}/status | sed -n '1,160p'"
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" "curl -fsSL http://${SBC_STATUS_HTTP}/status | sed -n '1,160p'"
