@@ -20,6 +20,7 @@ set +a
 : "${REMOTE_WEB:?missing REMOTE_WEB in env file}"
 : "${DOMAIN:?missing DOMAIN in env file}"
 : "${HTTP_BIND:?missing HTTP_BIND in env file}"
+SSH_HOST="${SSH_HOST:-${DOMAIN:-$HOST}}"
 
 # Optional HTTPS (served directly by static_web via rustls)
 HTTPS_BIND="${HTTPS_BIND:-}"
@@ -44,7 +45,7 @@ if [[ ! -x "$bin_src" ]]; then
 fi
 
 echo "Provisioning remote directories + system user"
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" "\
   set -euo pipefail; \
   if command -v apt-get >/dev/null 2>&1; then \
     sudo DEBIAN_FRONTEND=noninteractive apt-get update -y; \
@@ -61,16 +62,16 @@ ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
   sudo chown -R slopmud:slopmud \"${REMOTE_ROOT}\" \
 "
 
-echo "Uploading web_homepage -> ${SSH_USER}@${HOST}:${REMOTE_WEB}"
-rsync -rz --delete --exclude README.md --rsync-path="sudo rsync" -e "ssh ${ssh_opts[*]} ${ssh_port_opt[*]}" web_homepage/ "${SSH_USER}@${HOST}:${REMOTE_WEB}/"
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+echo "Uploading web_homepage -> ${SSH_USER}@${SSH_HOST}:${REMOTE_WEB}"
+rsync -rz --delete --exclude README.md --rsync-path="sudo rsync" -e "ssh ${ssh_opts[*]} ${ssh_port_opt[*]}" web_homepage/ "${SSH_USER}@${SSH_HOST}:${REMOTE_WEB}/"
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" "\
   set -euo pipefail; \
   sudo chown -R slopmud:slopmud \"${REMOTE_WEB}\" \
 "
 
-echo "Uploading binary -> ${SSH_USER}@${HOST}:${REMOTE_BIN}"
-scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$bin_src" "${SSH_USER}@${HOST}:/tmp/static_web"
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+echo "Uploading binary -> ${SSH_USER}@${SSH_HOST}:${REMOTE_BIN}"
+scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$bin_src" "${SSH_USER}@${SSH_HOST}:/tmp/static_web"
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" "\
   set -euo pipefail; \
   sudo install -m 0755 -o root -g root /tmp/static_web \"${REMOTE_BIN}\"; \
   sudo rm -f /tmp/static_web \
@@ -116,8 +117,8 @@ EOF
 unit_name="${WEB_SERVICE_NAME}.service"
 
 echo "Installing systemd unit (${WEB_SERVICE_NAME}) + stopping nginx if present"
-scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$tmp_unit" "${SSH_USER}@${HOST}:/tmp/${unit_name}"
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$tmp_unit" "${SSH_USER}@${SSH_HOST}:/tmp/${unit_name}"
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" "\
   set -euo pipefail; \
   sudo mv /tmp/${unit_name} /etc/systemd/system/${unit_name}; \
   sudo systemctl daemon-reload; \
@@ -135,9 +136,9 @@ if [[ -z "${smoke_host}" || "${smoke_host}" == "0.0.0.0" || "${smoke_host}" == "
 fi
 
 echo "Smoke test over SSH (${smoke_host}:${http_port}, Host header = ${DOMAIN})"
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" \
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" \
   "curl -fsSL -H 'Host: ${DOMAIN}' 'http://${smoke_host}:${http_port}/' | sed -n '1,25p'"
 
 echo "Health check over SSH"
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" \
+ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${SSH_HOST}" \
   "curl -fsSL -H 'Host: ${DOMAIN}' 'http://${smoke_host}:${http_port}/healthz'" || true

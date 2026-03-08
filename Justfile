@@ -603,24 +603,27 @@ web-restart env="prd":
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
+    ssh_host="${SSH_HOST:-${DOMAIN:-${HOST}}}"; \
     svc="${WEB_SERVICE_NAME:-slopmud-web}"; \
-    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" "sudo systemctl restart ${svc}"; \
+    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${ssh_host}" "sudo systemctl restart ${svc}"; \
   '
 
 web-logs env="prd":
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
+    ssh_host="${SSH_HOST:-${DOMAIN:-${HOST}}}"; \
     svc="${WEB_SERVICE_NAME:-slopmud-web}"; \
-    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" "sudo journalctl -u ${svc} -f --no-pager"; \
+    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${ssh_host}" "sudo journalctl -u ${svc} -f --no-pager"; \
   '
 
 deploy-status env="prd":
   bash -ceu ' \
     set -o pipefail; \
     set -a; source "env/{{env}}.env"; set +a; \
+    ssh_host="${SSH_HOST:-${DOMAIN:-${HOST}}}"; \
     svc="${WEB_SERVICE_NAME:-slopmud-web}"; \
-    ssh {{ssh_opts}} ${SSH_USER}@${HOST} -p ${SSH_PORT} " \
+    ssh {{ssh_opts}} ${SSH_USER}@${ssh_host} -p ${SSH_PORT} " \
       sudo systemctl status ${svc} --no-pager || true; \
       echo; \
       sudo ss -lntp | sed -n \"1,12p\"; \

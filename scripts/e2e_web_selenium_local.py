@@ -85,9 +85,6 @@ def _send_line(driver, s: str):
 
 
 def run_create_flow(driver, name: str, password: str):
-    # Password gate now connects immediately, then the in-terminal flow takes over.
-    _click_id(driver, "btn-gate-password", timeout_s=12.0)
-
     _wait_term(driver, "name:", timeout_s=20.0)
     _send_line(driver, name)
     _wait_term(driver, "auth method", timeout_s=20.0)
@@ -117,8 +114,6 @@ def run_create_flow(driver, name: str, password: str):
 
 
 def run_password_login_flow(driver, name: str, password: str):
-    _click_id(driver, "btn-gate-password", timeout_s=12.0)
-
     _wait_term(driver, "name:", timeout_s=20.0)
     _send_line(driver, name)
     _wait_term(driver, "auth method", timeout_s=20.0)

@@ -86,8 +86,6 @@
   let oauthIdentity = null; // { provider, email?, sub? }
   let oauthPollTimer = null;
 
-  let authGateChosen = false;
-
   const LS_WS_URL = "slopmud_ws_url";
   const LS_AUTOSCROLL = "slopmud_autoscroll";
   const LS_RESUME_TOKEN = "slopmud_resume_token";
@@ -637,7 +635,7 @@
   function setInputEnabled(on) {
     if (!lineEl) return;
     lineEl.disabled = !on;
-    if (!on) lineEl.placeholder = "choose an auth method to connect";
+    if (!on) lineEl.placeholder = "connecting...";
     else lineEl.placeholder = "type here, press Enter";
   }
 
@@ -848,14 +846,6 @@
     }
   }
 
-  function openInitialAuthGate() {
-    if (!dlgAuthGate) {
-      openDialog(dlgConnect, authNameEl || wsUrlEl);
-      return;
-    }
-    openDialog(dlgAuthGate, btnGatePassword || btnGateSlopsso || btnGateGoogle || null);
-  }
-
   document.addEventListener("click", () => closeMenu());
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
@@ -883,50 +873,6 @@
         lineEl && lineEl.focus();
       });
   }
-
-  dlgAuthGate &&
-    dlgAuthGate.addEventListener("close", () => {
-      // If the user closes the gate without picking a method, put them into the connect dialog.
-      if (authGateChosen) return;
-      if (sock && (sock.readyState === WebSocket.OPEN || sock.readyState === WebSocket.CONNECTING)) return;
-      openDialog(dlgConnect, authNameEl || wsUrlEl);
-    });
-
-  btnGatePassword &&
-    btnGatePassword.addEventListener("click", async () => {
-      authGateChosen = true;
-      try {
-        dlgAuthGate && dlgAuthGate.close();
-      } catch {
-        // ignore
-      }
-      // Password mode is terminal-first: connect immediately and let the MUD prompt.
-      await connectFreshSession();
-      lineEl && lineEl.focus();
-    });
-
-  btnGateSlopsso &&
-    btnGateSlopsso.addEventListener("click", () => {
-      authGateChosen = true;
-      try {
-        dlgAuthGate && dlgAuthGate.close();
-      } catch {
-        // ignore
-      }
-      // Go straight to the IdP (no mud UI yet).
-      oauthProviders.oidc && startOauth("oidc", { redirect: true });
-    });
-
-  btnGateGoogle &&
-    btnGateGoogle.addEventListener("click", () => {
-      authGateChosen = true;
-      try {
-        dlgAuthGate && dlgAuthGate.close();
-      } catch {
-        // ignore
-      }
-      oauthProviders.google && startOauth("google", { redirect: true });
-    });
 
   btnConnect && btnConnect.addEventListener("click", () => {
     shouldReconnect = true;
@@ -1036,7 +982,7 @@
   });
 
   menuConnect &&
-    menuConnect.addEventListener("click", () => openDialog(dlgConnect, authNameEl || wsUrlEl));
+    menuConnect.addEventListener("click", () => openDialog(dlgConnect, btnConnect || btnNewSession || null));
   menuOnline && menuOnline.addEventListener("click", () => openDialog(dlgOnline, null));
   menuAccount && menuAccount.addEventListener("click", () => openDialog(dlgAccount, acctEmailEl));
   menuSso && menuSso.addEventListener("click", () => openDialog(dlgSso, null));
@@ -1114,7 +1060,8 @@
       saveSettings();
     });
 
-  // Always ask the user how they want to auth before opening a WebSocket.
+  // Default to terminal-first early connect. OAuth callback return still upgrades the
+  // session before the reconnect so refreshes and off-site auth land back in-band.
   {
     const h = String(location.hash || "");
     if (h.startsWith("#oauth=")) {
@@ -1124,9 +1071,7 @@
       } catch {
         // ignore
       }
-      authGateChosen = true;
       if (oauthResult === "ok") {
-        // After OAuth callback, connect immediately (no extra connect dialog).
         connectFreshSession(async () => {
           await setAutoSsoWebAuth();
         }).catch(() => {
@@ -1134,10 +1079,13 @@
         });
         lineEl && lineEl.focus();
       } else {
-        openInitialAuthGate();
+        appendLine("# oauth failed; continuing with direct connection");
+        shouldReconnect = true;
+        connect();
       }
     } else {
-      openInitialAuthGate();
+      shouldReconnect = true;
+      connect();
     }
   }
 })();
