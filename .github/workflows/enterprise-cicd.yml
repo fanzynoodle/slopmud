@@ -52,9 +52,11 @@ jobs:
             gh api repos/${{ github.repository }}/actions/runners --paginate \
               --jq '.runners | map({name: .name, status: .status, busy: .busy, labels: (.labels | map(.name)})'
           )"; then
-            echo "::warning::Runner inventory check is unavailable for the CI token; continuing without hard fail."
-            echo "runner_name=unknown" >> "$GITHUB_OUTPUT"
-            echo "runner_count=0" >> "$GITHUB_OUTPUT"
+            echo "::warning::Runner inventory check is unavailable for the CI token; allowing self-hosted scheduling to proceed."
+            echo "runner_name=deferred" >> "$GITHUB_OUTPUT"
+            # Let downstream self-hosted jobs attempt normal label-based scheduling.
+            # This avoids false skips when GITHUB_TOKEN cannot read runner inventory.
+            echo "runner_count=1" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           runner_names="$(

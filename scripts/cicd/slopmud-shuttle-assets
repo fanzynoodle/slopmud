@@ -358,4 +358,48 @@ EOF
   wait_for_listen "${shard_port}" "${shard_port}"
 fi
 
+if [[ -x "$bin_shard_src" ]]; then
+  shard_unit_path="/etc/systemd/system/${shard_service_name}.service"
+  if [[ "$shard_unit_exists" != "1" || "$rewrite_unit" == "1" ]]; then
+    if [[ "$shard_unit_exists" == "1" && "$rewrite_unit" == "1" ]]; then
+      echo "WARN: rewriting existing shard unit file: ${shard_unit_path}" >&2
+    else
+      echo "Writing shard systemd unit file: ${shard_unit_path}"
+    fi
+
+    cat >"$shard_unit_path" <<EOF
+[Unit]
+Description=slopmud shard_01 (env: ${env_name}, sha: ${sha})
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=slopmud
+Group=slopmud
+WorkingDirectory=/opt/slopmud
+Environment=RUST_LOG=shard_01=info
+Environment=SHARD_BIND=${shard_bind}
+ExecStart=${shard_bin_dst}
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  fi
+
+  echo "Restarting systemd unit: ${shard_service_name}"
+  if [[ "$shard_unit_exists" != "1" || "$rewrite_unit" == "1" ]]; then
+    systemctl daemon-reload
+    systemctl enable --now "${shard_service_name}"
+  fi
+  systemctl restart "${shard_service_name}"
+
+  shard_port="${shard_bind##*:}"
+  echo "Listening check (shard port ${shard_port})"
+  ss -lnt | grep -qE ":${shard_port}\\b" || { echo "not listening on ${shard_port}" >&2; exit 1; }
+fi
+
 echo "OK: ${service_name} deployed (sha=${sha})"
