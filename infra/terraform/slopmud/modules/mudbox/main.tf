@@ -40,18 +40,117 @@ data "aws_ssm_parameter" "al2023_ami" {
 }
 
 locals {
-  subnet_ids         = sort(data.aws_subnets.default.ids)
-  ami_id             = var.os == "al2023" ? data.aws_ssm_parameter.al2023_ami[0].value : data.aws_ami.debian12[0].id
-  assets_bucket_name = var.assets_bucket_name != "" ? var.assets_bucket_name : "slopmud-assets-${data.aws_caller_identity.current.account_id}-${var.region}"
-  zone_apex          = trim(var.zone_name, ".")
-  dns_registration_names = distinct(concat(
-    ["${var.record_name}.${trim(var.zone_name, ".")}", "www.${trim(var.zone_name, ".")}"],
-    [for name in var.extra_cname_record_names : "${name}.${trim(var.zone_name, ".")}"],
-  ))
+  subnet_ids                 = sort(data.aws_subnets.default.ids)
+  ami_id                     = var.os == "al2023" ? data.aws_ssm_parameter.al2023_ami[0].value : data.aws_ami.debian12[0].id
+  assets_bucket_name         = var.assets_bucket_name != "" ? var.assets_bucket_name : "slopmud-assets-${data.aws_caller_identity.current.account_id}-${var.region}"
+  zone_apex                  = trim(var.zone_name, ".")
+  compute_public_dns         = try(data.aws_instance.active[0].public_dns, "")
+  compute_public_ip          = try(data.aws_instance.active[0].public_ip, "")
+  default_cname_target       = var.cname_target != "" ? var.cname_target : local.compute_public_dns
+  mud_cname_target_effective = var.mud_cname_target != "" ? var.mud_cname_target : local.default_cname_target
+  www_cname_target_effective = var.www_cname_target != "" ? var.www_cname_target : local.mud_cname_target_effective
+  extra_cname_names          = distinct(concat(var.extra_cname_record_names, keys(var.extra_cname_targets)))
+  extra_cname_target_map = {
+    for name in local.extra_cname_names :
+    name => lookup(var.extra_cname_targets, name, local.default_cname_target)
+    if lookup(var.extra_cname_targets, name, local.default_cname_target) != ""
+  }
+  apex_a_records_effective = length(var.apex_a_records) > 0 ? var.apex_a_records : (
+    var.create_apex_a_record && local.compute_public_ip != "" ? [local.compute_public_ip] : []
+  )
+  dns_registration_names = distinct(compact(concat(
+    var.enable_compute && var.mud_cname_target == "" && var.cname_target == "" ? ["${var.record_name}.${trim(var.zone_name, ".")}"] : [],
+    var.enable_compute && var.www_cname_target == "" && var.mud_cname_target == "" && var.cname_target == "" ? ["www.${trim(var.zone_name, ".")}"] : [],
+    [for name in local.extra_cname_names : var.enable_compute && lookup(var.extra_cname_targets, name, "") == "" && var.cname_target == "" ? "${name}.${trim(var.zone_name, ".")}" : ""],
+  )))
+  apex_tracks_compute = var.enable_compute && var.create_apex_a_record && length(var.apex_a_records) == 0
   tags = {
     ManagedBy = "terraform"
     Stack     = var.name_prefix
   }
+
+  dns_registration_script = var.dns_admin_enabled && (var.create_hosted_zone || var.dns_admin_zone_id != "") ? trimspace(<<-EOT
+    #!/usr/bin/env bash
+    set -uo pipefail
+
+    ZONE_ID="${local.dns_admin_zone_id}"
+    REGION="${var.region}"
+    APEX="${local.zone_apex}"
+    APEX_ENABLED="${local.apex_tracks_compute ? "1" : "0"}"
+    CNAME_LIST=$(cat <<'NAMES'
+    ${join("\n", local.dns_registration_names)}
+    NAMES
+    )
+
+    if ! command -v aws >/dev/null 2>&1; then
+      if command -v apt-get >/dev/null 2>&1; then
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -y && apt-get install -y awscli || true
+      elif command -v dnf >/dev/null 2>&1; then
+        dnf -y install awscli || true
+      fi
+    fi
+
+    if ! command -v aws >/dev/null 2>&1; then
+      echo "aws cli is unavailable; skipping dns registration"
+      exit 0
+    fi
+
+    PUBLIC_IP=""
+    PUBLIC_DNS=""
+    for _ in $(seq 1 30); do
+      token=$(curl -fsS -m 2 -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" || true)
+      if [ -n "$token" ]; then
+        PUBLIC_IP=$(curl -fsS -m 2 -H "X-aws-ec2-metadata-token: $token" "http://169.254.169.254/latest/meta-data/public-ipv4" || true)
+        PUBLIC_DNS=$(curl -fsS -m 2 -H "X-aws-ec2-metadata-token: $token" "http://169.254.169.254/latest/meta-data/public-hostname" || true)
+      fi
+      if [ -n "$PUBLIC_IP" ] && [ -n "$PUBLIC_DNS" ]; then
+        break
+      fi
+      sleep 2
+    done
+
+    if [ -z "$PUBLIC_IP" ] || [ -z "$PUBLIC_DNS" ]; then
+      echo "could not determine public metadata; skipping dns registration"
+      exit 0
+    fi
+
+    upsert_rr() {
+      name="$1"
+      rtype="$2"
+      value="$3"
+      change_batch=$(cat <<JSON
+    {"Changes":[{"Action":"UPSERT","ResourceRecordSet":{"Name":"$name","Type":"$rtype","TTL":60,"ResourceRecords":[{"Value":"$value"}]}}]}
+    JSON
+    )
+      aws route53 change-resource-record-sets \
+        --region "$REGION" \
+        --hosted-zone-id "$ZONE_ID" \
+        --change-batch "$change_batch" >/dev/null
+    }
+
+    if [ "$APEX_ENABLED" = "1" ]; then
+      upsert_rr "$APEX" "A" "$PUBLIC_IP"
+    fi
+    while IFS= read -r cname; do
+      [ -z "$cname" ] && continue
+      upsert_rr "$cname" "CNAME" "$PUBLIC_DNS"
+    done <<< "$CNAME_LIST"
+
+    echo "registered dns: ip=$PUBLIC_IP dns=$PUBLIC_DNS"
+  EOT
+  ) : ""
+
+  boot_restore_bundle_uri = var.boot_restore_enabled ? "s3://${local.assets_bucket_name}/bootstrap/${var.name_prefix}/rebootstrap.tgz" : ""
+  user_data_script = (local.dns_registration_script != "" || local.boot_restore_bundle_uri != "") ? templatefile("${path.module}/user_data.sh.tftpl", {
+    name_prefix             = var.name_prefix
+    region                  = var.region
+    assets_bucket_name      = local.assets_bucket_name
+    dns_registration_script = local.dns_registration_script
+    restore_bundle_uri      = local.boot_restore_bundle_uri
+    restore_track           = var.boot_restore_track
+    restore_env_prefix      = var.boot_restore_env_prefix
+  }) : null
 }
 
 resource "aws_security_group" "this" {
@@ -421,85 +520,7 @@ resource "aws_launch_template" "this" {
     security_groups             = [aws_security_group.this[0].id]
   }
 
-  user_data = var.dns_admin_enabled && (var.create_hosted_zone || var.dns_admin_zone_id != "") ? (
-    base64encode(<<EOT
-    #!/usr/bin/env bash
-    set -euxo pipefail
-
-    install -d -m 0755 /var/lib/cloud/scripts/per-boot
-    cat >/var/lib/cloud/scripts/per-boot/90-${var.name_prefix}-reregister-dns.sh <<'SCRIPT'
-    #!/usr/bin/env bash
-    set -uo pipefail
-
-    ZONE_ID="${local.dns_admin_zone_id}"
-    REGION="${var.region}"
-    APEX="${local.zone_apex}"
-    CNAME_LIST=$(cat <<'NAMES'
-    ${join("\n", local.dns_registration_names)}
-    NAMES
-    )
-
-    if ! command -v aws >/dev/null 2>&1; then
-      if command -v apt-get >/dev/null 2>&1; then
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -y && apt-get install -y awscli || true
-      elif command -v dnf >/dev/null 2>&1; then
-        dnf -y install awscli || true
-      fi
-    fi
-
-    if ! command -v aws >/dev/null 2>&1; then
-      echo "aws cli is unavailable; skipping dns registration"
-      exit 0
-    fi
-
-    PUBLIC_IP=""
-    PUBLIC_DNS=""
-    for _ in $(seq 1 30); do
-      token=$(curl -fsS -m 2 -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" || true)
-      if [ -n "$token" ]; then
-        PUBLIC_IP=$(curl -fsS -m 2 -H "X-aws-ec2-metadata-token: $token" "http://169.254.169.254/latest/meta-data/public-ipv4" || true)
-        PUBLIC_DNS=$(curl -fsS -m 2 -H "X-aws-ec2-metadata-token: $token" "http://169.254.169.254/latest/meta-data/public-hostname" || true)
-      fi
-      if [ -n "$PUBLIC_IP" ] && [ -n "$PUBLIC_DNS" ]; then
-        break
-      fi
-      sleep 2
-    done
-
-    if [ -z "$PUBLIC_IP" ] || [ -z "$PUBLIC_DNS" ]; then
-      echo "could not determine public metadata; skipping dns registration"
-      exit 0
-    fi
-
-    upsert_rr() {
-      name="$1"
-      rtype="$2"
-      value="$3"
-      change_batch=$(cat <<JSON
-    {"Changes":[{"Action":"UPSERT","ResourceRecordSet":{"Name":"$name","Type":"$rtype","TTL":60,"ResourceRecords":[{"Value":"$value"}]}}]}
-    JSON
-    )
-      aws route53 change-resource-record-sets \
-        --region "$REGION" \
-        --hosted-zone-id "$ZONE_ID" \
-        --change-batch "$change_batch" >/dev/null
-    }
-
-    upsert_rr "$APEX" "A" "$PUBLIC_IP"
-    while IFS= read -r cname; do
-      [ -z "$cname" ] && continue
-      upsert_rr "$cname" "CNAME" "$PUBLIC_DNS"
-    done <<< "$CNAME_LIST"
-
-    echo "registered dns: ip=$PUBLIC_IP dns=$PUBLIC_DNS"
-    SCRIPT
-
-    chmod 0755 /var/lib/cloud/scripts/per-boot/90-${var.name_prefix}-reregister-dns.sh
-    /var/lib/cloud/scripts/per-boot/90-${var.name_prefix}-reregister-dns.sh || true
-EOT
-    )
-  ) : null
+  user_data = local.user_data_script != null ? base64encode(local.user_data_script) : null
 
   instance_market_options {
     market_type = "spot"
@@ -609,45 +630,43 @@ locals {
 }
 
 resource "aws_route53_record" "mud_cname" {
-  count = var.create_hosted_zone && (var.enable_compute || var.cname_target != "") ? 1 : 0
+  count = var.create_hosted_zone && local.mud_cname_target_effective != "" ? 1 : 0
 
   zone_id = local.hosted_zone_id
   name    = "${var.record_name}.${trim(var.zone_name, ".")}"
   type    = "CNAME"
   ttl     = 60
-  records = [var.cname_target != "" ? var.cname_target : data.aws_instance.active[0].public_dns]
+  records = [local.mud_cname_target_effective]
 }
 
 resource "aws_route53_record" "www_cname" {
-  count = var.create_hosted_zone && (var.enable_compute || var.cname_target != "" || var.www_cname_target != "") ? 1 : 0
+  count = var.create_hosted_zone && local.www_cname_target_effective != "" ? 1 : 0
 
   zone_id = local.hosted_zone_id
   name    = "www.${trim(var.zone_name, ".")}"
   type    = "CNAME"
   ttl     = 60
-  records = [
-    var.www_cname_target != "" ? var.www_cname_target : (var.cname_target != "" ? var.cname_target : data.aws_instance.active[0].public_dns),
-  ]
+  records = [local.www_cname_target_effective]
 }
 
 resource "aws_route53_record" "extra_cnames" {
-  count = var.create_hosted_zone && length(var.extra_cname_record_names) > 0 && (var.enable_compute || var.cname_target != "") ? length(var.extra_cname_record_names) : 0
+  for_each = var.create_hosted_zone ? local.extra_cname_target_map : {}
 
   zone_id = local.hosted_zone_id
-  name    = "${var.extra_cname_record_names[count.index]}.${trim(var.zone_name, ".")}"
+  name    = "${each.key}.${trim(var.zone_name, ".")}"
   type    = "CNAME"
   ttl     = 60
-  records = [var.cname_target != "" ? var.cname_target : data.aws_instance.active[0].public_dns]
+  records = [each.value]
 }
 
 resource "aws_route53_record" "apex_a" {
-  count = var.create_hosted_zone && var.enable_compute ? 1 : 0
+  count = var.create_hosted_zone && length(local.apex_a_records_effective) > 0 ? 1 : 0
 
   zone_id = local.hosted_zone_id
   name    = trim(var.zone_name, ".")
   type    = "A"
   ttl     = 60
-  records = [data.aws_instance.active[0].public_ip]
+  records = local.apex_a_records_effective
 }
 
 resource "aws_route53_record" "sbc_enable_a" {

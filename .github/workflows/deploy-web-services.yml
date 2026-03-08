@@ -44,3 +44,11 @@ jobs:
         run: |
           set -euo pipefail
           ./scripts/deploy_web_target.sh "${{ inputs.target }}" "${{ inputs.env }}"
+
+      - name: Refresh prod restore artifact
+        shell: bash
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ./scripts/cicd/publish_assets_to_s3.sh "env/${{ inputs.env }}.env"

@@ -80,6 +80,12 @@ variable "cname_target" {
   default     = ""
 }
 
+variable "mud_cname_target" {
+  type        = string
+  description = "Explicit target for mud.<zone> CNAME. When empty, falls back to cname_target and then (if enable_compute=true) the instance public DNS."
+  default     = ""
+}
+
 variable "www_cname_target" {
   type        = string
   description = "Target for www.<zone> CNAME. If empty, it falls back to cname_target, and then (if enable_compute=true) to the instance public DNS."
@@ -125,6 +131,24 @@ variable "ssm_read_parameter_names" {
 variable "extra_cname_record_names" {
   type        = list(string)
   description = "Optional additional CNAME record names (relative to zone_name) pointing at cname_target (or the instance public DNS if enable_compute=true). Example: [\"prd-gaia\", \"stg-gaia\", \"dev-gaia\"]."
+  default     = []
+}
+
+variable "extra_cname_targets" {
+  type        = map(string)
+  description = "Optional per-record overrides for extra CNAMEs. Keys are names relative to zone_name; values are DNS targets. When a name is absent here it falls back to cname_target and then (if enable_compute=true) the instance public DNS."
+  default     = {}
+}
+
+variable "create_apex_a_record" {
+  type        = bool
+  description = "Whether to manage the zone apex A record. Defaults to true so existing one-box mudbox behavior stays unchanged."
+  default     = true
+}
+
+variable "apex_a_records" {
+  type        = list(string)
+  description = "Explicit IPs for the zone apex A record. When empty, falls back to the instance public IP if enable_compute=true and create_apex_a_record=true."
   default     = []
 }
 
@@ -175,4 +199,22 @@ variable "sbc_enable_dns_record_disabled_ip" {
   type        = string
   description = "Disabled-state IP value for the SBC enable A record (use a documentation/reserved IP by default)."
   default     = "192.0.2.2"
+}
+
+variable "boot_restore_enabled" {
+  type        = bool
+  description = "Whether to install a per-boot restore hook that rebuilds the instance-local one-box stack from the latest CI artifact in S3."
+  default     = false
+}
+
+variable "boot_restore_track" {
+  type        = string
+  description = "Artifact track to restore on boot when boot_restore_enabled=true (for example: prod, stg, dev)."
+  default     = ""
+}
+
+variable "boot_restore_env_prefix" {
+  type        = string
+  description = "Env bundle prefix inside the artifact when boot_restore_enabled=true (for example: prd, stg, dev)."
+  default     = ""
 }

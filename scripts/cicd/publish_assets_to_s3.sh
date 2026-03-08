@@ -54,12 +54,21 @@ artifact_path="$(
   ASSETS_ROOT="${ASSETS_ROOT:-assets}" \
   ./scripts/cicd/build_assets.sh
 )"
+bootstrap_bundle_path="$(
+  ASSETS_ROOT="${ASSETS_ROOT:-assets}" \
+  ./scripts/cicd/build_bootstrap_bundle.sh
+)"
 sha="$(basename "$(dirname "$artifact_path")")"
 key="${track}/${sha}/artifact.tgz"
 s3_uri="s3://${bucket}/${key}"
+bootstrap_key="bootstrap/mudbox/rebootstrap.tgz"
+bootstrap_s3_uri="s3://${bucket}/${bootstrap_key}"
 
 echo "Uploading artifact -> ${s3_uri}"
 aws s3 cp "$artifact_path" "$s3_uri"
+
+echo "Uploading bootstrap bundle -> ${bootstrap_s3_uri}"
+aws s3 cp "$bootstrap_bundle_path" "$bootstrap_s3_uri"
 
 echo "OK: uploaded ${s3_uri}"
 echo "$s3_uri"

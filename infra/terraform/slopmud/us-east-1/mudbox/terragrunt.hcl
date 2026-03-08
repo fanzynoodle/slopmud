@@ -20,9 +20,11 @@ inputs = {
 
   # Set this when you know what you want mud.slopmud.com to point at.
   # cname_target = "example.com"
+  # mud_cname_target = "game-host.example.com"
 
   # Optional: override www.slopmud.com target. Defaults to the same as mud (or the instance public DNS).
   # www_cname_target = "example.com"
+  # apex_a_records   = ["203.0.113.10"]
 
   # Allow the instance role to read specific SSM parameters (app secrets).
   # (Names only; values live in SSM and should not be committed.)
@@ -30,9 +32,10 @@ inputs = {
     "/slopmud/dev/openai_api_key",
     "/slopmud/stg/openai_api_key",
     "/slopmud/prd/openai_api_key",
-
-    # "/slopmud/prd/google_oauth_client_id",
-    # "/slopmud/prd/google_oauth_client_secret",
+    # Fresh replacement instances restore the canonical mud portal from the prod artifact,
+    # so the instance role must be able to resolve the Google OAuth client settings too.
+    "/slopmud/prd/google_oauth_client_id",
+    "/slopmud/prd/google_oauth_client_secret",
   ]
 
   # Env-specific vanity CNAMES -> this instance (helpful when running multiple envs on one host with different ports).
@@ -41,6 +44,11 @@ inputs = {
     "stg-gaia",
     "dev-gaia",
   ]
+  # If vanity names should not follow the mudbox instance, override them individually:
+  # extra_cname_targets = {
+  #   prd-gaia = "game-host.example.com"
+  #   stg-gaia = "stg-game-host.example.com"
+  # }
 
   # Optional: create + allow-read a compliance portal config JSON parameter (value should be passed via TF_VAR_...).
   # compliance_portal_config_json_ssm_name  = "/slopmud/prd/compliance_portal_config_json"
@@ -54,4 +62,10 @@ inputs = {
   # sbc_enable_dns_record_ttl   = 60
   # sbc_enable_dns_record_ip    = "192.0.2.1"
   # sbc_enable_dns_record_disabled_ip = "192.0.2.2"
+
+  # Rebuild the one-box prod stack from the latest prod artifact after Spot replacement.
+  # Keep the boot input generic here; the service logic stays in scripts/cicd/restore_onebox_stack.sh.
+  boot_restore_enabled    = true
+  boot_restore_track      = "prod"
+  boot_restore_env_prefix = "prd"
 }

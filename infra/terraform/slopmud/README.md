@@ -1,8 +1,9 @@
 # slopmud infra
 
 Terragrunt stack that creates:
-- Public Route53 hosted zone `slopmud.com` and a `CNAME` record `mud.slopmud.com` -> instance public DNS
-- `CNAME` record `www.slopmud.com` -> same target as `mud.slopmud.com` (overrideable via `www_cname_target`)
+- Public Route53 hosted zone `slopmud.com`
+- Configurable DNS records for `mud.slopmud.com`, `www.slopmud.com`, the zone apex, and optional vanity CNAMEs
+- Optional EC2 compute when you want a mudbox instance to own some or all of those records
 
 If you want DNS set up first, set `enable_compute=false` to create **Route53 only**.
 
@@ -64,6 +65,18 @@ aws ssm put-parameter --name "/slopmud/prd/google_oauth_client_secret" --type Se
 Or use the helper script:
 ```bash
 ./scripts/google_oauth_ssm_put.sh prd
+```
+
+- If landing, mud portal, and vanity names have different lifecycles, set the DNS targets explicitly instead of letting every name follow the mudbox instance:
+```hcl
+inputs = {
+  mud_cname_target  = "game-host.example.com"
+  www_cname_target  = "landing-host.example.com"
+  apex_a_records    = ["203.0.113.10"]
+  extra_cname_targets = {
+    prd-gaia = "game-host.example.com"
+  }
+}
 ```
 
 - Compliance portal config (domain allowlist) can be stored in SSM via Terraform variables:

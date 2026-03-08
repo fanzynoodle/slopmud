@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euxo pipefail
+
+install -d -m 0755 /usr/local/bin /var/lib/cloud/scripts/per-boot
+
+%{ if dns_registration_script != "" ~}
+cat >/var/lib/cloud/scripts/per-boot/90-${name_prefix}-reregister-dns.sh <<'SCRIPT'
+${dns_registration_script}
+SCRIPT
+chmod 0755 /var/lib/cloud/scripts/per-boot/90-${name_prefix}-reregister-dns.sh
+/var/lib/cloud/scripts/per-boot/90-${name_prefix}-reregister-dns.sh || true
+%{ endif ~}
+
+%{ if restore_bundle_uri != "" ~}
+cat >/var/lib/cloud/scripts/per-boot/91-${name_prefix}-restore-stack.sh <<'SCRIPT'
+#!/usr/bin/env bash
+set -uo pipefail
+export AWS_REGION=${region}
+export AWS_DEFAULT_REGION=${region}
+bundle_uri="${restore_bundle_uri}"
+work_root="/opt/slopmud/rebootstrap"
+bundle_tgz="$work_root/bundle.tgz"
+extract_dir="$work_root/extracted"
+
+if ! command -v aws >/dev/null 2>&1; then
+  if command -v apt-get >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y && apt-get install -y awscli tar || true
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf -y install awscli tar || true
+  fi
+fi
+
+if ! command -v aws >/dev/null 2>&1; then
+  echo "aws cli is unavailable; skipping stack restore"
+  exit 0
+fi
+
+install -d -m 0755 "$work_root" "$extract_dir"
+if ! aws s3 cp "$bundle_uri" "$bundle_tgz"; then
+  echo "restore bundle not found at $bundle_uri; skipping stack restore"
+  exit 0
+fi
+rm -rf "$extract_dir"
+mkdir -p "$extract_dir"
+tar -xzf "$bundle_tgz" -C "$extract_dir"
+"$extract_dir/run.sh" \
+  --bucket "${assets_bucket_name}" \
+  --track "${restore_track}" \
+  --env-prefix "${restore_env_prefix}" \
+  >>/var/log/slopmud-restore-stack.log 2>&1 || true
+SCRIPT
+chmod 0755 /var/lib/cloud/scripts/per-boot/91-${name_prefix}-restore-stack.sh
+/var/lib/cloud/scripts/per-boot/91-${name_prefix}-restore-stack.sh || true
+%{ endif ~}
