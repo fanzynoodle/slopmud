@@ -174,7 +174,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for c in gcc make pkg-config just python3 tar; do
+          for c in gcc git make pkg-config just python3 tar; do
             command -v "$c" >/dev/null 2>&1 || {
               echo "missing build dependency: $c" >&2
               echo "bootstrap the runner once (as admin on the host) using scripts/cicd/bootstrap_runner.sh" >&2

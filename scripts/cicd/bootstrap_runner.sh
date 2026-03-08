@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # One-time bootstrap for the self-hosted runner host:
-# - installs build deps (gcc/make/pkg-config)
+# - installs build deps (gcc/make/pkg-config/git)
 # - installs rustup toolchain for the runner user
 # - installs the privileged deploy hook + sudoers entry
 #
@@ -21,6 +21,7 @@ echo "Installing system packages (Debian/Ubuntu)"
 sudo apt-get update -y
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
   build-essential \
+  git \
   pkg-config \
   libssl-dev \
   ca-certificates \
