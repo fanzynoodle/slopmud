@@ -149,7 +149,7 @@ impl ItemDef {
     }
 }
 
-static ITEMS: [ItemDef; 11] = [
+static ITEMS: [ItemDef; 14] = [
     ItemDef {
         name: "stenchpouch",
         aliases: &["stench", "pouch", "stench pouch"],
@@ -260,6 +260,27 @@ static ITEMS: [ItemDef; 11] = [
             class: ArmorClass::Leather,
         }),
         description: "thin gloves meant to keep you from leaving blood on the rack.\n",
+    },
+    ItemDef {
+        name: "cracked helmet",
+        aliases: &["helmet", "cracked", "helm"],
+        size: None,
+        kind: ItemKind::Misc,
+        description: "a cracked training helmet kept around as a cautionary example.\n",
+    },
+    ItemDef {
+        name: "disposable healing pack",
+        aliases: &["pack", "healing pack", "disposable pack", "med pack"],
+        size: None,
+        kind: ItemKind::Consumable(ConsumableDef { heal: 6 }),
+        description: "a single-use training med pack from the prep bay dispenser.\n",
+    },
+    ItemDef {
+        name: "docent restore kit",
+        aliases: &["restore kit", "docent kit", "kit"],
+        size: None,
+        kind: ItemKind::Misc,
+        description: "a reusable practice injector tuned for the bearded docent.\nuse: `aid docent`\n",
     },
 ];
 

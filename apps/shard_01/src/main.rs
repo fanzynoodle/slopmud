@@ -54,7 +54,9 @@ const ROOM_TOWN_GATE: &str = "R_TOWN_GATE_01";
 const ROOM_TAVERN: &str = "R_TOWN_TAVERN_01";
 const ROOM_TOWN_JOB_BOARD: &str = "R_TOWN_JOB_01";
 const ROOM_SCHOOL_ORIENTATION: &str = "R_NS_ORIENT_01";
+const ROOM_SCHOOL_HANDS_DRILL: &str = "R_NS_ORIENT_03";
 const ROOM_SCHOOL_FIRST_FIGHT: &str = "R_NS_LABS_03";
+const ROOM_SCHOOL_PARTY_LAB: &str = "R_NS_LABS_05";
 const ROOM_CLASS_BARBARIAN: &str = "class_halls.barbarian";
 const ROOM_CLASS_BARD: &str = "class_halls.bard";
 const ROOM_CLASS_CLERIC: &str = "class_halls.cleric";
@@ -71,6 +73,19 @@ const ROOM_CLASS_WIZARD: &str = "class_halls.wizard";
 const ITEM_STENCHPOUCH: &str = "stenchpouch";
 const ROOM_NEWBIE_HEROES: &str = "R_NS_ORIENT_05";
 const ROOM_SEWERS_JUNCTION: &str = "R_SEW_JUNC_01";
+const QUEST_HANDS_BIN: &str = "q.q1.drill_hands.bin_opened";
+const QUEST_HANDS_INV: &str = "q.q1.drill_hands.inventory_checked";
+const QUEST_HANDS_WIELD: &str = "q.q1.drill_hands.weapon_wielded";
+const QUEST_LABS_HELMET_TAKEN: &str = "q.q1.labs_helmet_taken";
+const QUEST_PREP_BAY_PACK_TAKEN: &str = "q.q1.prep_bay_pack_taken";
+const QUEST_CONSIDER_LEARNED: &str = "q.q1.consider_used";
+const QUEST_ASSIST_LEARNED: &str = "q.q1.assist_used";
+const QUEST_DEATH_SEEN: &str = "q.q1.death_seen";
+const QUEST_RECOVERY_DONE: &str = "q.q1.recovery_done";
+const QUEST_PARTY_LESSON_PHASE: &str = "q.q1.party_lesson.phase";
+const QUEST_PARTY_AURA_UNTIL_MS: &str = "q.q1.party_lesson.aura_until_ms";
+const QUEST_PARTY_PLAYER_HEALED_DOCENT: &str = "q.q1.party_lesson.player_healed_docent";
+const ITEM_DOCENT_RESTORE_KIT: &str = "docent restore kit";
 
 const CLASS_HALL_PREFIX: &str = "class_halls.";
 
@@ -769,6 +784,41 @@ fn render_party_status(world: &World, cid: CharacterId) -> String {
     s
 }
 
+fn render_party_stats(world: &World, cid: CharacterId) -> String {
+    let mut s = String::new();
+    let Some(pid) = world.party_of.get(&cid).copied() else {
+        s.push_str("party: none\r\n");
+        return s;
+    };
+    let Some(p) = world.parties.get(&pid) else {
+        s.push_str("party: stale\r\n");
+        return s;
+    };
+    s.push_str(&format!("party {pid} stats:\r\n"));
+    for mid in p.members.iter().copied().collect::<Vec<_>>() {
+        let Some(m) = world.chars.get(&mid) else {
+            continue;
+        };
+        let lead = if p.leader == mid { " (leader)" } else { "" };
+        s.push_str(&format!(
+            " - {}{lead}: hp {}/{} mana {}/{} stamina {}/{}\r\n",
+            m.name, m.hp, m.max_hp, m.mana, m.max_mana, m.stamina, m.max_stamina
+        ));
+    }
+    s
+}
+
+fn is_bearded_docent(c: &Character) -> bool {
+    c.controller.is_none() && c.name.eq_ignore_ascii_case("bearded docent")
+}
+
+fn parse_party_lesson_phase(p: &Character) -> u32 {
+    p.quest
+        .get(QUEST_PARTY_LESSON_PHASE)
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(0)
+}
+
 fn fmt_session_id(sid: SessionId) -> String {
     format!("{:032x}", sid.0)
 }
@@ -964,6 +1014,300 @@ fn academy_object(room_id: &str, target: &str) -> Option<String> {
         ),
         _ => None,
     }
+}
+
+fn town_transfer_object(room_id: &str, target: &str) -> Option<String> {
+    if room_id != "P_NS_TOWN" {
+        return None;
+    }
+    let t = target.trim().to_ascii_lowercase();
+    match t.as_str() {
+        "board" | "job board" | "menu" | "tavern" | "jobs" => Some(
+            "you are at the school-to-town transfer point.\r\nfor town services, continue north into town gate first.\r\n"
+                .to_string(),
+        ),
+        "arch" | "archway" | "security arch" | "gate" => Some(
+            "the archway marks the handoff from school drills to town play.\r\ngo north to enter town gate.\r\n"
+                .to_string(),
+        ),
+        _ => None,
+    }
+}
+
+fn is_newbie_school_room(room_id: &str) -> bool {
+    room_id.starts_with("R_NS_") || room_id.starts_with("P_NS_")
+}
+
+fn normalize_for_lookup(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        if ch.is_ascii_alphanumeric() || ch.is_ascii_whitespace() {
+            out.push(ch.to_ascii_lowercase());
+        } else {
+            out.push(' ');
+        }
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn strip_common_article_prefix(s: &str) -> &str {
+    let lower = s.to_ascii_lowercase();
+    for p in ["a ", "an ", "the "] {
+        if lower.starts_with(p) {
+            return s[p.len()..].trim();
+        }
+    }
+    s
+}
+
+fn singularize_ascii(token: &str) -> String {
+    if token.ends_with("ies") && token.len() > 3 {
+        return format!("{}y", &token[..token.len() - 3]);
+    }
+    if token.ends_with("es") && token.len() > 2 {
+        return token[..token.len() - 2].to_string();
+    }
+    if token.ends_with('s') && token.len() > 1 {
+        return token[..token.len() - 1].to_string();
+    }
+    token.to_string()
+}
+
+fn newbie_school_desc_object(world: &World, room_id: &str, target: &str) -> Option<String> {
+    if !is_newbie_school_room(room_id) {
+        return None;
+    }
+    let desc = world.rooms.room_description(room_id)?;
+    if desc.trim().is_empty() {
+        return None;
+    }
+
+    let target = strip_common_article_prefix(target.trim());
+    if target.is_empty() {
+        return None;
+    }
+    let nt = normalize_for_lookup(target);
+    if nt.is_empty() {
+        return None;
+    }
+    let nt_singular = singularize_ascii(&nt);
+
+    let mut hits = Vec::new();
+    for raw in desc.lines() {
+        let line = raw.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let nl = normalize_for_lookup(line);
+        if nl.is_empty() {
+            continue;
+        }
+        let line_matches = nl.contains(&nt)
+            || (nt_singular != nt && nl.contains(&nt_singular))
+            || (nt != nt_singular && singularize_ascii(&nl).contains(&nt_singular));
+        if line_matches {
+            hits.push(line.to_string());
+        }
+    }
+    if hits.is_empty() {
+        return None;
+    }
+
+    let mut s = String::new();
+    s.push_str(&format!("you study {}:\r\n", target));
+    for h in hits {
+        s.push_str(" - ");
+        s.push_str(&h);
+        s.push_str("\r\n");
+    }
+    Some(s)
+}
+
+fn hands_drill_object(room_id: &str, target: &str) -> Option<String> {
+    if room_id != ROOM_SCHOOL_HANDS_DRILL {
+        return None;
+    }
+
+    let t = target.trim().to_ascii_lowercase();
+    match t.as_str() {
+        "bin" | "sealed bin" | "box" | "container" | "tool bin" => Some(
+            "a sealed training bin with a spring latch.\r\ntry: open bin\r\n".to_string(),
+        ),
+        "table" | "steel table" => Some(
+            "a scarred steel table with glove marks and old gouges.\r\n".to_string(),
+        ),
+        "placard" | "sign" | "board" | "cartoon" | "hand" => Some(
+            "placard:\r\n  1) open bin\r\n  2) inventory (or: i)\r\n  3) wield sword\r\n"
+                .to_string(),
+        ),
+        "tool" | "tools" | "glove" | "gloves" => Some(
+            "training issue: gloves for hands, sword for control.\r\ntry: open bin\r\n".to_string(),
+        ),
+        _ => None,
+    }
+}
+
+fn party_lab_object(room_id: &str, target: &str) -> Option<String> {
+    if room_id != ROOM_SCHOOL_PARTY_LAB {
+        return None;
+    }
+    let t = target.trim().to_ascii_lowercase();
+    match t.as_str() {
+        "bell" | "lesson bell" | "brass bell" => Some(
+            "a brass lesson bell on a chain.\r\ntry: ring bell\r\n".to_string(),
+        ),
+        "docent" | "bearded docent" => Some(
+            "the bearded docent is a veteran cleric tutor for party drills.\r\ntry: party invite docent\r\n"
+                .to_string(),
+        ),
+        _ => None,
+    }
+}
+
+fn hands_drill_bin_target(token: &str) -> bool {
+    matches!(
+        token.trim().to_ascii_lowercase().as_str(),
+        "bin"
+            | "sealed bin"
+            | "box"
+            | "container"
+            | "tool bin"
+            | "latch"
+            | "tool"
+            | "tools"
+            | "glove"
+            | "gloves"
+    )
+}
+
+fn hands_drill_progress(p: &Character) -> (bool, bool, bool) {
+    (
+        p.quest.contains_key(QUEST_HANDS_BIN),
+        p.quest.contains_key(QUEST_HANDS_INV),
+        p.quest.contains_key(QUEST_HANDS_WIELD),
+    )
+}
+
+fn render_hands_drill_status(p: &Character) -> String {
+    if p.room_id != ROOM_SCHOOL_HANDS_DRILL {
+        return String::new();
+    }
+    let (bin, inv, wield) = hands_drill_progress(p);
+    let mark = |ok: bool| if ok { "[x]" } else { "[ ]" };
+    let mut s = String::new();
+    s.push_str("hands drill:\r\n");
+    s.push_str(&format!(" - {} open bin\r\n", mark(bin)));
+    s.push_str(&format!(" - {} inventory (i)\r\n", mark(inv)));
+    s.push_str(&format!(" - {} wield sword\r\n", mark(wield)));
+    if bin && inv && wield {
+        s.push_str("drill complete: go west to wearables drill.\r\n");
+    }
+    s
+}
+
+fn try_hands_drill_interact(world: &mut World, session: SessionId, room_id: &str, token: &str) -> Option<String> {
+    if room_id != ROOM_SCHOOL_HANDS_DRILL || !hands_drill_bin_target(token) {
+        return None;
+    }
+    let cid = world.active_char_id(session)?;
+
+    let opened_before = world
+        .chars
+        .get(&cid)
+        .is_some_and(|c| c.quest.contains_key(QUEST_HANDS_BIN));
+    if !opened_before {
+        if let Some(pc) = world.chars.get_mut(&cid) {
+            pc.quest.insert(QUEST_HANDS_BIN.to_string(), "1".to_string());
+        }
+        let has_gloves_inv = world
+            .chars
+            .get(&cid)
+            .and_then(|c| c.inv.get("training gloves"))
+            .copied()
+            .unwrap_or(0)
+            > 0;
+        let has_gloves_eq = world
+            .chars
+            .get(&cid)
+            .and_then(|c| c.equip.get(items::EquipSlot::Hands))
+            .is_some_and(|name| name.eq_ignore_ascii_case("training gloves"));
+        if !has_gloves_inv && !has_gloves_eq {
+            world.inv_add(cid, "training gloves", 1);
+        }
+    }
+
+    let mut msg = String::new();
+    if opened_before {
+        msg.push_str("the bin is already open. nothing else pops out.\r\n");
+    } else {
+        msg.push_str("* click. the bin unlocks and dispenses training gloves.\r\n");
+    }
+    msg.push_str("drill: check your inventory (`i`), then `wield sword`.\r\n");
+    Some(msg)
+}
+
+fn try_equipment_storage_take(world: &mut World, session: SessionId, room_id: &str, token: &str) -> Option<String> {
+    if room_id != "R_NS_LABS_08" {
+        return None;
+    }
+    let t = token.trim().to_ascii_lowercase();
+    if !matches!(t.as_str(), "helmet" | "cracked helmet" | "cracked" | "helm") {
+        return None;
+    }
+    let cid = world.active_char_id(session)?;
+    let already = world
+        .chars
+        .get(&cid)
+        .is_some_and(|c| c.quest.contains_key(QUEST_LABS_HELMET_TAKEN));
+    if already {
+        return Some("the cracked helmet has already been checked out.\r\n".to_string());
+    }
+    world.inv_add(cid, "cracked helmet", 1);
+    if let Some(pc) = world.chars.get_mut(&cid) {
+        pc.quest
+            .insert(QUEST_LABS_HELMET_TAKEN.to_string(), "1".to_string());
+    }
+    Some("you take the cracked helmet from the top shelf.\r\n".to_string())
+}
+
+fn try_prep_bay_take(world: &mut World, session: SessionId, room_id: &str, token: &str) -> Option<String> {
+    if room_id != "R_NS_LABS_02" {
+        return None;
+    }
+    let t = token.trim().to_ascii_lowercase();
+    if !matches!(
+        t.as_str(),
+        "pack" | "healing pack" | "disposable healing pack" | "med pack" | "dispenser"
+    ) {
+        return None;
+    }
+    let cid = world.active_char_id(session)?;
+    let already = world
+        .chars
+        .get(&cid)
+        .is_some_and(|c| c.quest.contains_key(QUEST_PREP_BAY_PACK_TAKEN));
+    if already {
+        return Some("the dispenser is empty for now.\r\n".to_string());
+    }
+    world.inv_add(cid, "disposable healing pack", 1);
+    if let Some(pc) = world.chars.get_mut(&cid) {
+        pc.quest
+            .insert(QUEST_PREP_BAY_PACK_TAKEN.to_string(), "1".to_string());
+    }
+    Some("the dispenser drops a disposable healing pack into your hand.\r\n".to_string())
+}
+
+fn spawn_bearded_docent(world: &mut World, room_id: &str) -> CharacterId {
+    let cid = world.spawn_mob(room_id.to_string(), "bearded docent".to_string());
+    if let Some(c) = world.chars.get_mut(&cid) {
+        c.level = 8;
+        c.hp = 120;
+        c.max_hp = 120;
+        c.mana = 120;
+        c.max_mana = 120;
+        c.autoassist = true;
+    }
+    cid
 }
 
 const COC_LINE_ITEMS: [&str; 8] = [
@@ -2318,6 +2662,8 @@ struct World {
     parties: HashMap<PartyId, Party>,
     party_invites: HashMap<CharacterId, PartyInvite>, // invitee cid -> invite
     next_party_id: PartyId,
+    // Backend supports multi-party membership even though player commands enforce one active party.
+    party_memberships: HashMap<CharacterId, HashSet<PartyId>>,
     party_of: HashMap<CharacterId, PartyId>, // member cid -> party id
     party_builds: HashMap<PartyId, PartyBuildPlan>,
     rng: Rng64,
@@ -2367,6 +2713,7 @@ impl World {
             parties: HashMap::new(),
             party_invites: HashMap::new(),
             next_party_id: 1,
+            party_memberships: HashMap::new(),
             party_of: HashMap::new(),
             party_builds: HashMap::new(),
             rng: Rng64::from_seed(seed),
@@ -2813,7 +3160,12 @@ impl World {
                 continue;
             }
             let name_lc = c.name.to_ascii_lowercase();
-            if name_lc == t || name_lc.starts_with(&t) {
+            if name_lc == t
+                || name_lc.starts_with(&t)
+                || name_lc
+                    .split_whitespace()
+                    .any(|w| w == t || w.starts_with(&t))
+            {
                 return Some(*cid);
             }
         }
@@ -3202,6 +3554,15 @@ impl World {
             others.sort();
             s.push_str(&format!("here: {}\r\n", others.join(", ")));
         }
+        if room_id == ROOM_SCHOOL_HANDS_DRILL {
+            if let Some(active) = self
+                .sessions
+                .get(&viewer)
+                .and_then(|ss| self.chars.get(&ss.active))
+            {
+                s.push_str(&render_hands_drill_status(active));
+            }
+        }
         s
     }
 
@@ -3374,6 +3735,7 @@ impl World {
                 members,
             },
         );
+        self.party_memberships.entry(leader).or_default().insert(pid);
         self.party_of.insert(leader, pid);
         pid
     }
@@ -3382,6 +3744,12 @@ impl World {
         let Some(pid) = self.party_of.remove(&cid) else {
             return;
         };
+        if let Some(xs) = self.party_memberships.get_mut(&cid) {
+            xs.remove(&pid);
+            if xs.is_empty() {
+                self.party_memberships.remove(&cid);
+            }
+        }
         let Some(p) = self.parties.get_mut(&pid) else {
             return;
         };
@@ -3406,6 +3774,12 @@ impl World {
             return;
         };
         for mid in p.members {
+            if let Some(xs) = self.party_memberships.get_mut(&mid) {
+                xs.remove(&pid);
+                if xs.is_empty() {
+                    self.party_memberships.remove(&mid);
+                }
+            }
             self.party_of.remove(&mid);
         }
         self.party_invites.retain(|_, inv| inv.party_id != pid);
@@ -3469,9 +3843,6 @@ impl World {
             let Some(m) = self.chars.get(&mid).cloned() else {
                 continue;
             };
-            if m.controller.is_none() {
-                continue;
-            }
             if !m.autoassist {
                 continue;
             }
@@ -3612,6 +3983,301 @@ fn render_build_prompt(p: &Character) -> String {
         s.push_str(" - see stats: `stats`\r\n");
     }
     s
+}
+
+fn render_objective_hint(p: &Character) -> String {
+    if !is_built(p) {
+        return "objective: finish setup with `race <name>` and `class <name>`.\r\n".to_string();
+    }
+
+    match p.room_id.as_str() {
+        ROOM_SCHOOL_ORIENTATION => {
+            return "objective: begin orientation drills. go east.\r\n".to_string();
+        }
+        "R_NS_ORIENT_02" => {
+            return "objective: continue to hands drill. go north.\r\n".to_string();
+        }
+        "R_NS_ORIENT_03" => {
+            return "objective: complete hands drill (open bin, i, wield sword), then go west.\r\n"
+                .to_string();
+        }
+        "R_NS_ORIENT_04" => {
+            return "objective: wear starter gear, then go south.\r\n".to_string();
+        }
+        "R_NS_DORMS_02" | "R_NS_LABS_01" => {
+            return "objective: reach your first live target room. go east, then east.\r\n"
+                .to_string();
+        }
+        "R_NS_LABS_03" => {
+            return "objective: kill a target in this ring (`kill rat` works), then continue east.\r\n"
+                .to_string();
+        }
+        "R_NS_LABS_04" => {
+            return "objective: continue through the labs route toward med bay, then north to sim yard.\r\n"
+                .to_string();
+        }
+        "R_NS_LABS_05" => {
+            return "objective: optional party drill here: `ring bell`, `party invite docent`, `lesson start`.\r\n"
+                .to_string();
+        }
+        "R_NS_LABS_06" => {
+            return "objective: proceed north to sim yard and finish onboarding route.\r\n".to_string();
+        }
+        "R_NS_SIMYARD_01" => {
+            return "objective: town handoff is north. continue to corridor and gate.\r\n".to_string();
+        }
+        "R_NS_EXIT_01" | "P_NS_TOWN" => {
+            return "objective: enter town by going north.\r\n".to_string();
+        }
+        "P_TOWN_NS" => {
+            return "objective: head north into town square, then find the job board (`look board`).\r\n"
+                .to_string();
+        }
+        ROOM_TOWN_JOB_BOARD => {
+            let contracts_done = p
+                .quest
+                .get("q.q2_job_board.contracts_done")
+                .and_then(|v| v.trim().parse::<i64>().ok())
+                .unwrap_or(0)
+                .clamp(0, 3);
+            let faction = p
+                .quest
+                .get("q.q2_job_board.faction")
+                .map(|v| v.trim())
+                .filter(|v| !v.is_empty())
+                .unwrap_or("unset");
+            if contracts_done < 3 {
+                return "objective: complete 3 starter contracts. use `look board` for routes.\r\n"
+                    .to_string();
+            }
+            if faction == "unset" {
+                return "objective: choose a faction contact (`faction civic|industrial|green`).\r\n"
+                    .to_string();
+            }
+            return format!(
+                "objective: faction set to {faction}. continue with repeatables from the board.\r\n"
+            );
+        }
+        _ => {}
+    }
+
+    let consider_done = p.quest.contains_key(QUEST_CONSIDER_LEARNED);
+    let assist_done = p.quest.contains_key(QUEST_ASSIST_LEARNED);
+    let recovery_done = p.quest.contains_key(QUEST_RECOVERY_DONE);
+    if !(consider_done && assist_done && recovery_done) {
+        return format!(
+            "objective: curriculum drills pending -> consider:{} assist:{} recovery:{}.\r\n(use: consider <target> | assist on | die/recover once)\r\n",
+            if consider_done { "done" } else { "todo" },
+            if assist_done { "done" } else { "todo" },
+            if recovery_done { "done" } else { "todo" }
+        );
+    }
+
+    "objective: explore, fight, and use `look board` / `faction` at the town job board for progression.\r\n"
+        .to_string()
+}
+
+fn journal_newbie_school(p: &Character) -> (bool, String) {
+    let hands_done = p.quest.contains_key(QUEST_HANDS_BIN)
+        && p.quest.contains_key(QUEST_HANDS_INV)
+        && p.quest.contains_key(QUEST_HANDS_WIELD);
+    let first_kill = p
+        .quest
+        .get("q.q1.first_kill_done")
+        .is_some_and(|v| v == "1");
+    let reached_town = p.room_id == "P_TOWN_NS" || p.room_id == ROOM_TOWN_GATE;
+    let consider_done = p.quest.contains_key(QUEST_CONSIDER_LEARNED);
+    let assist_done = p.quest.contains_key(QUEST_ASSIST_LEARNED);
+    let recovery_done = p.quest.contains_key(QUEST_RECOVERY_DONE);
+    let completed = hands_done && first_kill && reached_town && consider_done && assist_done && recovery_done;
+    let status = if completed { "COMPLETED" } else { "ACTIVE" };
+
+    let mut s = String::new();
+    s.push_str(&format!("newbie_school [{status}]\r\n"));
+    s.push_str(&format!(
+        " - hands drill: {}\r\n",
+        if hands_done { "done" } else { "in progress" }
+    ));
+    s.push_str(&format!(
+        " - first combat kill: {}\r\n",
+        if first_kill { "done" } else { "pending" }
+    ));
+    s.push_str(&format!(
+        " - reached town gate: {}\r\n",
+        if reached_town { "done" } else { "pending" }
+    ));
+    s.push_str(&format!(
+        " - consider drill: {}\r\n",
+        if consider_done { "done" } else { "pending" }
+    ));
+    s.push_str(&format!(
+        " - assist drill: {}\r\n",
+        if assist_done { "done" } else { "pending" }
+    ));
+    s.push_str(&format!(
+        " - death recovery drill: {}\r\n",
+        if recovery_done { "done" } else { "pending" }
+    ));
+    (completed, s)
+}
+
+fn render_scan(world: &World, room_id: &str) -> String {
+    let exits = world.rooms.exits_raw(room_id);
+    if exits.is_empty() {
+        return "scan: no nearby rooms.\r\n".to_string();
+    }
+    let mut s = String::from("scan:\r\n");
+    for ex in exits {
+        let mut mobs = Vec::new();
+        let mut players = Vec::new();
+        for cid in world.occupants_of(&ex.to) {
+            if let Some(c) = world.chars.get(cid) {
+                if c.controller.is_some() {
+                    players.push(c.name.clone());
+                } else {
+                    mobs.push(c.name.clone());
+                }
+            }
+        }
+        mobs.sort();
+        players.sort();
+        let mut line = format!(" - {}: ", ex.dir);
+        if mobs.is_empty() && players.is_empty() {
+            line.push_str("quiet");
+        } else {
+            if !mobs.is_empty() {
+                line.push_str(&format!("mobs [{}]", mobs.join(", ")));
+            }
+            if !players.is_empty() {
+                if !mobs.is_empty() {
+                    line.push_str(" | ");
+                }
+                line.push_str(&format!("players [{}]", players.join(", ")));
+            }
+        }
+        line.push_str("\r\n");
+        s.push_str(&line);
+    }
+    s
+}
+
+fn threat_rank(attacker_level: u32, target_level: u32) -> &'static str {
+    let diff = target_level as i32 - attacker_level as i32;
+    match diff {
+        d if d >= 6 => "way too hard",
+        d if d >= 3 => "hard",
+        d if d >= -1 => "normal",
+        d if d >= -4 => "easy",
+        _ => "way too easy",
+    }
+}
+
+fn estimate_target_level(c: &Character) -> u32 {
+    if c.controller.is_some() {
+        return c.level.max(1);
+    }
+    // Rough mob scaling by known archetype + durability.
+    let base = match c.name.as_str() {
+        "stenchworm" => 2,
+        "rat" => 1,
+        "spitter" => 3,
+        "dummy" => 1,
+        "grease_king" => 8,
+        _ => 1,
+    };
+    let hp_bump = (c.max_hp / 12).max(0) as u32;
+    base.max(1) + hp_bump
+}
+
+fn render_consider(world: &World, viewer: &Character, token: &str) -> String {
+    let t = token.trim();
+    if t.is_empty() {
+        return "huh? (try: consider <target>)\r\n".to_string();
+    }
+    let room = &viewer.room_id;
+    let target_id = world
+        .find_mob_in_room(room, t)
+        .or_else(|| world.find_player_in_room(room, t));
+    let Some(tid) = target_id else {
+        return "huh? (no such target here)\r\n".to_string();
+    };
+    let Some(target) = world.chars.get(&tid) else {
+        return "huh? (no such target here)\r\n".to_string();
+    };
+    let you = viewer.level.max(1);
+    let them = estimate_target_level(target);
+    let rank = threat_rank(you, them);
+    format!("consider {}: {rank}.\r\n", target.name)
+}
+
+fn journal_job_board(p: &Character) -> (bool, String) {
+    let done = p
+        .quest
+        .get("q.q2_job_board.contracts_done")
+        .and_then(|v| v.trim().parse::<i64>().ok())
+        .unwrap_or(0)
+        .clamp(0, 3);
+    let faction = p
+        .quest
+        .get("q.q2_job_board.faction")
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| "unset".to_string());
+    let completed = done >= 3 && faction != "unset";
+    let status = if completed { "COMPLETED" } else { "ACTIVE" };
+    let mut s = String::new();
+    s.push_str(&format!("town_job_board [{status}]\r\n"));
+    s.push_str(&format!(" - starter contracts: {done}/3\r\n"));
+    s.push_str(&format!(" - faction contact: {faction}\r\n"));
+    (completed, s)
+}
+
+fn render_journal_overview(p: &Character, show_completed: bool) -> String {
+    let (newbie_done, _) = journal_newbie_school(p);
+    let (jobs_done, _) = journal_job_board(p);
+    if show_completed {
+        let mut s = String::new();
+        s.push_str("journal completed:\r\n");
+        let mut any = false;
+        if newbie_done {
+            any = true;
+            s.push_str(" - newbie_school\r\n");
+        }
+        if jobs_done {
+            any = true;
+            s.push_str(" - town_job_board\r\n");
+        }
+        if !any {
+            s.push_str(" (none)\r\n");
+        }
+        s.push_str("details: journal <entry>\r\n");
+        return s;
+    }
+    let mut s = String::new();
+    s.push_str("journal active:\r\n");
+    let mut any = false;
+    if !newbie_done {
+        any = true;
+        s.push_str(" - newbie_school\r\n");
+    }
+    if !jobs_done {
+        any = true;
+        s.push_str(" - town_job_board\r\n");
+    }
+    if !any {
+        s.push_str(" (none)\r\n");
+    }
+    s.push_str("details: journal <entry>\r\n");
+    s
+}
+
+fn render_journal_entry(p: &Character, entry: &str) -> Option<String> {
+    let e = entry.trim().to_ascii_lowercase();
+    match e.as_str() {
+        "newbie_school" | "school" | "onboarding" => Some(journal_newbie_school(p).1),
+        "town_job_board" | "job_board" | "jobs" | "board" => Some(journal_job_board(p).1),
+        _ => None,
+    }
 }
 
 fn assign_core_stats_for_class(class: Class) -> AbilityScores {
@@ -4012,12 +4678,45 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
             }
             ShardReq::Input { session, line } => {
                 let line_s = String::from_utf8_lossy(&line);
-                let line = line_s.trim();
+                let mut line_owned = line_s.trim().to_string();
+                let mut line = line_owned.as_str();
                 if line.is_empty() {
                     continue;
                 }
 
-                let lc = line.to_ascii_lowercase();
+                let mut lc = line.to_ascii_lowercase();
+                if lc == "group" {
+                    line_owned = "party".to_string();
+                    line = line_owned.as_str();
+                    lc = line.to_string();
+                } else if let Some(rest) = lc.strip_prefix("group ") {
+                    let mut it = rest.split_whitespace();
+                    let verb = it.next().unwrap_or_default();
+                    if matches!(
+                        verb,
+                        "invite"
+                            | "add"
+                            | "accept"
+                            | "leave"
+                            | "lead"
+                            | "kick"
+                            | "say"
+                            | "stats"
+                            | "disband"
+                            | "new"
+                            | "create"
+                            | "run"
+                    ) {
+                        line_owned = format!("party {rest}");
+                        line = line_owned.as_str();
+                        lc = line.to_ascii_lowercase();
+                    }
+                }
+                if let Some(rest) = lc.strip_prefix("party add ") {
+                    line_owned = format!("party invite {}", rest.trim());
+                    line = line_owned.as_str();
+                    lc = line.to_ascii_lowercase();
+                }
 
                 let Some(p) = world.active_char(session).cloned() else {
                     let _ = write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n").await;
@@ -4931,6 +5630,87 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
                     continue;
                 }
+                if lc == "objective" || lc == "next" {
+                    let s = render_objective_hint(&p);
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+                if lc == "scan" {
+                    let can_scan = world
+                        .active_char(session)
+                        .and_then(|pc| pc.skills.get("scan").copied())
+                        .unwrap_or(0)
+                        > 0;
+                    if !can_scan {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"scan is a trained skill.\r\n(try: train scan at a trainer; use consider meanwhile)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    let s = render_scan(&world, &p.room_id);
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+                if lc == "consider" {
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"huh? (try: consider <target>)\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+                if let Some(rest) = line.strip_prefix("consider ") {
+                    let s = render_consider(&world, &p, rest);
+                    if !s.starts_with("huh?") {
+                        if let Some(pc) = world.active_char_mut(session) {
+                            pc.quest
+                                .insert(QUEST_CONSIDER_LEARNED.to_string(), "1".to_string());
+                        }
+                    }
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+                if lc == "journal" || lc == "journal active" {
+                    let s = render_journal_overview(&p, false);
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+                if lc == "journal completed" {
+                    let s = render_journal_overview(&p, true);
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+                if let Some(rest) = lc.strip_prefix("journal ") {
+                    let key = rest.trim();
+                    if key.is_empty() {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: journal active | journal completed | journal <entry>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    if let Some(s) = render_journal_entry(&p, key) {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    } else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (journal entry unknown; try: journal school | journal jobs)\r\n",
+                        )
+                        .await?;
+                    }
+                    continue;
+                }
                 if lc == "look" || lc == "l" {
                     let s = world.render_room_for(&p.room_id, session);
                     write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
@@ -4947,6 +5727,14 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     } else if let Some(desc) = heroes_object(&p.room_id, target) {
                         write_resp_async(&mut fw, RESP_OUTPUT, session, desc.as_bytes()).await?;
                     } else if let Some(desc) = academy_object(&p.room_id, target) {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, desc.as_bytes()).await?;
+                    } else if let Some(desc) = town_transfer_object(&p.room_id, target) {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, desc.as_bytes()).await?;
+                    } else if let Some(desc) = hands_drill_object(&p.room_id, target) {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, desc.as_bytes()).await?;
+                    } else if let Some(desc) = party_lab_object(&p.room_id, target) {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, desc.as_bytes()).await?;
+                    } else if let Some(desc) = newbie_school_desc_object(&world, &p.room_id, target) {
                         write_resp_async(&mut fw, RESP_OUTPUT, session, desc.as_bytes()).await?;
                     } else {
                         // If it's not a room object, fall back to inventory/equipment.
@@ -5025,6 +5813,66 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                             .await?;
                         }
                     }
+                        continue;
+                    }
+
+                    let open_target = if let Some(rest) = lc.strip_prefix("open ") {
+                        Some(rest.trim())
+                    } else if let Some(rest) = lc.strip_prefix("unlock ") {
+                        Some(rest.trim())
+                    } else {
+                        None
+                    };
+                    if let Some(target) = open_target {
+                        if let Some(msg) =
+                            try_hands_drill_interact(&mut world, session, &p.room_id, target)
+                        {
+                            write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                        } else {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"huh? (nothing like that to open here)\r\n",
+                            )
+                            .await?;
+                        }
+                        continue;
+                    }
+
+                    let take_target = if let Some(rest) = lc.strip_prefix("take ") {
+                        Some(rest.trim())
+                    } else if let Some(rest) = lc.strip_prefix("grab ") {
+                        Some(rest.trim())
+                    } else if let Some(rest) = lc.strip_prefix("pickup ") {
+                        Some(rest.trim())
+                    } else if let Some(rest) = lc.strip_prefix("pick up ") {
+                        Some(rest.trim())
+                    } else {
+                        None
+                    };
+                    if let Some(target) = take_target {
+                        if let Some(msg) =
+                            try_hands_drill_interact(&mut world, session, &p.room_id, target)
+                        {
+                            write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                        } else if let Some(msg) =
+                            try_prep_bay_take(&mut world, session, &p.room_id, target)
+                        {
+                            write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                        } else if let Some(msg) =
+                            try_equipment_storage_take(&mut world, session, &p.room_id, target)
+                        {
+                            write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                        } else {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"huh? (nothing like that to take here)\r\n",
+                            )
+                            .await?;
+                        }
                         continue;
                     }
 
@@ -5360,6 +6208,49 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         .await?;
                         continue;
                     }
+                    if token.eq_ignore_ascii_case("scan") {
+                        let Some(cid) = world.active_char_id(session) else {
+                            let _ =
+                                write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n").await;
+                            continue;
+                        };
+                        let (sp, rank) = match world.chars.get(&cid) {
+                            Some(pc) => (pc.skill_points, pc.skills.get("scan").copied().unwrap_or(0)),
+                            None => (0, 0),
+                        };
+                        if rank > 0 {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"trainer: you already know scan.\r\n",
+                            )
+                            .await?;
+                            continue;
+                        }
+                        if sp == 0 {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"trainer: you need a skill point. gain one by leveling.\r\n",
+                            )
+                            .await?;
+                            continue;
+                        }
+                        if let Some(pc) = world.chars.get_mut(&cid) {
+                            pc.skill_points -= 1;
+                            pc.skills.insert("scan".to_string(), 1);
+                        }
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"trainer: scan trained (rank 1).\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
                     let Some(cid) = world.active_char_id(session) else {
                         let _ =
                             write_resp_async(&mut fw, RESP_ERR, session, b"not attached\r\n").await;
@@ -5528,6 +6419,77 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     .await?;
                     continue;
                 }
+                if lc == "aid" {
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"huh? (try: aid docent)\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+                if let Some(rest) = lc.strip_prefix("aid ") {
+                    let target = rest.trim();
+                    if target != "docent" && target != "bearded docent" {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: aid docent)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    let Some(pid) = world.party_of.get(&p.id).copied() else {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"party: join a party first\r\n")
+                            .await?;
+                        continue;
+                    };
+                    let Some(docent_id) = world
+                        .parties
+                        .get(&pid)
+                        .and_then(|pp| {
+                            pp.members
+                                .iter()
+                                .copied()
+                                .find(|mid| world.chars.get(mid).is_some_and(is_bearded_docent))
+                        })
+                    else {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"lesson: your docent is not in party\r\n")
+                            .await?;
+                        continue;
+                    };
+                    if !world
+                        .chars
+                        .get(&p.id)
+                        .is_some_and(|pc| pc.inv.get(ITEM_DOCENT_RESTORE_KIT).copied().unwrap_or(0) > 0)
+                    {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"you need a docent restore kit.\r\n")
+                            .await?;
+                        continue;
+                    }
+                    if let Some(dc) = world.chars.get_mut(&docent_id) {
+                        dc.hp = dc.max_hp;
+                    }
+                    if let Some(pc) = world.chars.get_mut(&p.id) {
+                        pc.quest.insert(
+                            QUEST_PARTY_PLAYER_HEALED_DOCENT.to_string(),
+                            "1".to_string(),
+                        );
+                    }
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"you patch up the docent to full.\r\n",
+                    )
+                    .await?;
+                    let _ = world
+                        .broadcast_room(&mut fw, &p.room_id, &format!("* {} uses a restore kit on the bearded docent.", p.name))
+                        .await;
+                    continue;
+                }
 
                 let use_cmd = if let Some(rest) = lc.strip_prefix("use ") {
                     Some(("use", rest))
@@ -5552,6 +6514,11 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                             b"huh? (try: use power_strike | use bandage | quaff fruity)\r\n",
                         )
                         .await?;
+                        continue;
+                    }
+                    if let Some(msg) = try_hands_drill_interact(&mut world, session, &p.room_id, token)
+                    {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
                         continue;
                     }
 
@@ -5904,6 +6871,24 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                 if lc == "i" || lc == "inv" || lc == "inventory" {
                     let s = render_inventory(&p);
                     write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    if p.room_id == ROOM_SCHOOL_HANDS_DRILL {
+                        let mut newly_marked = false;
+                        if let Some(pc) = world.active_char_mut(session) {
+                            if !pc.quest.contains_key(QUEST_HANDS_INV) {
+                                pc.quest.insert(QUEST_HANDS_INV.to_string(), "1".to_string());
+                                newly_marked = true;
+                            }
+                        }
+                        if newly_marked {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"drill: inventory confirmed. now `wield sword`.\r\n",
+                            )
+                            .await?;
+                        }
+                    }
                     continue;
                 }
 
@@ -6103,6 +7088,40 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     let _ = world
                         .broadcast_room(&mut fw, &p.room_id, &room_msg)
                         .await;
+                    if p.room_id == ROOM_SCHOOL_HANDS_DRILL && slot == items::EquipSlot::Wield {
+                        let mut newly_marked = false;
+                        if let Some(pc) = world.active_char_mut(session) {
+                            if !pc.quest.contains_key(QUEST_HANDS_WIELD) {
+                                pc.quest.insert(QUEST_HANDS_WIELD.to_string(), "1".to_string());
+                                newly_marked = true;
+                            }
+                        }
+                        if newly_marked {
+                            let complete = world
+                                .active_char(session)
+                                .is_some_and(|pc| {
+                                    let (bin, inv, wield) = hands_drill_progress(pc);
+                                    bin && inv && wield
+                                });
+                            if complete {
+                                write_resp_async(
+                                    &mut fw,
+                                    RESP_OUTPUT,
+                                    session,
+                                    b"drill complete: controlled grip confirmed. go west to wearables drill.\r\n",
+                                )
+                                .await?;
+                            } else {
+                                write_resp_async(
+                                    &mut fw,
+                                    RESP_OUTPUT,
+                                    session,
+                                    b"drill: good grip. finish the remaining checklist.\r\n",
+                                )
+                                .await?;
+                            }
+                        }
+                    }
                     continue;
                 }
 
@@ -6297,16 +7316,113 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     }
                     let target_id = if let Some(id) = world.find_mob_in_room(&p.room_id, target) {
                         id
+                    } else if p.room_id == "R_NS_LABS_03"
+                        && matches!(target.to_ascii_lowercase().as_str(), "rat" | "worm")
+                    {
+                        if let Some(id) = world.find_mob_in_room(&p.room_id, "stenchworm") {
+                            id
+                        } else {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"no target up yet. wait for the drain to wriggle.\r\n",
+                            )
+                            .await?;
+                            continue;
+                        }
                     } else if let Some(id) = world.find_player_in_room(&p.room_id, target) {
                         id
                     } else {
-                        write_resp_async(
-                            &mut fw,
-                            RESP_OUTPUT,
-                            session,
-                            b"huh? (no such thing to kill here)\r\n",
-                        )
-                        .await?;
+                        if p.room_id == "R_NS_LABS_01" {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"no target here yet. training fight is north.\r\n(try: north, then kill rat)\r\n",
+                            )
+                            .await?;
+                        } else if p.room_id == "R_NS_LABS_07" {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"this room is observation only.\r\nfor a live target: south, then east, then east.\r\n",
+                            )
+                            .await?;
+                        } else if p.room_id == "R_NS_DORMS_02" {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"no combat target in the door drill.\r\nfor training combat: north.\r\n",
+                            )
+                            .await?;
+                        } else if p.room_id == "R_NS_LABS_02" {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"prep bay has supplies, not targets.\r\nfor the solo target ring: east, then kill rat.\r\n",
+                            )
+                            .await?;
+                        } else if p.room_id == "R_NS_LABS_08" {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"equipment storage has gear, not targets.\r\nfor combat: south, then east.\r\n",
+                            )
+                            .await?;
+                        } else if p.room_id == "R_NS_LABS_04" || p.room_id == "R_NS_LABS_05" {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"no live target active here.\r\nfor a guaranteed target: west, then kill rat.\r\n",
+                            )
+                            .await?;
+                        } else if p.room_id == "R_NS_LABS_06" {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"med bay is recovery only.\r\nfor combat: south, then west, then kill rat.\r\n",
+                            )
+                            .await?;
+                        } else if p.room_id == "R_NS_SIMYARD_01" {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"sim yard ring is for movement drills, not live combat.\r\ncontinue onboarding: north toward town.\r\n",
+                            )
+                            .await?;
+                        } else if p.room_id == "R_NS_EXIT_01" {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"no combat target in the corridor.\r\nif you're done with school, go north to town gate.\r\n",
+                            )
+                            .await?;
+                        } else if p.room_id == "P_NS_TOWN" {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"transfer zone has no combat.\r\ncontinue north into town to find jobs and fights.\r\n",
+                            )
+                            .await?;
+                        } else {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"huh? (no such thing to kill here)\r\n",
+                            )
+                            .await?;
+                        }
                         continue;
                     };
                     if !is_built(&p) {
@@ -7166,6 +8282,7 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
 
                     if let Some(pc) = world.active_char_mut(session) {
                         pc.autoassist = on;
+                        pc.quest.insert(QUEST_ASSIST_LEARNED.to_string(), "1".to_string());
                     }
                     let msg = if on {
                         b"assist: on\r\n" as &[u8]
@@ -7274,6 +8391,11 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                 if lc == "party" {
                     let cid = p.id;
                     let s = render_party_status(&world, cid);
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+                if lc == "party stats" {
+                    let s = render_party_stats(&world, p.id);
                     write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
                     continue;
                 }
@@ -7577,7 +8699,11 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         continue;
                     }
 
-                    let Some(invitee_id) = world.find_player_by_prefix(target) else {
+                    let invitee_id = if let Some(pid2) = world.find_player_by_prefix(target) {
+                        pid2
+                    } else if let Some(mid) = world.find_mob_in_room(&p.room_id, target) {
+                        mid
+                    } else {
                         write_resp_async(
                             &mut fw,
                             RESP_OUTPUT,
@@ -7603,6 +8729,54 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                             RESP_OUTPUT,
                             session,
                             b"party: that player is already in a party\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    if world.chars.get(&invitee_id).is_some_and(|c| c.controller.is_none()) {
+                        if !world.chars.get(&invitee_id).is_some_and(is_bearded_docent) {
+                            let _ = world.broadcast_room(
+                                &mut fw,
+                                &p.room_id,
+                                &format!(
+                                    "* {} declines: \"no party drills for me.\"",
+                                    world
+                                        .chars
+                                        .get(&invitee_id)
+                                        .map(|c| c.name.as_str())
+                                        .unwrap_or("that npc")
+                                ),
+                            )
+                            .await;
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"party: declined\r\n",
+                            )
+                            .await?;
+                            continue;
+                        }
+                        if let Some(pp) = world.parties.get_mut(&pid) {
+                            pp.members.insert(invitee_id);
+                        }
+                        world
+                            .party_memberships
+                            .entry(invitee_id)
+                            .or_default()
+                            .insert(pid);
+                        world.party_of.insert(invitee_id, pid);
+                        let _ = world.broadcast_room(
+                            &mut fw,
+                            &p.room_id,
+                            "* bearded docent joins your party and taps his shield.",
+                        )
+                        .await;
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"party: added bearded docent\r\n",
                         )
                         .await?;
                         continue;
@@ -7672,6 +8846,11 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         continue;
                     };
                     party.members.insert(invitee_id);
+                    world
+                        .party_memberships
+                        .entry(invitee_id)
+                        .or_default()
+                        .insert(inv.party_id);
                     world.party_of.insert(invitee_id, inv.party_id);
                     let msg = format!("party: joined (id={})\r\n", inv.party_id);
                     write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
@@ -8554,6 +9733,156 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                         }
                     }
 
+                if lc == "ring bell" || lc == "press bell" || lc == "pull bell" {
+                    if p.room_id != ROOM_SCHOOL_PARTY_LAB {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (no lesson bell here)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    let already = world
+                        .occupants
+                        .get(&p.room_id)
+                        .is_some_and(|occ| occ.iter().any(|cid| world.chars.get(cid).is_some_and(is_bearded_docent)));
+                    if already {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"the bell rings once; the bearded docent strokes his beard. he's already here.\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    let _cid = spawn_bearded_docent(&mut world, &p.room_id);
+                    if let Some(pc) = world.active_char_mut(session) {
+                        pc.quest
+                            .insert(QUEST_PARTY_LESSON_PHASE.to_string(), "1".to_string());
+                        pc.quest.remove(QUEST_PARTY_PLAYER_HEALED_DOCENT);
+                    }
+                    world.inv_add(p.id, ITEM_DOCENT_RESTORE_KIT, 1);
+                    let _ = world
+                        .broadcast_room(
+                            &mut fw,
+                            &p.room_id,
+                            "* a bearded docent cleric arrives with a shield, nodding for party drills.",
+                        )
+                        .await;
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"lesson unlocked: invite him with `party invite docent` (or `party add docent`).\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+                if lc == "lesson" {
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"huh? (try: lesson status | lesson start)\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+                if lc == "lesson status" {
+                    let phase = parse_party_lesson_phase(&p);
+                    let msg = match phase {
+                        0 => "lesson: not started. ring bell in party lab.\r\n",
+                        1 => "lesson 1/4: dps while docent tanks.\r\n",
+                        2 => "lesson 2/4: tank while docent dpses.\r\n",
+                        3 => "lesson 3/4: tank while docent heals.\r\n",
+                        4 => "lesson 4/4: heal docent while he tanks.\r\n",
+                        _ => "lesson: completed.\r\n",
+                    };
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                    continue;
+                }
+                if lc == "lesson start" {
+                    let Some(pid) = world.party_of.get(&p.id).copied() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"lesson: create or join a party first.\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let Some(docent_id) = world.parties.get(&pid).and_then(|pp| {
+                        pp.members
+                            .iter()
+                            .copied()
+                            .find(|mid| world.chars.get(mid).is_some_and(is_bearded_docent))
+                    }) else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"lesson: invite the bearded docent first.\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let phase = parse_party_lesson_phase(&p).max(1);
+                    let aura_until = world.now_ms().saturating_add(25_000);
+                    let mob_id = world.spawn_mob(p.room_id.clone(), "curriculum brute".to_string());
+                    if let Some(m) = world.chars.get_mut(&mob_id) {
+                        m.hp = 16;
+                        m.max_hp = 16;
+                        m.level = 3;
+                    }
+                    if let Some(pc) = world.chars.get_mut(&p.id) {
+                        pc.quest.remove(QUEST_PARTY_PLAYER_HEALED_DOCENT);
+                    }
+                    match phase {
+                        1 => {
+                            world.start_combat(docent_id, mob_id);
+                            world.start_combat(mob_id, docent_id);
+                        }
+                        2 => {
+                            world.start_combat(p.id, mob_id);
+                            world.start_combat(mob_id, p.id);
+                            world.start_combat(docent_id, mob_id);
+                            if let Some(pc) = world.chars.get_mut(&p.id) {
+                                pc.quest.insert(
+                                    QUEST_PARTY_AURA_UNTIL_MS.to_string(),
+                                    aura_until.to_string(),
+                                );
+                            }
+                        }
+                        3 => {
+                            world.start_combat(p.id, mob_id);
+                            world.start_combat(mob_id, p.id);
+                            world.start_combat(docent_id, mob_id);
+                            if let Some(pc) = world.chars.get_mut(&p.id) {
+                                pc.quest.insert(
+                                    QUEST_PARTY_AURA_UNTIL_MS.to_string(),
+                                    aura_until.to_string(),
+                                );
+                            }
+                        }
+                        _ => {
+                            world.start_combat(docent_id, mob_id);
+                            world.start_combat(mob_id, docent_id);
+                        }
+                    }
+                    let brief = match phase {
+                        1 => "* lesson 1/4: burn the mob while docent tanks.",
+                        2 => "* lesson 2/4: hold aggro while docent dpses (aura applied).",
+                        3 => "* lesson 3/4: hold aggro while docent heals you (aura applied).",
+                        _ => "* lesson 4/4: keep docent alive with `aid docent` while he tanks.",
+                    };
+                    let _ = world.broadcast_room(&mut fw, &p.room_id, brief).await;
+                    continue;
+                }
+
                 let mut moved = false;
 
                 if lc == "go" {
@@ -8768,6 +10097,68 @@ async fn handle_event(
                     a.combat.autoattack = false;
                 }
                 return Ok(());
+            }
+
+            // Newbie-school party tutor behavior.
+            if is_bearded_docent(&att) {
+                let hp_quarter = (att.max_hp / 4).max(1);
+                if att.hp <= hp_quarter {
+                    let _ = world
+                        .broadcast_room(
+                            fw,
+                            &att.room_id,
+                            "* bearded docent chants a hard reset litany.",
+                        )
+                        .await;
+                    let _ = apply_damage_to_mob(
+                        world,
+                        fw,
+                        attacker_id,
+                        target_id,
+                        9999,
+                        "* bearded docent smites the threat in one blow.".to_string(),
+                    )
+                    .await?;
+                    if let Some(dc) = world.chars.get_mut(&attacker_id) {
+                        dc.hp = dc.max_hp;
+                        dc.combat.autoattack = false;
+                        dc.combat.target = None;
+                    }
+                    let _ = world
+                        .broadcast_room(
+                            fw,
+                            &att.room_id,
+                            "* bearded docent heals himself and says: `start the lesson again when ready.`",
+                        )
+                        .await;
+                    return Ok(());
+                }
+                if let Some(tank_id) = world
+                    .party_of
+                    .iter()
+                    .find_map(|(cid, pid)| (*pid == world.party_of.get(&attacker_id).copied().unwrap_or(0) && *cid != attacker_id).then_some(*cid))
+                {
+                    let phase = world
+                        .chars
+                        .get(&tank_id)
+                        .map(parse_party_lesson_phase)
+                        .unwrap_or(0);
+                    if phase == 3 {
+                        if let Some(pc) = world.chars.get_mut(&tank_id) {
+                            let before = pc.hp;
+                            pc.hp = (pc.hp + 7).min(pc.max_hp);
+                            if pc.hp > before {
+                                let _ = world
+                                    .broadcast_room(
+                                        fw,
+                                        &att.room_id,
+                                        "* bearded docent channels a protective mend.",
+                                    )
+                                    .await;
+                            }
+                        }
+                    }
+                }
             }
 
             let att_is_player = att.controller.is_some();
@@ -9057,6 +10448,7 @@ fn compute_mob_autoattack_damage(world: &mut World, att: &Character) -> i32 {
     // Keep simple and deterministic; use the per-world RNG.
     match att.name.as_str() {
         "dummy" => 0,
+        "curriculum brute" => 1,
         "spitter" => world.rng.roll_range(4, 6),
         "grease_king" => world.rng.roll_range(2, 5),
         _ => world.rng.roll_range(1, 3),
@@ -9087,11 +10479,24 @@ async fn apply_damage_to_mob(
     let room_id = att.room_id.clone();
     let _ = world.broadcast_room(fw, &room_id, &msg).await;
 
+    let final_dmg = {
+        let aura_until = world
+            .chars
+            .get(&target_id)
+            .and_then(|t| t.quest.get(QUEST_PARTY_AURA_UNTIL_MS))
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(0);
+        if aura_until > world.now_ms() {
+            (dmg / 2).max(1)
+        } else {
+            dmg
+        }
+    };
     let dead = {
         let Some(t) = world.chars.get_mut(&target_id) else {
             return Ok(false);
         };
-        t.hp -= dmg;
+        t.hp -= final_dmg;
         t.hp <= 0
     };
     if !dead {
@@ -9105,6 +10510,83 @@ async fn apply_damage_to_mob(
     let _ = world
         .broadcast_room(fw, &room_id, &format!("* {} dies.", deadc.name))
         .await;
+
+    if deadc.name == "curriculum brute" {
+        if let Some(pid) = world.party_of.get(&attacker_id).copied() {
+            let has_docent = world.parties.get(&pid).is_some_and(|pp| {
+                pp.members
+                    .iter()
+                    .any(|mid| world.chars.get(mid).is_some_and(is_bearded_docent))
+            });
+            if has_docent {
+                let trainee_id = if world
+                    .chars
+                    .get(&attacker_id)
+                    .is_some_and(|c| c.controller.is_some())
+                {
+                    attacker_id
+                } else {
+                    world
+                        .parties
+                        .get(&pid)
+                        .and_then(|pp| {
+                            pp.members.iter().copied().find(|mid| {
+                                world
+                                    .chars
+                                    .get(mid)
+                                    .is_some_and(|c| c.controller.is_some() && !is_bearded_docent(c))
+                            })
+                        })
+                        .unwrap_or(attacker_id)
+                };
+                let mut next_msg = None::<&'static str>;
+                if let Some(pc) = world.chars.get_mut(&trainee_id) {
+                    let phase = parse_party_lesson_phase(pc);
+                    let done_heal = pc
+                        .quest
+                        .get(QUEST_PARTY_PLAYER_HEALED_DOCENT)
+                        .is_some_and(|v| v == "1");
+                    match phase {
+                        1 => {
+                            pc.quest
+                                .insert(QUEST_PARTY_LESSON_PHASE.to_string(), "2".to_string());
+                            next_msg = Some(
+                                "* lesson complete: now tank while the docent dpses. use `lesson start`.",
+                            );
+                        }
+                        2 => {
+                            pc.quest
+                                .insert(QUEST_PARTY_LESSON_PHASE.to_string(), "3".to_string());
+                            next_msg = Some(
+                                "* lesson complete: now tank while the docent heals. use `lesson start`.",
+                            );
+                        }
+                        3 => {
+                            pc.quest
+                                .insert(QUEST_PARTY_LESSON_PHASE.to_string(), "4".to_string());
+                            next_msg = Some(
+                                "* lesson complete: now heal the docent while he tanks. use `lesson start` and `aid docent`.",
+                            );
+                        }
+                        4 if done_heal => {
+                            pc.quest
+                                .insert(QUEST_PARTY_LESSON_PHASE.to_string(), "5".to_string());
+                            next_msg = Some("* party curriculum complete.");
+                        }
+                        4 => {
+                            next_msg = Some(
+                                "* lesson partial: you must `aid docent` during the fight. start again.",
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+                if let Some(msg) = next_msg {
+                    let _ = world.broadcast_room(fw, &room_id, msg).await;
+                }
+            }
+        }
+    }
 
     if deadc.name == "stenchworm" {
         world.inv_add(attacker_id, ITEM_STENCHPOUCH, 1);
@@ -9191,6 +10673,7 @@ async fn send_to_graveyard(
         cc.hp = cc.max_hp.max(1);
         cc.combat.autoattack = false;
         cc.combat.target = None;
+        cc.quest.insert(QUEST_DEATH_SEEN.to_string(), "1".to_string());
     }
 
     let _ = world
@@ -9198,7 +10681,13 @@ async fn send_to_graveyard(
         .await;
 
     if let Some(sid) = c.controller {
-        let _ = write_resp_async(fw, RESP_OUTPUT, sid, b"you died.\\r\\n").await;
+        let _ = write_resp_async(
+            fw,
+            RESP_OUTPUT,
+            sid,
+            b"you died.\\r\\nrecovery drill: leave the graveyard and continue.\r\n",
+        )
+        .await;
         let s = world.render_room_for(&to, sid);
         let _ = write_resp_async(fw, RESP_OUTPUT, sid, s.as_bytes()).await;
     }
@@ -9354,6 +10843,9 @@ async fn try_move(
 
     if let Some(pp) = world.chars.get_mut(&cid) {
         pp.room_id = to.clone();
+        if from == graveyard_room_id() && pp.quest.contains_key(QUEST_DEATH_SEEN) {
+            pp.quest.insert(QUEST_RECOVERY_DONE.to_string(), "1".to_string());
+        }
     }
 
     world
@@ -9467,7 +10959,15 @@ buildinfo\r\n\
 aiping\r\n\
 uptime\r\n\
 stats\r\n\
+objective\r\n\
+next\r\n\
+journal\r\n\
+journal active\r\n\
+journal completed\r\n\
+journal <entry>\r\n\
 look\r\n\
+scan\r\n\
+consider <target>\r\n\
 look <thing>\r\n\
 look board\r\n\
 look chalk\r\n\
@@ -9490,12 +10990,19 @@ party\r\n\
 party create\r\n\
 party disband\r\n\
 party invite <player>\r\n\
+party add <player>\r\n\
+party stats\r\n\
 party kick <player>\r\n\
 party accept\r\n\
 party leave\r\n\
 party lead <player>\r\n\
 party say <msg>\r\n\
 party run <adventure_id>\r\n\
+group <party-cmd> (alias)\r\n\
+ring bell\r\n\
+lesson status\r\n\
+lesson start\r\n\
+aid docent\r\n\
 assist on|off\r\n\
 follow on|off\r\n\
 bot\r\n\

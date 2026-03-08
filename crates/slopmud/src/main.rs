@@ -246,6 +246,13 @@ fn normalize_pronouns(locale: &str, s: &str) -> Option<&'static str> {
     }
 }
 
+fn is_agree_ack(s: &str) -> bool {
+    matches!(
+        s.trim().to_ascii_lowercase().as_str(),
+        "agree" | "yes" | "y" | "ok" | "okay" | "i agree" | "accept" | "accepted"
+    )
+}
+
 fn usage_and_exit() -> ! {
     eprintln!(
         "slopmud (session broker)\n\n\
@@ -3642,7 +3649,13 @@ async fn handle_conn(
                         a.by_name.get(uname).cloned()
                     };
 
-                    match line.as_str() {
+                    let auth_pick = match line.as_str() {
+                        "password" | "pass" | "p" => "password",
+                        "google" | "g" => "google",
+                        _ => "",
+                    };
+
+                    match auth_pick {
                         "password" => {
                             auth_method = Some("password".to_string());
                             let exists = rec.is_some();
@@ -3731,7 +3744,9 @@ async fn handle_conn(
                         }
                         _ => {
                             let _ = write_tx
-                                .send(Bytes::from_static(b"please type: password | google\r\n> "))
+                                .send(Bytes::from_static(
+                                    b"please choose auth: password | google\r\n(note: if you typed 'human', use password)\r\n> ",
+                                ))
                                 .await;
                             continue;
                         }
@@ -4138,16 +4153,19 @@ async fn handle_conn(
                 }
                 ConnState::NeedBotDisclosure => {
                     let line = String::from_utf8_lossy(&line_bytes).trim().to_string();
-                    if line.is_empty() {
-                        continue;
-                    }
-                    let v = line.to_ascii_lowercase();
-                    let b = match v.as_str() {
-                        "human" => false,
-                        "bot" => true,
+                    let token: String = line
+                        .chars()
+                        .filter(|c| c.is_ascii_alphabetic())
+                        .collect::<String>()
+                        .to_ascii_lowercase();
+                    let b = match token.as_str() {
+                        "" | "h" | "human" | "person" | "player" => false,
+                        "b" | "bot" | "automation" | "automated" => true,
                         _ => {
                             let _ = write_tx
-                                .send(Bytes::from_static(b"please type: human | bot\r\n> "))
+                                .send(Bytes::from_static(
+                                    b"please type: human | bot (enter = human)\r\n> ",
+                                ))
                                 .await;
                             continue;
                         }
@@ -4167,9 +4185,11 @@ async fn handle_conn(
                         continue;
                     }
                     let v = line.to_ascii_lowercase();
-                    if v != "agree" {
+                    if !is_agree_ack(&v) {
                         let _ = write_tx
-                            .send(Bytes::from_static(b"type: agree\r\n> "))
+                            .send(Bytes::from_static(
+                                b"type: agree (or yes)\r\n> ",
+                            ))
                             .await;
                         continue;
                     }
@@ -4190,9 +4210,11 @@ async fn handle_conn(
                         continue;
                     }
                     let v = line.to_ascii_lowercase();
-                    if v != "agree" {
+                    if !is_agree_ack(&v) {
                         let _ = write_tx
-                            .send(Bytes::from_static(b"type: agree\r\n> "))
+                            .send(Bytes::from_static(
+                                b"type: agree (or yes)\r\n> ",
+                            ))
                             .await;
                         continue;
                     }
@@ -4272,7 +4294,7 @@ async fn handle_conn(
                     state = ConnState::NeedSex;
                     let _ = write_tx
                         .send(Bytes::from_static(
-                            b"character creation (step 7/7)\r\nsex:\r\ntype: male | female | none | other\r\n> ",
+                            b"character creation (step 7/7)\r\nsex:\r\ntype: male | female | none | other\r\n(skip allowed: type none or skip)\r\n> ",
                         ))
                         .await;
                     continue;
@@ -4297,6 +4319,10 @@ async fn handle_conn(
                             sex = Some("none".to_string());
                             pronouns = Some("they".to_string());
                         }
+                        "skip" | "prefer not" | "prefer not to say" | "n/a" | "na" => {
+                            sex = Some("none".to_string());
+                            pronouns = Some("they".to_string());
+                        }
                         "other" => {
                             sex = Some("other".to_string());
                             state = ConnState::NeedPronouns;
@@ -4310,7 +4336,7 @@ async fn handle_conn(
                         _ => {
                             let _ = write_tx
                                 .send(Bytes::from_static(
-                                    b"please type: male | female | none | other\r\n> ",
+                                    b"please type: male | female | none | other\r\n(or type: skip)\r\n> ",
                                 ))
                                 .await;
                             continue;
