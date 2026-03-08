@@ -10298,6 +10298,37 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
 
                 let mut moved = false;
 
+                if lc == "home" {
+                    if p.combat.autoattack || p.combat.target.is_some() {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"you can't head home while fighting.\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    let home_room = if world.rooms.has_room(ROOM_TOWN_GATE) {
+                        ROOM_TOWN_GATE
+                    } else {
+                        world.rooms.start_room()
+                    };
+                    if p.room_id == home_room {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"you're already home.\r\n",
+                        )
+                        .await?;
+                    } else {
+                        teleport_to(&mut world, &mut fw, session, home_room, "heads home")
+                            .await?;
+                    }
+                    continue;
+                }
+
                 if lc == "go" {
                     write_resp_async(&mut fw, RESP_OUTPUT, session, HUH_GO).await?;
                     continue;
@@ -11490,6 +11521,7 @@ whomans\r\n\
 go <exit>\r\n\
 (or just type an exit name / alias)\r\n\
 say <msg>\r\n\
+home\r\n\
 emote <action>\r\n\
 me <action>\r\n\
 em <action>\r\n\
