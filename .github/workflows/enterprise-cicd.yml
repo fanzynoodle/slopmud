@@ -315,17 +315,14 @@ jobs:
         with:
           clean: false
 
-      - name: Sync local shuttle helper
-        shell: bash
-        run: |
-          set -euo pipefail
-          chmod +x scripts/cicd/slopmud-shuttle-assets
-
       - name: Assert Deploy Hook Installed
         shell: bash
         run: |
           set -euo pipefail
-          ./scripts/cicd/slopmud-shuttle-assets --help >/dev/null 2>&1
+          if ! sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null 2>&1; then
+            echo "deploy hook is unavailable; bootstrap the runner once using scripts/cicd/bootstrap_runner.sh" >&2
+            exit 2
+          fi
 
       - name: Deploy to sandbox
         id: deploy
@@ -339,11 +336,11 @@ jobs:
           start_ts="$(date +%s)"
 
           if [[ -n "${BUCKET}" && -n "${KEY}" ]]; then
-            ./scripts/cicd/slopmud-shuttle-assets \
+            sudo -n /usr/local/bin/slopmud-shuttle-assets \
               --env sandbox \
               --from-s3 "s3://${BUCKET}/${KEY}"
           else
-            ./scripts/cicd/slopmud-shuttle-assets \
+            sudo -n /usr/local/bin/slopmud-shuttle-assets \
               --env sandbox \
               --from-file "$ARTIFACT_PATH"
           fi
@@ -497,17 +494,14 @@ jobs:
         with:
           clean: false
 
-      - name: Sync local shuttle helper
-        shell: bash
-        run: |
-          set -euo pipefail
-          chmod +x scripts/cicd/slopmud-shuttle-assets
-
       - name: Assert Deploy Hook Installed
         shell: bash
         run: |
           set -euo pipefail
-          ./scripts/cicd/slopmud-shuttle-assets --help >/dev/null 2>&1
+          if ! sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null 2>&1; then
+            echo "deploy hook is unavailable; bootstrap the runner once using scripts/cicd/bootstrap_runner.sh" >&2
+            exit 2
+          fi
 
       - name: Deploy
         id: deploy
@@ -522,11 +516,11 @@ jobs:
           start_ts="$(date +%s)"
 
           if [[ -n "${BUCKET}" && -n "${KEY}" ]]; then
-            ./scripts/cicd/slopmud-shuttle-assets \
+            sudo -n /usr/local/bin/slopmud-shuttle-assets \
               --env "$DEPLOY_ENV" \
               --from-s3 "s3://${BUCKET}/${KEY}"
           else
-            ./scripts/cicd/slopmud-shuttle-assets \
+            sudo -n /usr/local/bin/slopmud-shuttle-assets \
               --env "$DEPLOY_ENV" \
               --from-file "$ARTIFACT_PATH"
           fi
@@ -565,17 +559,14 @@ jobs:
         with:
           clean: false
 
-      - name: Sync local shuttle helper
-        shell: bash
-        run: |
-          set -euo pipefail
-          chmod +x scripts/cicd/slopmud-shuttle-assets
-
       - name: Assert Deploy Hook Installed
         shell: bash
         run: |
           set -euo pipefail
-          ./scripts/cicd/slopmud-shuttle-assets --help >/dev/null 2>&1
+          if ! sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null 2>&1; then
+            echo "deploy hook is unavailable; bootstrap the runner once using scripts/cicd/bootstrap_runner.sh" >&2
+            exit 2
+          fi
 
       - name: Build + Upload Prod Artifact
         id: publish_prod
@@ -613,7 +604,7 @@ jobs:
         run: |
           set -euo pipefail
           start_ts="$(date +%s)"
-          ./scripts/cicd/slopmud-shuttle-assets \
+          sudo -n /usr/local/bin/slopmud-shuttle-assets \
             --env prd \
             --from-s3 "s3://${BUCKET}/prod/${SHA}/artifact.tgz"
           duration_s=$(( $(date +%s) - start_ts ))
