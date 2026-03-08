@@ -1,7 +1,9 @@
 (() => {
   const GAME_ORIGIN = "https://mud.slopmud.com:4242";
   // Ensure the web client always runs from the OAuth/game web origin.
-  if (location.origin !== GAME_ORIGIN) {
+  const localDevHost =
+    location.hostname === "127.0.0.1" || location.hostname === "localhost" || location.hostname === "::1";
+  if (!localDevHost && location.origin !== GAME_ORIGIN) {
     const to = `${GAME_ORIGIN}${location.pathname}${location.search}${location.hash}`;
     location.replace(to);
     return;
@@ -66,6 +68,12 @@
   const statusDetail = document.getElementById("status-detail");
 
   const decoder = new TextDecoder("utf-8", { fatal: false });
+  const TELNET_IAC = 255;
+  const TELNET_WILL = 251;
+  const TELNET_DO = 253;
+  const TELNET_OPT_SGA = 3;
+  const TELNET_OPT_TTYPE = 24;
+  const TELNET_OPT_NAWS = 31;
   let sock = null;
   let shouldReconnect = true;
   let reconnectTimer = null;
@@ -83,6 +91,216 @@
   const LS_WS_URL = "slopmud_ws_url";
   const LS_AUTOSCROLL = "slopmud_autoscroll";
   const LS_RESUME_TOKEN = "slopmud_resume_token";
+  let ansiState = { bold: false, fg: "", bg: "", carry: "" };
+
+  function resetAnsiState() {
+    ansiState = { bold: false, fg: "", bg: "", carry: "" };
+  }
+
+  function ansi256(n) {
+    const base = [
+      "#000000",
+      "#800000",
+      "#008000",
+      "#808000",
+      "#000080",
+      "#800080",
+      "#008080",
+      "#c0c0c0",
+      "#808080",
+      "#ff0000",
+      "#00ff00",
+      "#ffff00",
+      "#0000ff",
+      "#ff00ff",
+      "#00ffff",
+      "#ffffff",
+    ];
+    if (n >= 0 && n < 16) return base[n];
+    if (n >= 16 && n <= 231) {
+      const idx = n - 16;
+      const r = Math.floor(idx / 36);
+      const g = Math.floor((idx % 36) / 6);
+      const b = idx % 6;
+      const scale = [0, 95, 135, 175, 215, 255];
+      return `rgb(${scale[r]}, ${scale[g]}, ${scale[b]})`;
+    }
+    if (n >= 232 && n <= 255) {
+      const v = 8 + (n - 232) * 10;
+      return `rgb(${v}, ${v}, ${v})`;
+    }
+    return "";
+  }
+
+  function applySgr(paramsText) {
+    const params =
+      paramsText === ""
+        ? [0]
+        : paramsText
+            .split(";")
+            .map((x) => (x === "" ? 0 : Number.parseInt(x, 10)))
+            .filter((x) => Number.isFinite(x));
+    for (let i = 0; i < params.length; i++) {
+      const p = params[i];
+      if (p === 0) {
+        resetAnsiState();
+        continue;
+      }
+      if (p === 1) {
+        ansiState.bold = true;
+        continue;
+      }
+      if (p === 22) {
+        ansiState.bold = false;
+        continue;
+      }
+      if (p >= 30 && p <= 37) {
+        ansiState.fg = {
+          30: "#1b1d1c",
+          31: "#d35d6e",
+          32: "#60d394",
+          33: "#f4d35e",
+          34: "#6ea8fe",
+          35: "#c77dff",
+          36: "#63cdda",
+          37: "#e8f2ea",
+        }[p];
+        continue;
+      }
+      if (p >= 90 && p <= 97) {
+        ansiState.fg = {
+          90: "#6b7280",
+          91: "#ff7b72",
+          92: "#7ee787",
+          93: "#ffd866",
+          94: "#79c0ff",
+          95: "#d2a8ff",
+          96: "#a5f3fc",
+          97: "#ffffff",
+        }[p];
+        continue;
+      }
+      if (p === 39) {
+        ansiState.fg = "";
+        continue;
+      }
+      if (p >= 40 && p <= 47) {
+        const fgCode = p - 10;
+        ansiState.bg = {
+          30: "#1b1d1c",
+          31: "#d35d6e",
+          32: "#60d394",
+          33: "#f4d35e",
+          34: "#6ea8fe",
+          35: "#c77dff",
+          36: "#63cdda",
+          37: "#e8f2ea",
+        }[fgCode];
+        continue;
+      }
+      if (p >= 100 && p <= 107) {
+        const fgCode = p - 10;
+        ansiState.bg = {
+          90: "#6b7280",
+          91: "#ff7b72",
+          92: "#7ee787",
+          93: "#ffd866",
+          94: "#79c0ff",
+          95: "#d2a8ff",
+          96: "#a5f3fc",
+          97: "#ffffff",
+        }[fgCode];
+        continue;
+      }
+      if (p === 49) {
+        ansiState.bg = "";
+        continue;
+      }
+      if ((p === 38 || p === 48) && params[i + 1] === 5 && Number.isFinite(params[i + 2])) {
+        const c = ansi256(params[i + 2]);
+        if (p === 38) ansiState.fg = c;
+        else ansiState.bg = c;
+        i += 2;
+        continue;
+      }
+      if (
+        (p === 38 || p === 48) &&
+        params[i + 1] === 2 &&
+        Number.isFinite(params[i + 2]) &&
+        Number.isFinite(params[i + 3]) &&
+        Number.isFinite(params[i + 4])
+      ) {
+        const c = `rgb(${params[i + 2]}, ${params[i + 3]}, ${params[i + 4]})`;
+        if (p === 38) ansiState.fg = c;
+        else ansiState.bg = c;
+        i += 4;
+      }
+    }
+  }
+
+  function appendStyledText(frag, text) {
+    if (!text) return;
+    if (!ansiState.bold && !ansiState.fg && !ansiState.bg) {
+      frag.appendChild(document.createTextNode(text));
+      return;
+    }
+    const span = document.createElement("span");
+    span.className = "term__run";
+    if (ansiState.bold) span.style.fontWeight = "700";
+    if (ansiState.fg) span.style.color = ansiState.fg;
+    if (ansiState.bg) span.style.backgroundColor = ansiState.bg;
+    span.textContent = text;
+    frag.appendChild(span);
+  }
+
+  function renderAnsiChunk(input) {
+    const frag = document.createDocumentFragment();
+    const src = ansiState.carry + String(input || "");
+    ansiState.carry = "";
+    let textStart = 0;
+    let i = 0;
+
+    while (i < src.length) {
+      if (src[i] !== "\x1b") {
+        i += 1;
+        continue;
+      }
+
+      appendStyledText(frag, src.slice(textStart, i));
+
+      if (i + 1 >= src.length) {
+        ansiState.carry = src.slice(i);
+        return frag;
+      }
+      if (src[i + 1] !== "[") {
+        appendStyledText(frag, src[i]);
+        i += 1;
+        textStart = i;
+        continue;
+      }
+
+      let j = i + 2;
+      while (j < src.length && !/[A-Za-z]/.test(src[j])) j += 1;
+      if (j >= src.length) {
+        ansiState.carry = src.slice(i);
+        return frag;
+      }
+
+      if (src[j] === "m") applySgr(src.slice(i + 2, j));
+      i = j + 1;
+      textStart = i;
+    }
+
+    appendStyledText(frag, src.slice(textStart));
+    return frag;
+  }
+
+  function sendTerminalNegotiation() {
+    if (!sock || sock.readyState !== WebSocket.OPEN) return;
+    sock.send(Uint8Array.from([TELNET_IAC, TELNET_WILL, TELNET_OPT_TTYPE]));
+    sock.send(Uint8Array.from([TELNET_IAC, TELNET_WILL, TELNET_OPT_NAWS]));
+    sock.send(Uint8Array.from([TELNET_IAC, TELNET_DO, TELNET_OPT_SGA]));
+  }
 
   function updateSsoUrl(url) {
     const u = String(url || "").trim();
@@ -384,7 +602,7 @@
 
   function append(text) {
     if (!term) return;
-    term.textContent += text;
+    term.appendChild(renderAnsiChunk(text));
     if (optScroll && optScroll.checked) term.scrollTop = term.scrollHeight;
   }
 
@@ -394,7 +612,8 @@
 
   function clear() {
     if (!term) return;
-    term.textContent = "";
+    term.replaceChildren();
+    resetAnsiState();
   }
 
   function sendBytes(u8) {
@@ -444,6 +663,7 @@
     btnDisconnect && (btnDisconnect.disabled = false);
 
     ws.addEventListener("open", () => {
+      sendTerminalNegotiation();
       setStatus("connected", displayUrl);
       appendLine(`# connected: ${displayUrl}`);
       setInputEnabled(true);

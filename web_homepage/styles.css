@@ -584,6 +584,10 @@ body {
   word-break: break-word;
 }
 
+.term__run {
+  white-space: inherit;
+}
+
 .inputbar {
   display: grid;
   grid-template-columns: 1fr;

@@ -35,6 +35,7 @@ const LOGIN_THROTTLE_MAX_NAMES: usize = 2048;
 
 const SCROLLBACK_MAX_LINES: usize = 1500;
 const SCROLLBACK_MAX_LINE_CHARS: usize = 512;
+const SESSION_CHECKPOINT_BYTES_DEFAULT: u64 = 4 * 1024 * 1024;
 
 // Snowflake-style 64-bit IDs for scrollback lines:
 //   42 bits: milliseconds since LINEID_EPOCH_UNIX_MS
@@ -257,7 +258,7 @@ fn usage_and_exit() -> ! {
     eprintln!(
         "slopmud (session broker)\n\n\
 USAGE:\n  slopmud [--bind HOST:PORT] [--shard-addr HOST:PORT]\n\n\
-ENV:\n  SLOPMUD_BIND               default 0.0.0.0:4000\n  SHARD_ADDR                 default 127.0.0.1:5000\n  NODE_ID                    optional (for logs only)\n  SLOPMUD_ACCOUNTS_PATH       optional; default accounts.json (in WorkingDirectory)\n  SLOPMUD_LOCALE              optional; default en\n  SLOPMUD_ADMIN_BIND          optional; default 127.0.0.1:4011 (local admin JSON)\n  SLOPMUD_BANS_PATH           optional; default locks/bans.json\n  SBC_ADMIN_SOCK              optional; default /run/slopmud/sbc-admin.sock\n  SBC_EVENTS_SOCK             optional; default /run/slopmud/sbc-events.sock\n  SLOPMUD_EMAIL_MODE          optional; default disabled (disabled | ses | smtp | file)\n  SLOPMUD_EMAIL_FROM          required for ses/smtp; optional for file\n  SLOPMUD_SMTP_HOST           required for smtp\n  SLOPMUD_SMTP_PORT           optional; default 587\n  SLOPMUD_SMTP_USERNAME       optional\n  SLOPMUD_SMTP_PASSWORD       optional\n  SLOPMUD_EMAIL_FILE_DIR      optional; default /tmp/slopmud_email_outbox\n  SLOPMUD_EVENTLOG_ENABLED    optional; default 0\n  SLOPMUD_EVENTLOG_SPOOL_DIR  optional; default locks/eventlog\n  SLOPMUD_EVENTLOG_FLUSH_INTERVAL_S optional; default 60\n  SLOPMUD_EVENTLOG_S3_BUCKET  optional; if set, uploads target this bucket\n  SLOPMUD_EVENTLOG_S3_PREFIX  optional; default slopmud/eventlog\n  SLOPMUD_EVENTLOG_UPLOAD_ENABLED optional; default 0\n  SLOPMUD_EVENTLOG_UPLOAD_DELETE_LOCAL optional; default 1\n  SLOPMUD_EVENTLOG_UPLOAD_SCAN_INTERVAL_S optional; default 600\n  SLOPMUD_NEARLINE_ENABLED    optional; default 1\n  SLOPMUD_NEARLINE_DIR        optional; default locks/nearline_scrollback\n  SLOPMUD_NEARLINE_MAX_SEGMENTS optional; default 12\n  SLOPMUD_NEARLINE_SEGMENT_MAX_BYTES optional; default 2000000\n  SLOPMUD_GOOGLE_OAUTH_DIR    optional; default locks/google_oauth (shared with static_web)\n  SLOPMUD_GOOGLE_AUTH_BASE_URL optional; default http://127.0.0.1:8080 (where to open OAuth in browser)\n  SLOPMUD_OIDC_TOKEN_URL      optional; if set, mint a session token at login\n  SLOPMUD_OIDC_CLIENT_ID      required if token url set\n  SLOPMUD_OIDC_CLIENT_SECRET  required if token url set\n  SLOPMUD_OIDC_SCOPE          optional; default slopmud:session\n"
+ENV:\n  SLOPMUD_BIND               default 0.0.0.0:4000\n  SHARD_ADDR                 default 127.0.0.1:5000\n  NODE_ID                    optional (for logs only)\n  SLOPMUD_ACCOUNTS_PATH       optional; default accounts.json (in WorkingDirectory)\n  SLOPMUD_LOCALE              optional; default en\n  SLOPMUD_ADMIN_BIND          optional; default 127.0.0.1:4011 (local admin JSON)\n  SLOPMUD_BANS_PATH           optional; default locks/bans.json\n  SBC_ADMIN_SOCK              optional; default /run/slopmud/sbc-admin.sock\n  SBC_EVENTS_SOCK             optional; default /run/slopmud/sbc-events.sock\n  SLOPMUD_SESSION_CHECKPOINT_DIR optional; default locks/session_checkpoints\n  SLOPMUD_SESSION_CHECKPOINT_BYTES optional; default 4194304\n  SLOPMUD_EMAIL_MODE          optional; default disabled (disabled | ses | smtp | file)\n  SLOPMUD_EMAIL_FROM          required for ses/smtp; optional for file\n  SLOPMUD_SMTP_HOST           required for smtp\n  SLOPMUD_SMTP_PORT           optional; default 587\n  SLOPMUD_SMTP_USERNAME       optional\n  SLOPMUD_SMTP_PASSWORD       optional\n  SLOPMUD_EMAIL_FILE_DIR      optional; default /tmp/slopmud_email_outbox\n  SLOPMUD_EVENTLOG_ENABLED    optional; default 0\n  SLOPMUD_EVENTLOG_SPOOL_DIR  optional; default locks/eventlog\n  SLOPMUD_EVENTLOG_FLUSH_INTERVAL_S optional; default 60\n  SLOPMUD_EVENTLOG_S3_BUCKET  optional; if set, uploads target this bucket\n  SLOPMUD_EVENTLOG_S3_PREFIX  optional; default slopmud/eventlog\n  SLOPMUD_EVENTLOG_UPLOAD_ENABLED optional; default 0\n  SLOPMUD_EVENTLOG_UPLOAD_DELETE_LOCAL optional; default 1\n  SLOPMUD_EVENTLOG_UPLOAD_SCAN_INTERVAL_S optional; default 600\n  SLOPMUD_NEARLINE_ENABLED    optional; default 1\n  SLOPMUD_NEARLINE_DIR        optional; default locks/nearline_scrollback\n  SLOPMUD_NEARLINE_MAX_SEGMENTS optional; default 12\n  SLOPMUD_NEARLINE_SEGMENT_MAX_BYTES optional; default 2000000\n  SLOPMUD_GOOGLE_OAUTH_DIR    optional; default locks/google_oauth (shared with static_web)\n  SLOPMUD_GOOGLE_AUTH_BASE_URL optional; default http://127.0.0.1:8080 (where to open OAuth in browser)\n  SLOPMUD_OIDC_TOKEN_URL      optional; if set, mint a session token at login\n  SLOPMUD_OIDC_CLIENT_ID      required if token url set\n  SLOPMUD_OIDC_CLIENT_SECRET  required if token url set\n  SLOPMUD_OIDC_SCOPE          optional; default slopmud:session\n"
     );
     std::process::exit(2);
 }
@@ -289,6 +290,8 @@ struct Config {
     bans_path: PathBuf,
     sbc_admin_sock: PathBuf,
     sbc_events_sock: PathBuf,
+    session_checkpoint_dir: PathBuf,
+    session_checkpoint_bytes: u64,
     #[allow(dead_code)]
     email: email::EmailConfig,
     eventlog: eventlog::EventLogConfig,
@@ -334,6 +337,13 @@ fn parse_args() -> Config {
     let sbc_events_sock: PathBuf = std::env::var("SBC_EVENTS_SOCK")
         .unwrap_or_else(|_| "/run/slopmud/sbc-events.sock".to_string())
         .into();
+    let session_checkpoint_dir: PathBuf = std::env::var("SLOPMUD_SESSION_CHECKPOINT_DIR")
+        .unwrap_or_else(|_| "locks/session_checkpoints".to_string())
+        .into();
+    let session_checkpoint_bytes = std::env::var("SLOPMUD_SESSION_CHECKPOINT_BYTES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(SESSION_CHECKPOINT_BYTES_DEFAULT);
 
     let mut email = email::EmailConfig::default();
     email.mode = std::env::var("SLOPMUD_EMAIL_MODE").unwrap_or_else(|_| email.mode.clone());
@@ -433,6 +443,8 @@ fn parse_args() -> Config {
         bans_path,
         sbc_admin_sock,
         sbc_events_sock,
+        session_checkpoint_dir,
+        session_checkpoint_bytes,
         email,
         eventlog,
         nearline,
@@ -671,6 +683,94 @@ impl Scrollback {
             .cloned()
             .or_else(|| self.lines.get(idx).cloned())?;
         Some((target, context))
+    }
+
+    fn snapshot_lines(&self) -> Vec<ScrollLineSnapshot> {
+        self.lines
+            .iter()
+            .map(|l| ScrollLineSnapshot {
+                id: l.id.encode(),
+                ts_unix_ms: l.ts_unix_ms,
+                text: l.text.clone(),
+            })
+            .collect()
+    }
+
+    fn from_snapshot_lines(cap: usize, lines: &[ScrollLineSnapshot]) -> Self {
+        let mut sb = Scrollback::new(cap);
+        for l in lines {
+            let Some(id) = LineId::decode(&l.id) else {
+                continue;
+            };
+            sb.push_line(id, l.ts_unix_ms, clamp_chars(&l.text, SCROLLBACK_MAX_LINE_CHARS));
+        }
+        sb
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ScrollLineSnapshot {
+    id: String,
+    ts_unix_ms: u64,
+    text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SessionCheckpointFile {
+    v: u8,
+    name: String,
+    ts_unix_ms: u64,
+    lines: Vec<ScrollLineSnapshot>,
+}
+
+#[derive(Clone)]
+struct SessionCheckpointStore {
+    dir: PathBuf,
+}
+
+impl SessionCheckpointStore {
+    async fn new(dir: PathBuf) -> Self {
+        let _ = tokio::fs::create_dir_all(&dir).await;
+        Self { dir }
+    }
+
+    fn path_for(&self, name: &str) -> PathBuf {
+        let mut p = self.dir.clone();
+        let base = sanitize_name(name);
+        let base = if base.is_empty() {
+            "unknown".to_string()
+        } else {
+            base
+        };
+        p.push(format!("{base}.json"));
+        p
+    }
+
+    async fn load(&self, name: &str) -> Option<Scrollback> {
+        let path = self.path_for(name);
+        let bytes = tokio::fs::read(path).await.ok()?;
+        let f = serde_json::from_slice::<SessionCheckpointFile>(&bytes).ok()?;
+        if f.v != 1 {
+            return None;
+        }
+        Some(Scrollback::from_snapshot_lines(SCROLLBACK_MAX_LINES, &f.lines))
+    }
+
+    async fn save_snapshot(&self, name: &str, lines: Vec<ScrollLineSnapshot>, now_ms: u64) {
+        let path = self.path_for(name);
+        let tmp = path.with_extension("json.tmp");
+        let f = SessionCheckpointFile {
+            v: 1,
+            name: name.to_string(),
+            ts_unix_ms: now_ms,
+            lines,
+        };
+        let Ok(bytes) = serde_json::to_vec(&f) else {
+            return;
+        };
+        if tokio::fs::write(&tmp, bytes).await.is_ok() {
+            let _ = tokio::fs::rename(tmp, path).await;
+        }
     }
 }
 
@@ -1590,6 +1690,8 @@ struct SessionInfo {
     write_tx: tokio::sync::mpsc::Sender<Bytes>,
     disconnect_tx: tokio::sync::watch::Sender<bool>,
     scrollback: Arc<tokio::sync::Mutex<Scrollback>>,
+    checkpoint_bytes_since_save: Arc<tokio::sync::Mutex<u64>>,
+    color_ansi: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1688,6 +1790,8 @@ struct AccountRec {
     // User-configured email address for notifications. Not used for auth.
     #[serde(default)]
     email: Option<String>,
+    #[serde(default)]
+    color_ansi: Option<bool>,
     created_unix: u64,
 }
 
@@ -1803,6 +1907,8 @@ async fn main() -> anyhow::Result<()> {
         LineIdGen::new(cfg.node_id.as_deref()),
     ));
     let nearline = Arc::new(nearline::NearlineRing::new(cfg.nearline.clone()).await);
+    let checkpoint_store =
+        Arc::new(SessionCheckpointStore::new(cfg.session_checkpoint_dir.clone()).await);
 
     let (shard_tx, shard_rx) = tokio::sync::mpsc::channel::<ShardMsg>(4096);
     tokio::spawn(shard_manager_task(
@@ -1810,6 +1916,8 @@ async fn main() -> anyhow::Result<()> {
         sessions.clone(),
         line_ids.clone(),
         nearline.clone(),
+        checkpoint_store.clone(),
+        cfg.session_checkpoint_bytes,
         eventlog.clone(),
         shard_rx,
     ));
@@ -1849,6 +1957,7 @@ async fn main() -> anyhow::Result<()> {
         let bans = bans.clone();
         let holds = holds.clone();
         let nearline = nearline.clone();
+        let checkpoint_store = checkpoint_store.clone();
         let eventlog = eventlog.clone();
         tokio::spawn(async move {
             if let Err(e) = handle_conn(
@@ -1863,6 +1972,7 @@ async fn main() -> anyhow::Result<()> {
                 bans,
                 holds,
                 nearline,
+                checkpoint_store,
                 eventlog,
             )
             .await
@@ -1878,6 +1988,8 @@ async fn shard_manager_task(
     sessions: Arc<tokio::sync::Mutex<HashMap<SessionId, SessionInfo>>>,
     line_ids: Arc<tokio::sync::Mutex<LineIdGen>>,
     nearline: Arc<nearline::NearlineRing>,
+    checkpoint_store: Arc<SessionCheckpointStore>,
+    checkpoint_bytes: u64,
     eventlog: Arc<eventlog::EventLog>,
     mut rx: tokio::sync::mpsc::Receiver<ShardMsg>,
 ) {
@@ -1942,7 +2054,15 @@ async fn shard_manager_task(
                             };
                             match mudproto::shard::parse_resp(frame) {
                                 Ok(resp) => {
-                                    route_resp(resp, &sessions, &line_ids, &nearline, &eventlog)
+                                    route_resp(
+                                        resp,
+                                        &sessions,
+                                        &line_ids,
+                                        &nearline,
+                                        &checkpoint_store,
+                                        checkpoint_bytes,
+                                        &eventlog,
+                                    )
                                         .await
                                 }
                                 Err(e) => {
@@ -1987,6 +2107,8 @@ async fn route_resp(
     sessions: &Arc<tokio::sync::Mutex<HashMap<SessionId, SessionInfo>>>,
     line_ids: &Arc<tokio::sync::Mutex<LineIdGen>>,
     nearline: &Arc<nearline::NearlineRing>,
+    checkpoint_store: &Arc<SessionCheckpointStore>,
+    checkpoint_bytes: u64,
     eventlog: &Arc<eventlog::EventLog>,
 ) {
     match resp {
@@ -2001,12 +2123,15 @@ async fn route_resp(
                 let held = si.held;
                 let texts = extract_output_lines(line.as_ref());
                 let mut log_lines: Vec<(LineId, String)> = Vec::new();
+                let mut checkpoint_bytes_added = 0u64;
                 if !texts.is_empty() {
                     let mut id_gen = line_ids.lock().await;
                     let mut sb = si.scrollback.lock().await;
                     for text in texts {
                         let id = id_gen.next_id(now_ms);
                         let sb_text = clamp_chars(&text, SCROLLBACK_MAX_LINE_CHARS);
+                        checkpoint_bytes_added =
+                            checkpoint_bytes_added.saturating_add(sb_text.len() as u64);
                         sb.push_line(id, now_ms, sb_text.clone());
 
                         let disk_text = if held {
@@ -2027,6 +2152,24 @@ async fn route_resp(
 
                         let log_text = if held { redact_pii(&text) } else { text };
                         log_lines.push((id, log_text));
+                    }
+                }
+                if checkpoint_bytes_added > 0 {
+                    let mut should_checkpoint = false;
+                    {
+                        let mut n = si.checkpoint_bytes_since_save.lock().await;
+                        *n = n.saturating_add(checkpoint_bytes_added);
+                        if *n >= checkpoint_bytes.max(1) {
+                            *n = 0;
+                            should_checkpoint = true;
+                        }
+                    }
+                    if should_checkpoint {
+                        let snapshot = {
+                            let sb = si.scrollback.lock().await;
+                            sb.snapshot_lines()
+                        };
+                        checkpoint_store.save_snapshot(&name, snapshot, now_ms).await;
                     }
                 }
 
@@ -2060,12 +2203,15 @@ async fn route_resp(
                 let held = si.held;
                 let texts = extract_output_lines(msg.as_ref());
                 let mut log_lines: Vec<(LineId, String)> = Vec::new();
+                let mut checkpoint_bytes_added = 0u64;
                 if !texts.is_empty() {
                     let mut id_gen = line_ids.lock().await;
                     let mut sb = si.scrollback.lock().await;
                     for text in texts {
                         let id = id_gen.next_id(now_ms);
                         let sb_text = clamp_chars(&text, SCROLLBACK_MAX_LINE_CHARS);
+                        checkpoint_bytes_added =
+                            checkpoint_bytes_added.saturating_add(sb_text.len() as u64);
                         sb.push_line(id, now_ms, sb_text.clone());
 
                         let disk_text = if held {
@@ -2086,6 +2232,24 @@ async fn route_resp(
 
                         let log_text = if held { redact_pii(&text) } else { text };
                         log_lines.push((id, log_text));
+                    }
+                }
+                if checkpoint_bytes_added > 0 {
+                    let mut should_checkpoint = false;
+                    {
+                        let mut n = si.checkpoint_bytes_since_save.lock().await;
+                        *n = n.saturating_add(checkpoint_bytes_added);
+                        if *n >= checkpoint_bytes.max(1) {
+                            *n = 0;
+                            should_checkpoint = true;
+                        }
+                    }
+                    if should_checkpoint {
+                        let snapshot = {
+                            let sb = si.scrollback.lock().await;
+                            sb.snapshot_lines()
+                        };
+                        checkpoint_store.save_snapshot(&name, snapshot, now_ms).await;
                     }
                 }
 
@@ -2368,6 +2532,7 @@ async fn handle_admin_conn(
                                 oidc_email: None,
                                 caps,
                                 email: None,
+                                color_ansi: None,
                                 created_unix: now_unix,
                             },
                         );
@@ -2783,6 +2948,7 @@ async fn handle_conn(
     bans: Arc<tokio::sync::Mutex<ban::BanState>>,
     holds: Arc<tokio::sync::Mutex<hold::HoldCache>>,
     nearline: Arc<nearline::NearlineRing>,
+    checkpoint_store: Arc<SessionCheckpointStore>,
     eventlog: Arc<eventlog::EventLog>,
 ) -> anyhow::Result<()> {
     let session = new_session_id();
@@ -2849,11 +3015,17 @@ async fn handle_conn(
     let mut password_echo_disabled = false;
     let mut state = ConnState::NeedName;
     let mut proxy_checked = false;
+    let mut ansi_capable = false;
 
+    let mut telnet_hello = Vec::new();
+    telnet_hello.extend_from_slice(&telnet_do(TELNET_OPT_TTYPE));
+    telnet_hello.extend_from_slice(&telnet_do(TELNET_OPT_NAWS));
+    telnet_hello.extend_from_slice(&telnet_will(TELNET_OPT_SGA));
     write_tx
-        .send(Bytes::from_static(
-            b"slopmud (alpha)\r\ncharacter creation (step 1/4)\r\nname: ",
-        ))
+        .send(Bytes::from(telnet_hello))
+        .await
+        .ok();
+    write_tx.send(intro_screen(false))
         .await
         .ok();
 
@@ -2867,6 +3039,9 @@ async fn handle_conn(
             break;
         }
 
+        if !ansi_capable && has_iac_will_opt(&buf[..n], TELNET_OPT_TTYPE) {
+            ansi_capable = true;
+        }
         let (data, replies) = iac.parse(&buf[..n]);
         if !replies.is_empty() {
             let _ = write_tx.send(Bytes::from(replies)).await;
@@ -3120,6 +3295,7 @@ async fn handle_conn(
                                                     oidc_email: None,
                                                     caps: None,
                                                     email: None,
+                                                    color_ansi: None,
                                                     created_unix: now_unix,
                                                 },
                                             );
@@ -3277,6 +3453,7 @@ async fn handle_conn(
                                                         oidc_email: None,
                                                         caps: None,
                                                         email: None,
+                                                        color_ansi: None,
                                                         created_unix: now_unix,
                                                     },
                                                 );
@@ -3378,6 +3555,7 @@ async fn handle_conn(
                                                         oidc_email: email.clone(),
                                                         caps: None,
                                                         email: None,
+                                                        color_ansi: None,
                                                         created_unix: now_unix,
                                                     },
                                                 );
@@ -3510,6 +3688,7 @@ async fn handle_conn(
                                                     oidc_email: None,
                                                     caps: None,
                                                     email: None,
+                                                    color_ansi: None,
                                                     created_unix: now_unix,
                                                 },
                                             );
@@ -3594,6 +3773,7 @@ async fn handle_conn(
                                                     oidc_email: email.clone(),
                                                     caps: None,
                                                     email: None,
+                                                    color_ansi: None,
                                                     created_unix: now_unix,
                                                 },
                                             );
@@ -3883,6 +4063,7 @@ async fn handle_conn(
                                             oidc_email: None,
                                             caps: None,
                                             email: None,
+                                            color_ansi: None,
                                             created_unix: now_unix,
                                         },
                                     );
@@ -4006,6 +4187,7 @@ async fn handle_conn(
                                 oidc_email: None,
                                 caps: None,
                                 email: None,
+                                color_ansi: None,
                                 created_unix: now_unix,
                             },
                         );
@@ -4388,6 +4570,15 @@ async fn handle_conn(
                 });
 
                 let held = { holds.lock().await.is_held(&n).is_some() };
+                let account_color_pref = {
+                    let a = accounts.lock().await;
+                    a.by_name.get(&n).and_then(|r| r.color_ansi)
+                };
+                let color_ansi = ansi_capable && account_color_pref.unwrap_or(true);
+                let restored_scrollback = checkpoint_store
+                    .load(&n)
+                    .await
+                    .unwrap_or_else(|| Scrollback::new(SCROLLBACK_MAX_LINES));
 
                 {
                     let mut m = sessions.lock().await;
@@ -4405,11 +4596,19 @@ async fn handle_conn(
                             peer_ip,
                             write_tx: write_tx.clone(),
                             disconnect_tx: disconnect_tx.clone(),
-                            scrollback: Arc::new(tokio::sync::Mutex::new(Scrollback::new(
-                                SCROLLBACK_MAX_LINES,
-                            ))),
+                            scrollback: Arc::new(tokio::sync::Mutex::new(restored_scrollback)),
+                            checkpoint_bytes_since_save: Arc::new(tokio::sync::Mutex::new(0)),
+                            color_ansi,
                         },
                     );
+                }
+
+                if color_ansi {
+                    let _ = write_tx
+                        .send(Bytes::from_static(
+                            b"\x1b[38;5;117mANSI color is enabled. Type `color off` to disable.\x1b[0m\r\n",
+                        ))
+                        .await;
                 }
 
                 {
@@ -4477,6 +4676,46 @@ async fn handle_conn(
             if lc == "exit" || lc == "quit" {
                 let _ = write_tx.send(Bytes::from_static(b"bye\r\n")).await;
                 break 'read;
+            }
+
+            if lc == "color" || lc == "colour" || lc == "color on" || lc == "color off" || lc == "color toggle" {
+                let desired = match lc.as_str() {
+                    "color on" => Some(true),
+                    "color off" => Some(false),
+                    "color toggle" => None,
+                    _ => None,
+                };
+
+                let mut current = false;
+                {
+                    let mut m = sessions.lock().await;
+                    if let Some(si) = m.get_mut(&session) {
+                        if let Some(want) = desired {
+                            si.color_ansi = ansi_capable && want;
+                        } else if lc == "color toggle" {
+                            si.color_ansi = ansi_capable && !si.color_ansi;
+                        }
+                        current = si.color_ansi;
+                    }
+                }
+
+                if let Some(nm) = name.as_ref() {
+                    let mut a = accounts.lock().await;
+                    if let Some(r) = a.by_name.get_mut(nm) {
+                        r.color_ansi = Some(current);
+                        let _ = a.save();
+                    }
+                }
+
+                let msg = if !ansi_capable {
+                    "color: terminal did not negotiate ANSI support (TTYPE).\r\n"
+                } else if current {
+                    "\x1b[32mcolor: on\x1b[0m\r\n"
+                } else {
+                    "color: off\r\n"
+                };
+                let _ = write_tx.send(Bytes::from(msg.to_string())).await;
+                continue;
             }
 
             if lc == "uptime" || lc == "uptime broker" || lc == "uptime session" {
@@ -4559,6 +4798,15 @@ async fn handle_conn(
     // Disconnect cleanup.
     let removed = { sessions.lock().await.remove(&session) };
     if let Some(si) = removed {
+        let now_ms = u64::try_from(Utc::now().timestamp_millis()).unwrap_or(0);
+        let snapshot = {
+            let sb = si.scrollback.lock().await;
+            sb.snapshot_lines()
+        };
+        checkpoint_store
+            .save_snapshot(&si.name, snapshot, now_ms)
+            .await;
+
         {
             let ts = Utc::now().to_rfc3339();
             let sid = session_hex(session);
@@ -4593,9 +4841,13 @@ async fn handle_conn(
 }
 
 const TELNET_IAC: u8 = 255;
+const TELNET_DO: u8 = 253;
 const TELNET_WILL: u8 = 251;
 const TELNET_WONT: u8 = 252;
 const TELNET_OPT_ECHO: u8 = 1;
+const TELNET_OPT_SGA: u8 = 3;
+const TELNET_OPT_NAWS: u8 = 31;
+const TELNET_OPT_TTYPE: u8 = 24;
 
 fn telnet_will(opt: u8) -> [u8; 3] {
     [TELNET_IAC, TELNET_WILL, opt]
@@ -4603,6 +4855,51 @@ fn telnet_will(opt: u8) -> [u8; 3] {
 
 fn telnet_wont(opt: u8) -> [u8; 3] {
     [TELNET_IAC, TELNET_WONT, opt]
+}
+
+fn telnet_do(opt: u8) -> [u8; 3] {
+    [TELNET_IAC, TELNET_DO, opt]
+}
+
+fn has_iac_will_opt(chunk: &[u8], opt: u8) -> bool {
+    if chunk.len() < 3 {
+        return false;
+    }
+    chunk
+        .windows(3)
+        .any(|w| w[0] == TELNET_IAC && w[1] == TELNET_WILL && w[2] == opt)
+}
+
+fn intro_screen(color: bool) -> Bytes {
+    let title = [
+        "  _____ _      ____  ____  __  __ _   _ ____ ",
+        " / ____| |    / __ \\|  _ \\|  \\/  | | | |  _ \\",
+        "| (___ | |   | |  | | |_) | \\  / | | | | | | |",
+        " \\___ \\| |   | |  | |  __/| |\\/| | | | | | | |",
+        " ____) | |___| |__| | |   | |  | | |_| | |_| |",
+        "|_____/|______\\____/|_|   |_|  |_|\\___/|____/ ",
+    ];
+    let mut out = Vec::new();
+    if color {
+        out.extend_from_slice(b"\x1b[1;36m");
+    }
+    for l in title {
+        out.extend_from_slice(l.as_bytes());
+        out.extend_from_slice(b"\r\n");
+    }
+    if color {
+        out.extend_from_slice(b"\x1b[0m");
+        out.extend_from_slice(b"\x1b[38;5;250m");
+    }
+    out.extend_from_slice(b"slopmud (alpha)\r\n");
+    out.extend_from_slice(b"character creation (step 1/4)\r\n");
+    if color {
+        out.extend_from_slice(b"\x1b[0m");
+        out.extend_from_slice(b"\x1b[1;33mname:\x1b[0m ");
+    } else {
+        out.extend_from_slice(b"name: ");
+    }
+    Bytes::from(out)
 }
 
 fn parse_proxy_line_v1(line: &str) -> Option<(IpAddr, u16)> {

@@ -2,9 +2,11 @@
   const GAME_ORIGIN = "https://mud.slopmud.com:4242";
   // Keep landing and game web lifecycles split: selected pages must always run from the game origin.
   const p = String(location.pathname || "");
+  const localDevHost =
+    location.hostname === "127.0.0.1" || location.hostname === "localhost" || location.hostname === "::1";
   const mustUseGameOrigin =
     p === "/connect.html" || p === "/play.html" || p === "/auth.html" || p === "/protocol.html";
-  if (mustUseGameOrigin && location.origin !== GAME_ORIGIN) {
+  if (!localDevHost && mustUseGameOrigin && location.origin !== GAME_ORIGIN) {
     const to = `${GAME_ORIGIN}${p}${location.search}${location.hash}`;
     location.replace(to);
     return;
