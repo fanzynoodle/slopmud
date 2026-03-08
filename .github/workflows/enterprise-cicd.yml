@@ -245,6 +245,8 @@ jobs:
           TRACK: ${{ steps.meta.outputs.deploy_env }}
           # Clean rebuild only on the stg branch/track.
           CLEAN_BUILD: ${{ steps.meta.outputs.deploy_env == 'stg' && '1' || '0' }}
+          # Dev runners are tiny; keep artifact builds single-job to avoid OOM.
+          SLOPMUD_CARGO_BUILD_JOBS: ${{ steps.meta.outputs.deploy_env == 'dev' && '1' || '' }}
         run: |
           set -euo pipefail
           start_ts="$(date +%s)"

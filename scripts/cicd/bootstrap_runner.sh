@@ -5,6 +5,7 @@ set -euo pipefail
 # - installs build deps (gcc/make/pkg-config/git)
 # - installs rustup toolchain for the runner user
 # - installs the privileged deploy hook + sudoers entry
+# - enables a small swapfile so release Rust builds fit on the smallest mud box
 #
 # Intended to be run on the target EC2 instance as an admin user with sudo:
 #   ./scripts/cicd/bootstrap_runner.sh
@@ -16,6 +17,9 @@ fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
+
+swapfile_path="${RUNNER_SWAPFILE_PATH:-/swapfile}"
+swapfile_mb="${RUNNER_SWAPFILE_MB:-2048}"
 
 echo "Installing system packages (Debian/Ubuntu)"
 sudo apt-get update -y
@@ -29,6 +33,19 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
   python3 \
   awscli \
   ripgrep
+
+echo "Ensuring runner swapfile (${swapfile_path}, ${swapfile_mb} MiB)"
+if ! sudo /sbin/swapon --show=NAME --noheadings | grep -qx "${swapfile_path}"; then
+  if [[ ! -f "${swapfile_path}" ]]; then
+    sudo fallocate -l "${swapfile_mb}M" "${swapfile_path}"
+    sudo chmod 600 "${swapfile_path}"
+    sudo /sbin/mkswap "${swapfile_path}" >/dev/null
+  fi
+  sudo /sbin/swapon "${swapfile_path}"
+fi
+if ! sudo grep -qF "${swapfile_path} none swap sw 0 0" /etc/fstab; then
+  echo "${swapfile_path} none swap sw 0 0" | sudo tee -a /etc/fstab >/dev/null
+fi
 
 if ! id -u ghrunner >/dev/null 2>&1; then
   echo "ERROR: expected runner user 'ghrunner' to exist on this host" >&2

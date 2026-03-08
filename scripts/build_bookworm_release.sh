@@ -17,6 +17,12 @@ fi
 build_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 build_unix="$(date -u +%s)"
 profile="release"
+cargo_jobs="${SLOPMUD_CARGO_BUILD_JOBS:-${CARGO_BUILD_JOBS:-}}"
+
+build_cmd=(cargo build -p "${pkg}" --release)
+if [[ -n "${cargo_jobs}" ]]; then
+  build_cmd+=(-j "${cargo_jobs}")
+fi
 
 if command -v podman >/dev/null 2>&1; then
   # Needs a Cargo new enough for edition=2024.
@@ -31,12 +37,13 @@ if command -v podman >/dev/null 2>&1; then
     -e SLOPMUD_BUILD_UTC="${build_utc}" \
     -e SLOPMUD_BUILD_UNIX="${build_unix}" \
     -e SLOPMUD_PROFILE="${profile}" \
+    -e CARGO_BUILD_JOBS="${cargo_jobs}" \
     -e PATH=/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     -v "${HOME}/.cargo:/cargo:Z" \
     -v "${repo_root}:/work:Z" \
     -w /work \
     "${image}" \
-    bash -lc "/usr/local/cargo/bin/cargo build -p \"${pkg}\" --release"
+    bash -lc "$(printf '/usr/local/cargo/bin/%q ' "${build_cmd[@]}")"
 else
   echo "podman not found; falling back to local build (may produce a binary incompatible with Debian 12)" >&2
   export SLOPMUD_GIT_SHA="${git_sha}"
@@ -44,5 +51,5 @@ else
   export SLOPMUD_BUILD_UTC="${build_utc}"
   export SLOPMUD_BUILD_UNIX="${build_unix}"
   export SLOPMUD_PROFILE="${profile}"
-  cargo build -p "${pkg}" --release
+  "${build_cmd[@]}"
 fi
