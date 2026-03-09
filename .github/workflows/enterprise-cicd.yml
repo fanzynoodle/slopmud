@@ -141,12 +141,14 @@ jobs:
 
       - name: Preflight disk hygiene
         shell: bash
+        env:
+          DEPLOY_ENV: ${{ steps.meta.outputs.deploy_env }}
         run: |
           set -euo pipefail
           echo "Disk before cleanup"
           df -h /
 
-          if [[ "${GITHUB_REF_NAME}" == "dev" ]]; then
+          if [[ "$DEPLOY_ENV" == "dev" ]]; then
             echo "Dev branch: keeping workspace and target caches for warm builds."
           else
             avail_kb="$(df -Pk / | awk 'NR==2 {print $4}')"
@@ -158,6 +160,8 @@ jobs:
               echo "Keeping local cargo target directories for warm-cache compile speed."
             fi
           fi
+          find /opt/actions-runner/_work/_temp -maxdepth 2 -type f -name 'cache.tzst' -delete || true
+          find /opt/actions-runner/_work/_temp -maxdepth 1 -mindepth 1 -type d -empty -delete || true
           find /opt/actions-runner/_diag -type f -name '*.log' -mtime +7 -delete || true
 
           avail_kb="$(df -Pk / | awk 'NR==2 {print $4}')"
@@ -211,6 +215,7 @@ jobs:
           ./scripts/cicd/ci_scope_e2e.sh
 
       - name: Restore Rust cache
+        if: steps.meta.outputs.deploy_env != 'dev'
         uses: Swatinem/rust-cache@v2
 
       - name: Validate (fast + strict)
@@ -382,6 +387,8 @@ jobs:
           df -h /
           rm -rf "$GITHUB_WORKSPACE/target/release"
           find /tmp -maxdepth 1 -type d -name 'cargo-installer*' -prune -exec rm -rf {} +
+          find /opt/actions-runner/_work/_temp -maxdepth 2 -type f -name 'cache.tzst' -delete || true
+          find /opt/actions-runner/_work/_temp -maxdepth 1 -mindepth 1 -type d -empty -delete || true
           avail_kb="$(df -Pk / | awk 'NR==2 {print $4}')"
           if [ "${avail_kb}" -lt 1048576 ]; then
             echo "insufficient free space on / for e2e (available ${avail_kb} KB)" >&2
@@ -402,9 +409,6 @@ jobs:
           fi
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           cargo --version
-
-      - name: Restore Rust cache
-        uses: Swatinem/rust-cache@v2
 
       - name: Run e2e-local (skip-build)
         id: run
@@ -440,6 +444,8 @@ jobs:
           df -h /
           rm -rf "$GITHUB_WORKSPACE/target/release"
           find /tmp -maxdepth 1 -type d -name 'cargo-installer*' -prune -exec rm -rf {} +
+          find /opt/actions-runner/_work/_temp -maxdepth 2 -type f -name 'cache.tzst' -delete || true
+          find /opt/actions-runner/_work/_temp -maxdepth 1 -mindepth 1 -type d -empty -delete || true
           avail_kb="$(df -Pk / | awk 'NR==2 {print $4}')"
           if [ "${avail_kb}" -lt 1048576 ]; then
             echo "insufficient free space on / for e2e (available ${avail_kb} KB)" >&2
@@ -460,9 +466,6 @@ jobs:
           fi
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           cargo --version
-
-      - name: Restore Rust cache
-        uses: Swatinem/rust-cache@v2
 
       - name: Run e2e-party (skip-build)
         id: run
@@ -498,6 +501,8 @@ jobs:
           df -h /
           rm -rf "$GITHUB_WORKSPACE/target/release"
           find /tmp -maxdepth 1 -type d -name 'cargo-installer*' -prune -exec rm -rf {} +
+          find /opt/actions-runner/_work/_temp -maxdepth 2 -type f -name 'cache.tzst' -delete || true
+          find /opt/actions-runner/_work/_temp -maxdepth 1 -mindepth 1 -type d -empty -delete || true
           avail_kb="$(df -Pk / | awk 'NR==2 {print $4}')"
           if [ "${avail_kb}" -lt 1048576 ]; then
             echo "insufficient free space on / for e2e (available ${avail_kb} KB)" >&2
@@ -518,9 +523,6 @@ jobs:
           fi
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           cargo --version
-
-      - name: Restore Rust cache
-        uses: Swatinem/rust-cache@v2
 
       - name: Build and run ws e2e
         id: run
