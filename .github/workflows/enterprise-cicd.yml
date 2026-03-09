@@ -366,11 +366,29 @@ jobs:
     if: >
       needs.build.outputs.deploy_env == 'dev' &&
       needs.build.outputs.e2e_core == '1'
+    env:
+      CARGO_BUILD_JOBS: 1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           clean: false
+
+      - name: Reclaim disk before E2E
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Disk before e2e cleanup"
+          df -h /
+          rm -rf "$GITHUB_WORKSPACE/target/release"
+          find /tmp -maxdepth 1 -type d -name 'cargo-installer*' -prune -exec rm -rf {} +
+          avail_kb="$(df -Pk / | awk 'NR==2 {print $4}')"
+          if [ "${avail_kb}" -lt 1048576 ]; then
+            echo "insufficient free space on / for e2e (available ${avail_kb} KB)" >&2
+            exit 2
+          fi
+          echo "Disk after e2e cleanup"
+          df -h /
 
       - name: Rust Toolchain On PATH
         shell: bash
@@ -406,11 +424,29 @@ jobs:
     if: >
       needs.build.outputs.deploy_env == 'dev' &&
       needs.build.outputs.e2e_core == '1'
+    env:
+      CARGO_BUILD_JOBS: 1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           clean: false
+
+      - name: Reclaim disk before E2E
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Disk before e2e cleanup"
+          df -h /
+          rm -rf "$GITHUB_WORKSPACE/target/release"
+          find /tmp -maxdepth 1 -type d -name 'cargo-installer*' -prune -exec rm -rf {} +
+          avail_kb="$(df -Pk / | awk 'NR==2 {print $4}')"
+          if [ "${avail_kb}" -lt 1048576 ]; then
+            echo "insufficient free space on / for e2e (available ${avail_kb} KB)" >&2
+            exit 2
+          fi
+          echo "Disk after e2e cleanup"
+          df -h /
 
       - name: Rust Toolchain On PATH
         shell: bash
@@ -446,11 +482,29 @@ jobs:
     if: >
       needs.build.outputs.deploy_env == 'dev' &&
       needs.build.outputs.e2e_ws == '1'
+    env:
+      CARGO_BUILD_JOBS: 1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           clean: false
+
+      - name: Reclaim disk before E2E
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Disk before e2e cleanup"
+          df -h /
+          rm -rf "$GITHUB_WORKSPACE/target/release"
+          find /tmp -maxdepth 1 -type d -name 'cargo-installer*' -prune -exec rm -rf {} +
+          avail_kb="$(df -Pk / | awk 'NR==2 {print $4}')"
+          if [ "${avail_kb}" -lt 1048576 ]; then
+            echo "insufficient free space on / for e2e (available ${avail_kb} KB)" >&2
+            exit 2
+          fi
+          echo "Disk after e2e cleanup"
+          df -h /
 
       - name: Rust Toolchain On PATH
         shell: bash
@@ -474,7 +528,7 @@ jobs:
         run: |
           set -euo pipefail
           start_ts="$(date +%s)"
-          cargo build -q -p ws_gateway --bin e2e_ws
+          cargo build -q -p shard_01 -p slopmud -p bot_party -p ws_gateway --bins
           ./target/debug/e2e_ws
           duration_s=$(( $(date +%s) - start_ts ))
           echo "::notice::e2e_ws_duration_s=${duration_s}"
