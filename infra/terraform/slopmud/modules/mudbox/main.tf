@@ -171,11 +171,17 @@ locals {
     var.ssm_read_parameter_names,
     (var.compliance_portal_config_json_ssm_name != "" ? [var.compliance_portal_config_json_ssm_name] : []),
   ))
+  ssm_write_param_names = distinct(var.ssm_write_parameter_names)
 
   ssm_read_param_arns = [
     for n in local.ssm_read_param_names :
     "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(n, "/")}"
   ]
+  ssm_write_param_arns = [
+    for n in local.ssm_write_param_names :
+    "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(n, "/")}"
+  ]
+  bootstrap_restore_bundle_key = var.bootstrap_restore_bundle_key != "" ? var.bootstrap_restore_bundle_key : "bootstrap/${var.name_prefix}/rebootstrap.tgz"
 }
 
 data "aws_iam_policy_document" "ssm_read_params" {
@@ -228,6 +234,39 @@ resource "aws_iam_role_policy_attachment" "ssm_read_params" {
 
   role       = aws_iam_role.ssm[0].name
   policy_arn = aws_iam_policy.ssm_read_params[0].arn
+}
+
+data "aws_iam_policy_document" "ssm_write_params" {
+  count = var.enable_compute && length(local.ssm_write_param_arns) > 0 ? 1 : 0
+
+  statement {
+    sid    = "SsmWriteParameters"
+    effect = "Allow"
+    actions = [
+      "ssm:PutParameter",
+      "ssm:DeleteParameter",
+      "ssm:AddTagsToResource",
+      "ssm:RemoveTagsFromResource",
+    ]
+    resources = local.ssm_write_param_arns
+  }
+}
+
+resource "aws_iam_policy" "ssm_write_params" {
+  count = var.enable_compute && length(local.ssm_write_param_arns) > 0 ? 1 : 0
+
+  name_prefix = "${var.name_prefix}-ssmwrite-"
+  description = "Allow the instance to write specific SSM parameters (for cached TLS material)."
+  policy      = data.aws_iam_policy_document.ssm_write_params[0].json
+
+  tags = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ssm_write_params" {
+  count = var.enable_compute && length(local.ssm_write_param_arns) > 0 ? 1 : 0
+
+  role       = aws_iam_role.ssm[0].name
+  policy_arn = aws_iam_policy.ssm_write_params[0].arn
 }
 
 resource "aws_ssm_parameter" "compliance_portal_config_json" {
@@ -404,18 +443,24 @@ resource "aws_key_pair" "this" {
   tags = local.tags
 }
 
-resource "aws_instance" "this" {
+resource "aws_launch_template" "this" {
   count = var.enable_compute ? 1 : 0
 
-  ami                         = local.ami_id
-  instance_type               = var.instance_type
-  subnet_id                   = element(local.subnet_ids, 0)
-  vpc_security_group_ids      = [aws_security_group.this[0].id]
-  iam_instance_profile        = aws_iam_instance_profile.ssm[0].name
-  associate_public_ip_address = var.associate_public_ip_address
-  key_name                    = var.ssh_public_key_path != "" ? aws_key_pair.this[0].key_name : null
-  user_data = var.dns_admin_enabled && (var.create_hosted_zone || var.dns_admin_zone_id != "") ? (
-    <<EOT
+  name_prefix   = "${var.name_prefix}-"
+  image_id      = local.ami_id
+  instance_type = var.instance_type
+  key_name      = var.ssh_public_key_path != "" ? aws_key_pair.this[0].key_name : null
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ssm[0].name
+  }
+
+  network_interfaces {
+    associate_public_ip_address = var.associate_public_ip_address
+    security_groups             = [aws_security_group.this[0].id]
+  }
+
+  user_data = base64encode(<<EOT
     #!/usr/bin/env bash
     set -euxo pipefail
 
@@ -424,6 +469,7 @@ resource "aws_instance" "this" {
     #!/usr/bin/env bash
     set -uo pipefail
 
+    DNS_ENABLED="${var.dns_admin_enabled && (var.create_hosted_zone || var.dns_admin_zone_id != "") ? 1 : 0}"
     ZONE_ID="${local.dns_admin_zone_id}"
     REGION="${var.region}"
     APEX="${local.zone_apex}"
@@ -431,6 +477,10 @@ resource "aws_instance" "this" {
     ${join("\n", local.dns_registration_names)}
     NAMES
     )
+
+    if [ "$DNS_ENABLED" != "1" ]; then
+      exit 0
+    fi
 
     if ! command -v aws >/dev/null 2>&1; then
       if command -v apt-get >/dev/null 2>&1; then
@@ -488,11 +538,57 @@ resource "aws_instance" "this" {
     echo "registered dns: ip=$PUBLIC_IP dns=$PUBLIC_DNS"
     SCRIPT
 
+    cat >/var/lib/cloud/scripts/per-boot/91-${var.name_prefix}-restore-stack.sh <<'SCRIPT'
+    #!/usr/bin/env bash
+    set -uo pipefail
+
+    BOOTSTRAP_RESTORE_ENABLED="${var.bootstrap_restore_enabled ? 1 : 0}"
+    export AWS_REGION="${var.region}"
+    export AWS_DEFAULT_REGION="${var.region}"
+    bundle_uri="s3://${local.assets_bucket_name}/${local.bootstrap_restore_bundle_key}"
+    work_root="/opt/slopmud/rebootstrap"
+    bundle_tgz="$work_root/bundle.tgz"
+    extract_dir="$work_root/extracted"
+
+    if [ "$BOOTSTRAP_RESTORE_ENABLED" != "1" ]; then
+      exit 0
+    fi
+
+    if ! command -v aws >/dev/null 2>&1; then
+      if command -v apt-get >/dev/null 2>&1; then
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -y && apt-get install -y awscli tar || true
+      elif command -v dnf >/dev/null 2>&1; then
+        dnf -y install awscli tar || true
+      fi
+    fi
+
+    if ! command -v aws >/dev/null 2>&1; then
+      echo "aws cli is unavailable; skipping stack restore"
+      exit 0
+    fi
+
+    install -d -m 0755 "$work_root" "$extract_dir"
+    if ! aws s3 cp "$bundle_uri" "$bundle_tgz"; then
+      echo "restore bundle not found at $bundle_uri; skipping stack restore"
+      exit 0
+    fi
+    rm -rf "$extract_dir"
+    mkdir -p "$extract_dir"
+    tar -xzf "$bundle_tgz" -C "$extract_dir"
+    "$extract_dir/run.sh" \
+      --bucket "${local.assets_bucket_name}" \
+      --track "${var.bootstrap_restore_track}" \
+      --env-prefix "${var.bootstrap_restore_env_prefix}" \
+      >>/var/log/slopmud-restore-stack.log 2>&1 || true
+    SCRIPT
+
     chmod 0755 /var/lib/cloud/scripts/per-boot/90-${var.name_prefix}-reregister-dns.sh
+    chmod 0755 /var/lib/cloud/scripts/per-boot/91-${var.name_prefix}-restore-stack.sh
     /var/lib/cloud/scripts/per-boot/90-${var.name_prefix}-reregister-dns.sh || true
+    /var/lib/cloud/scripts/per-boot/91-${var.name_prefix}-restore-stack.sh || true
 EOT
-  ) : null
-  user_data_replace_on_change = true
+  )
 
   instance_market_options {
     market_type = "spot"
@@ -510,14 +606,84 @@ EOT
     http_put_response_hop_limit = 1
   }
 
-  root_block_device {
-    volume_type           = "gp3"
-    volume_size           = var.root_volume_gib
-    delete_on_termination = true
-    encrypted             = true
+  block_device_mappings {
+    device_name = "/dev/sda1"
+
+    ebs {
+      volume_type           = "gp3"
+      volume_size           = var.root_volume_gib
+      delete_on_termination = true
+      encrypted             = true
+    }
   }
 
-  tags = merge(local.tags, { Name = var.name_prefix })
+  tag_specifications {
+    resource_type = "instance"
+    tags          = merge(local.tags, { Name = var.name_prefix })
+  }
+
+  tag_specifications {
+    resource_type = "volume"
+    tags          = local.tags
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_autoscaling_group" "this" {
+  count = var.enable_compute ? 1 : 0
+
+  name_prefix         = "${var.name_prefix}-"
+  min_size            = 1
+  max_size            = 1
+  desired_capacity    = 1
+  health_check_type   = "EC2"
+  vpc_zone_identifier = [element(local.subnet_ids, 0)]
+  force_delete        = false
+
+  launch_template {
+    id      = aws_launch_template.this[0].id
+    version = "$Latest"
+  }
+
+  tag {
+    key                 = "Name"
+    value               = var.name_prefix
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "ManagedBy"
+    value               = "terraform"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Stack"
+    value               = var.name_prefix
+    propagate_at_launch = true
+  }
+
+  depends_on = [aws_launch_template.this]
+}
+
+data "aws_instances" "asg_instances" {
+  count = var.enable_compute ? 1 : 0
+
+  instance_state_names = ["pending", "running"]
+
+  filter {
+    name   = "tag:aws:autoscaling:groupName"
+    values = [aws_autoscaling_group.this[0].name]
+  }
+}
+
+data "aws_instance" "active" {
+  count = var.enable_compute ? 1 : 0
+
+  instance_id = sort(data.aws_instances.asg_instances[0].ids)[0]
 }
 
 resource "aws_route53_zone" "this" {
@@ -532,20 +698,16 @@ locals {
 }
 
 resource "aws_route53_record" "mud_cname" {
-  # Count cannot depend on resource attributes. If compute is enabled, we create the record
-  # and let the target resolve to the instance's public DNS after apply.
   count = var.create_hosted_zone && (var.enable_compute || var.cname_target != "") ? 1 : 0
 
   zone_id = local.hosted_zone_id
   name    = "${var.record_name}.${trim(var.zone_name, ".")}"
   type    = "CNAME"
   ttl     = 60
-  records = [var.cname_target != "" ? var.cname_target : aws_instance.this[0].public_dns]
+  records = [var.cname_target != "" ? var.cname_target : data.aws_instance.active[0].public_dns]
 }
 
 resource "aws_route53_record" "www_cname" {
-  # Count cannot depend on resource attributes. If compute is enabled, we create the record
-  # and let the target resolve to the instance's public DNS after apply.
   count = var.create_hosted_zone && (var.enable_compute || var.cname_target != "" || var.www_cname_target != "") ? 1 : 0
 
   zone_id = local.hosted_zone_id
@@ -553,7 +715,7 @@ resource "aws_route53_record" "www_cname" {
   type    = "CNAME"
   ttl     = 60
   records = [
-    var.www_cname_target != "" ? var.www_cname_target : (var.cname_target != "" ? var.cname_target : aws_instance.this[0].public_dns),
+    var.www_cname_target != "" ? var.www_cname_target : (var.cname_target != "" ? var.cname_target : data.aws_instance.active[0].public_dns),
   ]
 }
 
@@ -564,7 +726,7 @@ resource "aws_route53_record" "extra_cnames" {
   name    = "${var.extra_cname_record_names[count.index]}.${trim(var.zone_name, ".")}"
   type    = "CNAME"
   ttl     = 60
-  records = [var.cname_target != "" ? var.cname_target : aws_instance.this[0].public_dns]
+  records = [var.cname_target != "" ? var.cname_target : data.aws_instance.active[0].public_dns]
 }
 
 resource "aws_route53_record" "apex_a" {
@@ -574,7 +736,7 @@ resource "aws_route53_record" "apex_a" {
   name    = trim(var.zone_name, ".")
   type    = "A"
   ttl     = 60
-  records = [aws_instance.this[0].public_ip]
+  records = [data.aws_instance.active[0].public_ip]
 }
 
 resource "aws_route53_record" "sbc_enable_a" {

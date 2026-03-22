@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::{IpAddr, SocketAddr};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -262,6 +262,8 @@ struct Config {
     node_id: Option<String>,
     // Accounts DB (stores only password hashes, never raw passwords).
     accounts_path: String,
+    // Shared player snapshot file written by shard_01.
+    players_path: PathBuf,
     // Directory used for cross-process OAuth handoffs (static_web writes results here).
     google_oauth_dir: String,
     // Base URL for the user to open in a browser for OAuth (points at static_web).
@@ -302,6 +304,9 @@ fn parse_args() -> Config {
     let node_id = std::env::var("NODE_ID").ok();
     let accounts_path =
         std::env::var("SLOPMUD_ACCOUNTS_PATH").unwrap_or_else(|_| "accounts.json".to_string());
+    let players_path: PathBuf = std::env::var("SLOPMUD_PLAYERS_PATH")
+        .unwrap_or_else(|_| "var/shard_01_players.json".to_string())
+        .into();
     let google_oauth_dir = std::env::var("SLOPMUD_GOOGLE_OAUTH_DIR")
         .unwrap_or_else(|_| "locks/google_oauth".to_string());
     let google_auth_base_url = std::env::var("SLOPMUD_GOOGLE_AUTH_BASE_URL")
@@ -415,6 +420,7 @@ fn parse_args() -> Config {
         shard_addr,
         node_id,
         accounts_path,
+        players_path,
         google_oauth_dir,
         google_auth_base_url,
         oidc_token_url,
@@ -1601,6 +1607,16 @@ struct ShardAuthBlob {
     caps: Option<Vec<String>>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct SavedPlayerSnapshot {
+    name: String,
+    is_bot: bool,
+    race: String,
+    class: String,
+    sex: String,
+    pronouns: String,
+}
+
 fn make_shard_auth_blob(
     acct: &str,
     method: &str,
@@ -1637,6 +1653,114 @@ fn make_shard_auth_blob(
     };
     // Broker is the auth boundary; if this fails, we prefer a hard error over silently dropping.
     Bytes::from(serde_json::to_vec(&b).expect("serialize shard auth blob"))
+}
+
+fn load_saved_player(path: &Path, name: &str) -> Option<SavedPlayerSnapshot> {
+    let target = sanitize_name(name);
+    if target.is_empty() {
+        return None;
+    }
+    let raw = std::fs::read_to_string(path).ok()?;
+    let snapshots = serde_json::from_str::<Vec<SavedPlayerSnapshot>>(&raw).ok()?;
+    snapshots
+        .into_iter()
+        .find(|p| sanitize_name(&p.name).eq_ignore_ascii_case(&target))
+}
+
+async fn wait_for_saved_player(
+    path: &Path,
+    name: &str,
+    timeout: Duration,
+) -> Option<SavedPlayerSnapshot> {
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        if let Some(saved) = load_saved_player(path, name) {
+            return Some(saved);
+        }
+        if std::time::Instant::now() >= deadline {
+            return None;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
+async fn attach_authenticated_session(
+    session: SessionId,
+    peer_ip: IpAddr,
+    name: &str,
+    bot: bool,
+    race: &str,
+    class: &str,
+    sex: &str,
+    pronouns: &str,
+    shard_auth: Bytes,
+    auth_method: &str,
+    write_tx: &tokio::sync::mpsc::Sender<Bytes>,
+    disconnect_tx: &tokio::sync::watch::Sender<bool>,
+    sessions: &Arc<tokio::sync::Mutex<HashMap<SessionId, SessionInfo>>>,
+    holds: &Arc<tokio::sync::Mutex<hold::HoldCache>>,
+    eventlog: &Arc<eventlog::EventLog>,
+    shard_tx: &tokio::sync::mpsc::Sender<ShardMsg>,
+) -> anyhow::Result<()> {
+    let held = { holds.lock().await.is_held(name).is_some() };
+
+    {
+        let mut m = sessions.lock().await;
+        m.insert(
+            session,
+            SessionInfo {
+                name: name.to_string(),
+                held,
+                is_bot: bot,
+                auth: Some(shard_auth.clone()),
+                race: race.to_string(),
+                class: class.to_string(),
+                sex: sex.to_string(),
+                pronouns: pronouns.to_string(),
+                peer_ip,
+                write_tx: write_tx.clone(),
+                disconnect_tx: disconnect_tx.clone(),
+                scrollback: Arc::new(tokio::sync::Mutex::new(Scrollback::new(
+                    SCROLLBACK_MAX_LINES,
+                ))),
+            },
+        );
+    }
+
+    {
+        let ts = Utc::now().to_rfc3339();
+        let sid = session_hex(session);
+        let entry = format!(
+            "ts={} kind=login session={} ip={} name={} bot={} auth_method={}",
+            logfmt_str(&ts),
+            logfmt_str(&sid),
+            logfmt_str(&peer_ip.to_string()),
+            logfmt_str(name),
+            logfmt_str(&(if bot { "1" } else { "0" }).to_string()),
+            logfmt_str(auth_method),
+        );
+        eventlog.log_line(LogStream::All, &entry).await;
+        eventlog.log_line(LogStream::Character(name), &entry).await;
+        eventlog.log_line(LogStream::Login, &entry).await;
+    }
+
+    let body = attach_body(
+        bot,
+        Some(shard_auth.as_ref()),
+        race,
+        class,
+        sex,
+        pronouns,
+        name.as_bytes(),
+    );
+    let _ = shard_tx
+        .send(ShardMsg {
+            t: REQ_ATTACH,
+            session,
+            body,
+        })
+        .await;
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -2842,6 +2966,24 @@ async fn handle_conn(
     let mut password_echo_disabled = false;
     let mut state = ConnState::NeedName;
     let mut proxy_checked = false;
+    let has_oidc_webauth = cfg.oidc_token_url.is_some()
+        && cfg.oidc_client_id.is_some()
+        && cfg.oidc_client_secret.is_some();
+    let auth_prompt = if has_oidc_webauth {
+        "\r\nauth method:\r\n- password\r\n- google\r\n- slopsso\r\ntype: password | google | slopsso\r\n> "
+    } else {
+        "\r\nauth method:\r\n- password\r\n- google\r\ntype: password | google\r\n> "
+    };
+    let auth_prompt_cancelled = if has_oidc_webauth {
+        "\r\ncancelled\r\nauth method:\r\n- password\r\n- google\r\n- slopsso\r\ntype: password | google | slopsso\r\n> "
+    } else {
+        "\r\ncancelled\r\nauth method:\r\n- password\r\n- google\r\ntype: password | google\r\n> "
+    };
+    let auth_prompt_invalid = if has_oidc_webauth {
+        "please type: password | google | slopsso\r\n> "
+    } else {
+        "please type: password | google\r\n> "
+    };
 
     write_tx
         .send(Bytes::from_static(
@@ -2967,7 +3109,7 @@ async fn handle_conn(
                                 }
                             };
 
-                            let action = req.action.trim().to_ascii_lowercase();
+                            let mut action = req.action.trim().to_ascii_lowercase();
                             let method = req.method.trim().to_ascii_lowercase();
 
                             let mut uname = sanitize_name(&req.name);
@@ -3004,10 +3146,7 @@ async fn handle_conn(
 
                                 match linked_names.as_slice() {
                                     [] => {
-                                        // No linked account yet. Keep the player in-band at `name:`
-                                        // so they can choose an in-game character name, then we'll
-                                        // create/link via this pending web auth identity.
-                                        pending_auto_webauth = Some(if method == "google" {
+                                        let pending = if method == "google" {
                                             PendingAutoWebAuth::Google {
                                                 sub: sub.to_string(),
                                                 email: req.google_email.clone(),
@@ -3019,8 +3158,50 @@ async fn handle_conn(
                                                 email: req.oidc_email.clone(),
                                                 caps: req.caps.clone(),
                                             }
-                                        });
-                                        continue;
+                                        };
+
+                                        if let Some(chosen_name) = name
+                                            .as_deref()
+                                            .map(sanitize_name)
+                                            .filter(|n| !n.is_empty())
+                                        {
+                                            let exists = {
+                                                let a = accounts.lock().await;
+                                                a.by_name.get(&chosen_name).cloned()
+                                            };
+                                            match exists {
+                                                Some(r) => {
+                                                    let linked = if method == "google" {
+                                                        r.google_sub.as_deref() == Some(sub)
+                                                    } else {
+                                                        r.oidc_sub.as_deref() == Some(sub)
+                                                    };
+                                                    if !linked {
+                                                        pending_auto_webauth = Some(pending);
+                                                        name = None;
+                                                        state = ConnState::NeedName;
+                                                        let _ = write_tx
+                                                            .send(Bytes::from_static(
+                                                                b"name already taken\r\nname: ",
+                                                            ))
+                                                            .await;
+                                                        continue;
+                                                    }
+                                                    uname = chosen_name;
+                                                    action = "login".to_string();
+                                                }
+                                                None => {
+                                                    uname = chosen_name;
+                                                    action = "create".to_string();
+                                                }
+                                            }
+                                        } else {
+                                            // No linked account yet. Keep the player in-band at `name:`
+                                            // so they can choose an in-game character name, then we'll
+                                            // create/link via this pending web auth identity.
+                                            pending_auto_webauth = Some(pending);
+                                            continue;
+                                        }
                                     }
                                     [only] => {
                                         uname = only.clone();
@@ -3405,12 +3586,43 @@ async fn handle_conn(
                             };
 
                             if ok {
-                                state = ConnState::NeedBotDisclosure;
-                                let _ = write_tx
-                                    .send(Bytes::from_static(
-                                        b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                    ))
-                                    .await;
+                                let uname = name.as_deref().unwrap_or("");
+                                if let Some(saved) = wait_for_saved_player(
+                                    &cfg.players_path,
+                                    uname,
+                                    Duration::from_secs(2),
+                                )
+                                .await
+                                {
+                                    let shard_auth = auth_blob.clone().expect("auth blob set");
+                                    attach_authenticated_session(
+                                        session,
+                                        peer_ip,
+                                        uname,
+                                        saved.is_bot,
+                                        &saved.race,
+                                        &saved.class,
+                                        &saved.sex,
+                                        &saved.pronouns,
+                                        shard_auth,
+                                        auth_method.as_deref().unwrap_or("unknown"),
+                                        &write_tx,
+                                        &disconnect_tx,
+                                        &sessions,
+                                        &holds,
+                                        &eventlog,
+                                        &shard_tx,
+                                    )
+                                    .await?;
+                                    state = ConnState::InWorld;
+                                } else {
+                                    state = ConnState::NeedBotDisclosure;
+                                    let _ = write_tx
+                                        .send(Bytes::from_static(
+                                            b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
+                                        ))
+                                        .await;
+                                }
                             }
                             continue;
                         }
@@ -3477,12 +3689,42 @@ async fn handle_conn(
                                         ));
                                         name = Some(n.clone());
                                         pending_auto_webauth = None;
-                                        state = ConnState::NeedBotDisclosure;
-                                        let _ = write_tx
-                                            .send(Bytes::from_static(
-                                                b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                            ))
-                                            .await;
+                                        if let Some(saved) = wait_for_saved_player(
+                                            &cfg.players_path,
+                                            &n,
+                                            Duration::from_secs(2),
+                                        )
+                                        .await
+                                        {
+                                            let shard_auth = auth_blob.clone().expect("auth blob set");
+                                            attach_authenticated_session(
+                                                session,
+                                                peer_ip,
+                                                &n,
+                                                saved.is_bot,
+                                                &saved.race,
+                                                &saved.class,
+                                                &saved.sex,
+                                                &saved.pronouns,
+                                                shard_auth,
+                                                auth_method.as_deref().unwrap_or("unknown"),
+                                                &write_tx,
+                                                &disconnect_tx,
+                                                &sessions,
+                                                &holds,
+                                                &eventlog,
+                                                &shard_tx,
+                                            )
+                                            .await?;
+                                            state = ConnState::InWorld;
+                                        } else {
+                                            state = ConnState::NeedBotDisclosure;
+                                            let _ = write_tx
+                                                .send(Bytes::from_static(
+                                                    b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
+                                                ))
+                                                .await;
+                                        }
                                         continue;
                                     }
                                     None => {
@@ -3522,12 +3764,42 @@ async fn handle_conn(
                                         ));
                                         name = Some(n.clone());
                                         pending_auto_webauth = None;
-                                        state = ConnState::NeedBotDisclosure;
-                                        let _ = write_tx
-                                            .send(Bytes::from_static(
-                                                b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                            ))
-                                            .await;
+                                        if let Some(saved) = wait_for_saved_player(
+                                            &cfg.players_path,
+                                            &n,
+                                            Duration::from_secs(2),
+                                        )
+                                        .await
+                                        {
+                                            let shard_auth = auth_blob.clone().expect("auth blob set");
+                                            attach_authenticated_session(
+                                                session,
+                                                peer_ip,
+                                                &n,
+                                                saved.is_bot,
+                                                &saved.race,
+                                                &saved.class,
+                                                &saved.sex,
+                                                &saved.pronouns,
+                                                shard_auth,
+                                                auth_method.as_deref().unwrap_or("unknown"),
+                                                &write_tx,
+                                                &disconnect_tx,
+                                                &sessions,
+                                                &holds,
+                                                &eventlog,
+                                                &shard_tx,
+                                            )
+                                            .await?;
+                                            state = ConnState::InWorld;
+                                        } else {
+                                            state = ConnState::NeedBotDisclosure;
+                                            let _ = write_tx
+                                                .send(Bytes::from_static(
+                                                    b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
+                                                ))
+                                                .await;
+                                        }
                                         continue;
                                     }
                                 }
@@ -3561,12 +3833,42 @@ async fn handle_conn(
                                         ));
                                         name = Some(n.clone());
                                         pending_auto_webauth = None;
-                                        state = ConnState::NeedBotDisclosure;
-                                        let _ = write_tx
-                                            .send(Bytes::from_static(
-                                                b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                            ))
-                                            .await;
+                                        if let Some(saved) = wait_for_saved_player(
+                                            &cfg.players_path,
+                                            &n,
+                                            Duration::from_secs(2),
+                                        )
+                                        .await
+                                        {
+                                            let shard_auth = auth_blob.clone().expect("auth blob set");
+                                            attach_authenticated_session(
+                                                session,
+                                                peer_ip,
+                                                &n,
+                                                saved.is_bot,
+                                                &saved.race,
+                                                &saved.class,
+                                                &saved.sex,
+                                                &saved.pronouns,
+                                                shard_auth,
+                                                auth_method.as_deref().unwrap_or("unknown"),
+                                                &write_tx,
+                                                &disconnect_tx,
+                                                &sessions,
+                                                &holds,
+                                                &eventlog,
+                                                &shard_tx,
+                                            )
+                                            .await?;
+                                            state = ConnState::InWorld;
+                                        } else {
+                                            state = ConnState::NeedBotDisclosure;
+                                            let _ = write_tx
+                                                .send(Bytes::from_static(
+                                                    b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
+                                                ))
+                                                .await;
+                                        }
                                         continue;
                                     }
                                     None => {
@@ -3606,12 +3908,42 @@ async fn handle_conn(
                                         ));
                                         name = Some(n.clone());
                                         pending_auto_webauth = None;
-                                        state = ConnState::NeedBotDisclosure;
-                                        let _ = write_tx
-                                            .send(Bytes::from_static(
-                                                b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                            ))
-                                            .await;
+                                        if let Some(saved) = wait_for_saved_player(
+                                            &cfg.players_path,
+                                            &n,
+                                            Duration::from_secs(2),
+                                        )
+                                        .await
+                                        {
+                                            let shard_auth = auth_blob.clone().expect("auth blob set");
+                                            attach_authenticated_session(
+                                                session,
+                                                peer_ip,
+                                                &n,
+                                                saved.is_bot,
+                                                &saved.race,
+                                                &saved.class,
+                                                &saved.sex,
+                                                &saved.pronouns,
+                                                shard_auth,
+                                                auth_method.as_deref().unwrap_or("unknown"),
+                                                &write_tx,
+                                                &disconnect_tx,
+                                                &sessions,
+                                                &holds,
+                                                &eventlog,
+                                                &shard_tx,
+                                            )
+                                            .await?;
+                                            state = ConnState::InWorld;
+                                        } else {
+                                            state = ConnState::NeedBotDisclosure;
+                                            let _ = write_tx
+                                                .send(Bytes::from_static(
+                                                    b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
+                                                ))
+                                                .await;
+                                        }
                                         continue;
                                     }
                                 }
@@ -3621,14 +3953,22 @@ async fn handle_conn(
 
                     name = Some(n);
                     state = ConnState::NeedAuthMethod;
-                    let _ = write_tx
-                        .send(Bytes::from_static(
-                            b"\r\nauth method:\r\n- password\r\n- google\r\ntype: password | google\r\n> ",
-                        ))
-                        .await;
+                    let _ = write_tx.send(Bytes::from(auth_prompt)).await;
                     continue;
                 }
                 ConnState::NeedAuthMethod => {
+                    if trusted_proxy_peer
+                        && std::str::from_utf8(&line_bytes)
+                            .map(|s| s.starts_with("WEB_AUTH "))
+                            .unwrap_or(false)
+                    {
+                        state = ConnState::NeedName;
+                        let mut replay = line_bytes.clone();
+                        replay.push(b'\n');
+                        linebuf.splice(0..0, replay);
+                        continue;
+                    }
+
                     let line = String::from_utf8_lossy(&line_bytes)
                         .trim()
                         .to_ascii_lowercase();
@@ -3649,9 +3989,15 @@ async fn handle_conn(
                             if let Some(r) = rec.as_ref() {
                                 if r.pw_hash.is_none() {
                                     let _ = write_tx
-                                        .send(Bytes::from_static(
-                                            b"account has no password; use google\r\n> ",
-                                        ))
+                                        .send(if has_oidc_webauth {
+                                            Bytes::from_static(
+                                                b"account has no password; use google or slopsso\r\n> ",
+                                            )
+                                        } else {
+                                            Bytes::from_static(
+                                                b"account has no password; use google\r\n> ",
+                                            )
+                                        })
                                         .await;
                                     continue;
                                 }
@@ -3729,9 +4075,21 @@ async fn handle_conn(
                             let _ = write_tx.send(Bytes::from(msg)).await;
                             continue;
                         }
+                        "oidc" | "slopsso" => {
+                            let _ = write_tx
+                                .send(if has_oidc_webauth {
+                                    Bytes::from_static(
+                                        b"slopsso is web-client-only; open the web auth gate\r\n> ",
+                                    )
+                                } else {
+                                    Bytes::from_static(b"please type: password | google\r\n> ")
+                                })
+                                .await;
+                            continue;
+                        }
                         _ => {
                             let _ = write_tx
-                                .send(Bytes::from_static(b"please type: password | google\r\n> "))
+                                .send(Bytes::from(auth_prompt_invalid))
                                 .await;
                             continue;
                         }
@@ -3748,9 +4106,7 @@ async fn handle_conn(
                     let Some(code) = google_oauth_code.as_deref() else {
                         state = ConnState::NeedAuthMethod;
                         let _ = write_tx
-                            .send(Bytes::from_static(
-                                b"oauth state lost; pick auth method\r\n> ",
-                            ))
+                            .send(Bytes::from(auth_prompt))
                             .await;
                         continue;
                     };
@@ -3764,9 +4120,7 @@ async fn handle_conn(
                             google_oauth_code = None;
                             state = ConnState::NeedAuthMethod;
                             let _ = write_tx
-                                .send(Bytes::from_static(
-                                    b"cancelled\r\nauth method:\r\n- password\r\n- google\r\ntype: password | google\r\n> ",
-                                ))
+                                .send(Bytes::from(auth_prompt_cancelled))
                                 .await;
                             continue;
                         }
@@ -3887,13 +4241,43 @@ async fn handle_conn(
 
                             let _ = std::fs::remove_file(&path);
                             google_oauth_code = None;
-
-                            state = ConnState::NeedBotDisclosure;
-                            let _ = write_tx
-                                .send(Bytes::from_static(
-                                    b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                ))
-                                .await;
+                            let uname = name.as_deref().unwrap_or("");
+                            if let Some(saved) = wait_for_saved_player(
+                                &cfg.players_path,
+                                uname,
+                                Duration::from_secs(2),
+                            )
+                            .await
+                            {
+                                let shard_auth = auth_blob.clone().expect("auth blob set");
+                                attach_authenticated_session(
+                                    session,
+                                    peer_ip,
+                                    uname,
+                                    saved.is_bot,
+                                    &saved.race,
+                                    &saved.class,
+                                    &saved.sex,
+                                    &saved.pronouns,
+                                    shard_auth,
+                                    auth_method.as_deref().unwrap_or("unknown"),
+                                    &write_tx,
+                                    &disconnect_tx,
+                                    &sessions,
+                                    &holds,
+                                    &eventlog,
+                                    &shard_tx,
+                                )
+                                .await?;
+                                state = ConnState::InWorld;
+                            } else {
+                                state = ConnState::NeedBotDisclosure;
+                                let _ = write_tx
+                                    .send(Bytes::from_static(
+                                        b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
+                                    ))
+                                    .await;
+                            }
                             continue;
                         }
                         _ => {
@@ -4014,12 +4398,43 @@ async fn handle_conn(
                     ));
 
                     line_bytes.zeroize();
-                    state = ConnState::NeedBotDisclosure;
-                    let _ = write_tx
-                        .send(Bytes::from_static(
-                            b"character creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                        ))
-                        .await;
+                    let uname = name.as_deref().unwrap_or("");
+                    if let Some(saved) = wait_for_saved_player(
+                        &cfg.players_path,
+                        uname,
+                        Duration::from_secs(2),
+                    )
+                    .await
+                    {
+                        let shard_auth = auth_blob.clone().expect("auth blob set");
+                        attach_authenticated_session(
+                            session,
+                            peer_ip,
+                            uname,
+                            saved.is_bot,
+                            &saved.race,
+                            &saved.class,
+                            &saved.sex,
+                            &saved.pronouns,
+                            shard_auth,
+                            auth_method.as_deref().unwrap_or("unknown"),
+                            &write_tx,
+                            &disconnect_tx,
+                            &sessions,
+                            &holds,
+                            &eventlog,
+                            &shard_tx,
+                        )
+                        .await?;
+                        state = ConnState::InWorld;
+                    } else {
+                        state = ConnState::NeedBotDisclosure;
+                        let _ = write_tx
+                            .send(Bytes::from_static(
+                                b"character creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
+                            ))
+                            .await;
+                    }
                     continue;
                 }
                 ConnState::NeedPasswordLogin => {
@@ -4128,12 +4543,42 @@ async fn handle_conn(
                     ));
 
                     line_bytes.zeroize();
-                    state = ConnState::NeedBotDisclosure;
-                    let _ = write_tx
-                        .send(Bytes::from_static(
-                            b"character creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                        ))
-                        .await;
+                    if let Some(saved) = wait_for_saved_player(
+                        &cfg.players_path,
+                        uname,
+                        Duration::from_secs(2),
+                    )
+                    .await
+                    {
+                        let shard_auth = auth_blob.clone().expect("auth blob set");
+                        attach_authenticated_session(
+                            session,
+                            peer_ip,
+                            uname,
+                            saved.is_bot,
+                            &saved.race,
+                            &saved.class,
+                            &saved.sex,
+                            &saved.pronouns,
+                            shard_auth,
+                            auth_method.as_deref().unwrap_or("unknown"),
+                            &write_tx,
+                            &disconnect_tx,
+                            &sessions,
+                            &holds,
+                            &eventlog,
+                            &shard_tx,
+                        )
+                        .await?;
+                        state = ConnState::InWorld;
+                    } else {
+                        state = ConnState::NeedBotDisclosure;
+                        let _ = write_tx
+                            .send(Bytes::from_static(
+                                b"character creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
+                            ))
+                            .await;
+                    }
                     continue;
                 }
                 ConnState::NeedBotDisclosure => {

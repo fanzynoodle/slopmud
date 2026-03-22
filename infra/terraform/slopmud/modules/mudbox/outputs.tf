@@ -3,15 +3,15 @@ output "account_id" {
 }
 
 output "instance_id" {
-  value = try(aws_instance.this[0].id, null)
+  value = try(data.aws_instance.active[0].id, null)
 }
 
 output "public_ip" {
-  value = try(aws_instance.this[0].public_ip, null)
+  value = try(data.aws_instance.active[0].public_ip, null)
 }
 
 output "public_dns" {
-  value = try(aws_instance.this[0].public_dns, null)
+  value = try(data.aws_instance.active[0].public_dns, null)
 }
 
 output "ssh_allowed_cidr" {
@@ -27,11 +27,11 @@ output "hosted_zone_name_servers" {
 }
 
 output "mud_fqdn" {
-  value = var.create_hosted_zone && length(aws_route53_record.mud_cname) > 0 ? aws_route53_record.mud_cname[0].fqdn : null
+  value = var.create_hosted_zone ? "${var.record_name}.${trim(var.zone_name, ".")}" : null
 }
 
 output "www_fqdn" {
-  value = var.create_hosted_zone && length(aws_route53_record.www_cname) > 0 ? aws_route53_record.www_cname[0].fqdn : null
+  value = var.create_hosted_zone ? "www.${trim(var.zone_name, ".")}" : null
 }
 
 output "assets_bucket_name" {

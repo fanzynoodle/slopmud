@@ -594,7 +594,7 @@ fn login_form(cfg: &Config, q: &AuthorizeQuery, err: Option<&str>) -> Html<Strin
   {h_state}\
   {h_code_challenge}\
   {h_code_challenge_method}\
-  <label>Username<br/><input name=\"username\" autocomplete=\"username\"/></label><br/><br/>\
+  <label>Username<br/><input name=\"username\" autocomplete=\"username\" autofocus/></label><br/><br/>\
   <label>Password<br/><input name=\"password\" type=\"password\" autocomplete=\"current-password\"/></label><br/><br/>\
   <button type=\"submit\">Continue</button>\
 </form>\
@@ -701,7 +701,7 @@ fn register_form(q: &AuthorizeQuery, err: Option<&str>) -> Html<String> {
   {h_state}\
   {h_code_challenge}\
   {h_code_challenge_method}\
-  <label>Username<br/><input name=\"username\" autocomplete=\"username\"/></label><br/><br/>\
+  <label>Username<br/><input name=\"username\" autocomplete=\"username\" autofocus/></label><br/><br/>\
   <label>Password<br/><input name=\"password\" type=\"password\" autocomplete=\"new-password\"/></label><br/><br/>\
   <label>Password (again)<br/><input name=\"password2\" type=\"password\" autocomplete=\"new-password\"/></label><br/><br/>\
   <button type=\"submit\">Create and continue</button>\
@@ -970,7 +970,7 @@ fn reset_form(q: &AuthorizeQuery, err: Option<&str>) -> Html<String> {
   {h_state}\
   {h_code_challenge}\
   {h_code_challenge_method}\
-  <label>Username<br/><input name=\"username\" autocomplete=\"username\"/></label><br/><br/>\
+  <label>Username<br/><input name=\"username\" autocomplete=\"username\" autofocus/></label><br/><br/>\
   <label>New password<br/><input name=\"password\" type=\"password\" autocomplete=\"new-password\"/></label><br/><br/>\
   <label>New password (again)<br/><input name=\"password2\" type=\"password\" autocomplete=\"new-password\"/></label><br/><br/>\
   <button type=\"submit\">Reset</button>\
@@ -1155,10 +1155,7 @@ async fn authorize_post(
             .into_response();
     };
 
-    let db: UserDb = match std::fs::read_to_string(users_path)
-        .with_context(|| format!("read user db {users_path:?}"))
-        .and_then(|s| Ok(serde_json::from_str::<UserDb>(&s)?))
-    {
+    let db: UserDb = match load_userdb(users_path) {
         Ok(v) => v,
         Err(e) => {
             warn!(err = ?e, "failed to load user db");

@@ -118,8 +118,38 @@ variable "assets_bucket_force_destroy" {
 
 variable "ssm_read_parameter_names" {
   type        = list(string)
-  description = "Optional list of SSM Parameter Store names that the instance role may read (useful for app secrets like OAuth client secrets). Example: /slopmud/prd/google_oauth_client_secret"
+  description = "Optional list of SSM Parameter Store names that the instance role may read (useful for app secrets and both broker/web OIDC settings). Examples: /slopmud/prd/google_oauth_client_secret, /slopmud/prd/oidc_token_url, /slopmud/prd/oidc_client_secret, /slopmud/prd/oidc_sso_client_secret"
   default     = []
+}
+
+variable "ssm_write_parameter_names" {
+  type        = list(string)
+  description = "Optional list of SSM Parameter Store names that the instance role may write (useful for cached TLS material or other host-managed secrets)."
+  default     = []
+}
+
+variable "bootstrap_restore_enabled" {
+  type        = bool
+  description = "Whether to install a per-boot stack-restore hook that pulls the rebootstrap bundle from S3 and redeploys the one-box stack."
+  default     = true
+}
+
+variable "bootstrap_restore_track" {
+  type        = string
+  description = "Artifact track restored by the per-boot restore hook."
+  default     = "prod"
+}
+
+variable "bootstrap_restore_env_prefix" {
+  type        = string
+  description = "Env prefix restored by the per-boot restore hook."
+  default     = "prd"
+}
+
+variable "bootstrap_restore_bundle_key" {
+  type        = string
+  description = "S3 object key for the rebootstrap bundle. If empty, defaults to bootstrap/<name_prefix>/rebootstrap.tgz."
+  default     = ""
 }
 
 variable "extra_cname_record_names" {

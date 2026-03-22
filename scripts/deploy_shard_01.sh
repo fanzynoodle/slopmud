@@ -78,6 +78,13 @@ Environment=RUST_LOG=shard_01=info
 Environment=SHARD_BIND=${SHARD_BIND}
 EOF
 
+if [[ -n "${SHARD_RAFT_LOG:-}" ]]; then
+  echo "Environment=SHARD_RAFT_LOG=${SHARD_RAFT_LOG}" >>"$tmp_unit"
+fi
+if [[ -n "${SHARD_PLAYERS_PATH:-}" ]]; then
+  echo "Environment=SHARD_PLAYERS_PATH=${SHARD_PLAYERS_PATH}" >>"$tmp_unit"
+fi
+
 # Optional: OpenAI config for admin `aiping` command.
 if [[ -n "${OPENAI_API_BASE:-}" ]]; then
   echo "Environment=OPENAI_API_BASE=${OPENAI_API_BASE}" >>"$tmp_unit"

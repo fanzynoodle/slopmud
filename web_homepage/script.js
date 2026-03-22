@@ -1,16 +1,26 @@
 (() => {
-  // prd: `mud.slopmud.com` serves the homepage on :443 but runs OAuth on :4242.
-  // Redirect only the connect/play pages so SSO uses the right redirect_uri without moving the homepage.
+  function isLocalHost(hostname) {
+    const h = String(hostname || "").trim().toLowerCase();
+    return h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h.endsWith(".localhost");
+  }
+
+  const configuredGameOrigin = String(
+    window.SLOPMUD_GAME_ORIGIN || document.documentElement.dataset.gameOrigin || "",
+  )
+    .trim()
+    .replace(/\/$/, "");
+  // Keep landing and game web lifecycles split: selected pages must always run from the game origin.
   const p = String(location.pathname || "");
+  const mustUseGameOrigin =
+    p === "/connect.html" || p === "/play.html" || p === "/auth.html" || p === "/protocol.html";
   if (
-    location.hostname === "mud.slopmud.com" &&
-    location.port !== "4242" &&
-    (p === "/connect.html" || p === "/play.html")
+    configuredGameOrigin &&
+    mustUseGameOrigin &&
+    !isLocalHost(location.hostname) &&
+    location.origin !== configuredGameOrigin
   ) {
-    const to = new URL(location.href);
-    to.protocol = "https:";
-    to.port = "4242";
-    location.replace(to.toString());
+    const to = `${configuredGameOrigin}${p}${location.search}${location.hash}`;
+    location.replace(to);
     return;
   }
 

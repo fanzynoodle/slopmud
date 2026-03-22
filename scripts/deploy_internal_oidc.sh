@@ -54,7 +54,13 @@ ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
     sudo useradd --system --home \"${REMOTE_ROOT}\" --create-home --shell /usr/sbin/nologin slopmud; \
   fi; \
   sudo mkdir -p \"${REMOTE_ROOT}\" \"${remote_bin_dir}\"; \
-  sudo chown -R slopmud:slopmud \"${REMOTE_ROOT}\" \
+  sudo chown -R slopmud:slopmud \"${REMOTE_ROOT}\"; \
+  if [ -n \"${OIDC_USERS_PATH:-}\" ] && [ ! -e \"${OIDC_USERS_PATH}\" ]; then \
+    sudo install -d -o slopmud -g slopmud -m 0755 \"$(dirname "${OIDC_USERS_PATH}")\"; \
+    printf '%s\n' '{\"users\":[]}' | sudo tee \"${OIDC_USERS_PATH}\" >/dev/null; \
+    sudo chown slopmud:slopmud \"${OIDC_USERS_PATH}\"; \
+    sudo chmod 0644 \"${OIDC_USERS_PATH}\"; \
+  fi \
 "
 
 echo "Uploading binary -> ${SSH_USER}@${HOST}:${OIDC_REMOTE_BIN}"

@@ -159,19 +159,25 @@ certbot-hook-install env="prd":
     cert_name="${CERTBOT_CERT_NAME:-${DOMAIN}}"; \
     hook_name="slopmud-${ENV_NAME:-{{env}}}.sh"; \
     base_hook="$(mktemp)"; \
+    cache_helper="$(mktemp)"; \
     wrapper_hook="$(mktemp)"; \
-    trap "rm -f \"${base_hook}\" \"${wrapper_hook}\"" EXIT; \
+    trap "rm -f \"${base_hook}\" \"${cache_helper}\" \"${wrapper_hook}\"" EXIT; \
     cp scripts/certbot_deploy_hook_slopmud.sh "${base_hook}"; \
+    cp scripts/tls_cache_ssm.sh "${cache_helper}"; \
     chmod 0755 "${base_hook}"; \
+    chmod 0755 "${cache_helper}"; \
     { \
       printf "%s\\n" "#!/usr/bin/env bash"; \
       printf "%s\\n" "set -euo pipefail"; \
       printf "%s\\n" "export CERTBOT_CERT_NAME=${cert_name}"; \
       printf "%s\\n" "export TLS_DST_DIR=${dst_dir}"; \
       printf "%s\\n" "export WEB_SERVICE_NAME=${svc}"; \
+      if [ -n "${TLS_CACHE_FULLCHAIN_SSM:-}" ]; then printf "%s\\n" "export TLS_CACHE_FULLCHAIN_SSM=${TLS_CACHE_FULLCHAIN_SSM}"; fi; \
+      if [ -n "${TLS_CACHE_PRIVKEY_SSM:-}" ]; then printf "%s\\n" "export TLS_CACHE_PRIVKEY_SSM=${TLS_CACHE_PRIVKEY_SSM}"; fi; \
       printf "%s\\n" "exec /usr/local/bin/slopmud-certbot-hook"; \
     } >"${wrapper_hook}"; \
     scp -P "${SSH_PORT}" {{ssh_opts}} "${base_hook}" "${SSH_USER}@${HOST}:/tmp/slopmud-certbot-hook"; \
+    scp -P "${SSH_PORT}" {{ssh_opts}} "${cache_helper}" "${SSH_USER}@${HOST}:/tmp/slopmud-tls-cache-ssm"; \
     scp -P "${SSH_PORT}" {{ssh_opts}} "${wrapper_hook}" "${SSH_USER}@${HOST}:/tmp/${hook_name}"; \
     ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" " \
       set -euo pipefail; \
@@ -180,8 +186,9 @@ certbot-hook-install env="prd":
       fi; \
       sudo install -d -m 0755 /etc/letsencrypt/renewal-hooks/deploy; \
       sudo install -m 0755 -o root -g root /tmp/slopmud-certbot-hook /usr/local/bin/slopmud-certbot-hook; \
+      sudo install -m 0755 -o root -g root /tmp/slopmud-tls-cache-ssm /usr/local/bin/slopmud-tls-cache-ssm; \
       sudo install -m 0755 -o root -g root \"/tmp/${hook_name}\" \"/etc/letsencrypt/renewal-hooks/deploy/${hook_name}\"; \
-      sudo rm -f /tmp/slopmud-certbot-hook \"/tmp/${hook_name}\"; \
+      sudo rm -f /tmp/slopmud-certbot-hook /tmp/slopmud-tls-cache-ssm \"/tmp/${hook_name}\"; \
       sudo rm -f /etc/letsencrypt/renewal-hooks/deploy/slopmud.sh 2>/dev/null || true; \
     "; \
   '
@@ -207,6 +214,31 @@ certbot-tls-sync env="prd" domain="":
       sudo install -o slopmud -g slopmud -m 0640 \"/etc/letsencrypt/live/${cert_name}/fullchain.pem\" \"${dst_dir}/fullchain.pem\"; \
       sudo install -o slopmud -g slopmud -m 0640 \"/etc/letsencrypt/live/${cert_name}/privkey.pem\" \"${dst_dir}/privkey.pem\"; \
       sudo systemctl restart \"${svc}\" 2>/dev/null || true; \
+    "; \
+  '
+
+certbot-cache-sync env="prd" domain="":
+  bash -ceu ' \
+    set -o pipefail; \
+    set -a; source "env/{{env}}.env"; set +a; \
+    if [ -z "${TLS_CACHE_FULLCHAIN_SSM:-}" ] || [ -z "${TLS_CACHE_PRIVKEY_SSM:-}" ]; then \
+      echo "skipping cache sync for {{env}} (TLS_CACHE_*_SSM not set)"; \
+      exit 0; \
+    fi; \
+    helper="$(mktemp)"; \
+    trap "rm -f \"${helper}\"" EXIT; \
+    cp scripts/tls_cache_ssm.sh "${helper}"; \
+    chmod 0755 "${helper}"; \
+    scp -P "${SSH_PORT}" {{ssh_opts}} "${helper}" "${SSH_USER}@${HOST}:/tmp/slopmud-tls-cache-ssm"; \
+    ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" " \
+      set -euo pipefail; \
+      sudo install -m 0755 -o root -g root /tmp/slopmud-tls-cache-ssm /usr/local/bin/slopmud-tls-cache-ssm; \
+      sudo rm -f /tmp/slopmud-tls-cache-ssm; \
+      sudo /usr/local/bin/slopmud-tls-cache-ssm store \
+        --cert \"${TLS_CERT}\" \
+        --key \"${TLS_KEY}\" \
+        --fullchain-ssm \"${TLS_CACHE_FULLCHAIN_SSM}\" \
+        --privkey-ssm \"${TLS_CACHE_PRIVKEY_SSM}\"; \
     "; \
   '
 
@@ -252,6 +284,7 @@ https-setup email env="prd":
   just certbot-install {{env}}
   just certbot-issue-web {{email}} {{env}}
   just certbot-tls-sync {{env}}
+  just certbot-cache-sync {{env}}
   just deploy {{env}}
   just https-smoke {{env}}
 
@@ -446,6 +479,10 @@ e2e-web-slopsso-register-local:
 # Selenium: click gate->SlopSSO redirect, register (password twice) in IdP, return, create via SSO, connect.
 e2e-web-slopsso-register-selenium-local:
   python3 scripts/e2e_web_slopsso_register_selenium_local.py
+
+# Production browser smoke: home -> connect -> play, full password play flow, and OAuth redirect checks for SlopSSO + Google.
+e2e-web-prd-auth-methods:
+  python3 scripts/e2e_web_prd_auth_methods_selenium.py
 
 # Local browser demo: slopmud_web + internal_oidc ("slopsso") on a random free 52xx port block.
 local-slopsso-demo:
@@ -658,6 +695,21 @@ assets-publish env="prd":
 # - full s3:// URI
 assets-redeploy env="prd" artifact="":
   ./scripts/cicd/deploy_slopmud_from_s3.sh "env/{{env}}.env" "{{artifact}}"
+
+rebootstrap-bundle-build out="tmp/rebootstrap.tgz":
+  ./scripts/cicd/build_rebootstrap_bundle.sh "{{out}}"
+
+rebootstrap-bundle-publish env="prd" out="tmp/rebootstrap.tgz":
+  bash -ceu ' \
+    set -o pipefail; \
+    set -a; source "env/{{env}}.env"; set +a; \
+    bundle_path="$(./scripts/cicd/build_rebootstrap_bundle.sh "{{out}}")"; \
+    aws_region="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"; \
+    account_id="$(aws sts get-caller-identity --query Account --output text)"; \
+    bucket="${ASSETS_BUCKET:-slopmud-assets-${account_id}-${aws_region}}"; \
+    aws s3 cp "${bundle_path}" "s3://${bucket}/bootstrap/mudbox/rebootstrap.tgz"; \
+    echo "published rebootstrap bundle to s3://${bucket}/bootstrap/mudbox/rebootstrap.tgz"; \
+  '
 
 deploy-shard env="prd":
   bash -ceu ' \

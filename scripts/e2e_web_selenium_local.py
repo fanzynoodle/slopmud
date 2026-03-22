@@ -85,16 +85,11 @@ def _send_line(driver, s: str):
 
 
 def run_create_flow(driver, name: str, password: str):
-    # Pick auth method before the terminal connects, then connect and use the in-terminal flow.
-    # (static_web doesn't serve /api/webauth; only slopmud_web does.)
-    _click_id(driver, "btn-gate-password", timeout_s=12.0)
-    _click_id(driver, "btn-connect", timeout_s=12.0)
-
     _wait_term(driver, "name:", timeout_s=20.0)
     _send_line(driver, name)
     _wait_term(driver, "auth method", timeout_s=20.0)
     _send_line(driver, "password")
-    _wait_term(driver, "password", timeout_s=20.0)  # "set password" or "password"
+    _wait_term(driver, "set password", timeout_s=20.0)
     _send_line(driver, password)
 
     _wait_term(driver, "type: human | bot", timeout_s=20.0)
@@ -119,29 +114,23 @@ def run_create_flow(driver, name: str, password: str):
 
 
 def run_password_login_flow(driver, name: str, password: str):
-    _click_id(driver, "btn-gate-password", timeout_s=12.0)
-    _click_id(driver, "btn-connect", timeout_s=12.0)
-
     _wait_term(driver, "name:", timeout_s=20.0)
     _send_line(driver, name)
     _wait_term(driver, "auth method", timeout_s=20.0)
     _send_line(driver, "password")
-    _wait_term(driver, "password", timeout_s=20.0)  # should be login prompt now
+    _wait_term(driver, "password (never logged/echoed):", timeout_s=20.0)
     _send_line(driver, password)
-    _wait_term(driver, "type: human | bot", timeout_s=20.0)
-    _send_line(driver, "human")
-    _wait_term(driver, "type: agree", timeout_s=20.0)
-    _send_line(driver, "agree")
-    _wait_term(driver, "code of conduct:", timeout_s=20.0)
-    _wait_term(driver, "type: agree", timeout_s=20.0)
-    _send_line(driver, "agree")
-    _wait_term(driver, "choose race", timeout_s=20.0)
-    _send_line(driver, "race human")
-    _wait_term(driver, "choose class", timeout_s=20.0)
-    _send_line(driver, "class fighter")
-    _wait_term(driver, "sex:", timeout_s=20.0)
-    _send_line(driver, "none")
-    _wait_term(driver, "Orientation Wing", timeout_s=20.0)
+
+    deadline = time.time() + 20.0
+    last = ""
+    while time.time() < deadline:
+        last = _term_text(driver)
+        if "Orientation Wing" in last:
+            return
+        if "character creation (step 2/4)" in last:
+            raise RuntimeError(f"fresh password login fell back into setup:\n{last[-2000:]}")
+        time.sleep(0.05)
+    raise TimeoutError(f"timeout waiting for password relogin into world; got:\n{last[-2000:]}")
 
 
 def new_chrome(user_data_dir: Path):
@@ -207,7 +196,10 @@ def main():
 
     run_id = str(time.time_ns())
     accounts_path = f"/tmp/slopmud_accounts_e2e_web_{run_id}.json"
+    players_path = f"/tmp/slopmud_players_e2e_web_{run_id}.json"
     env["SLOPMUD_ACCOUNTS_PATH"] = accounts_path
+    env["SLOPMUD_PLAYERS_PATH"] = players_path
+    env["SHARD_PLAYERS_PATH"] = players_path
 
     # Ensure the web -> broker bridge uses the same port and never defaults to :23.
     env["SESSION_TCP_ADDR"] = broker_bind

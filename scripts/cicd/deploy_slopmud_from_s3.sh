@@ -52,16 +52,21 @@ account_id="$(aws sts get-caller-identity --query Account --output text)"
 bucket="${ASSETS_BUCKET:-slopmud-assets-${account_id}-${aws_region}}"
 
 if [[ -z "$artifact_ref" ]]; then
-  key="$(aws s3api list-objects-v2 \
-    --bucket "$bucket" \
-    --prefix "${track}/" \
-    --query 'reverse(sort_by(Contents,&LastModified))[?ends_with(Key, `artifact.tgz`)].Key | [0]' \
-    --output text)"
-  if [[ -z "$key" || "$key" == "None" ]]; then
-    echo "ERROR: no artifact found under s3://${bucket}/${track}/" >&2
-    exit 1
+  latest_key="${track}/latest/artifact.tgz"
+  if aws s3api head-object --bucket "$bucket" --key "$latest_key" >/dev/null 2>&1; then
+    s3_uri="s3://${bucket}/${latest_key}"
+  else
+    key="$(aws s3api list-objects-v2 \
+      --bucket "$bucket" \
+      --prefix "${track}/" \
+      --query 'reverse(sort_by(Contents,&LastModified))[?ends_with(Key, `artifact.tgz`)].Key | [0]' \
+      --output text)"
+    if [[ -z "$key" || "$key" == "None" ]]; then
+      echo "ERROR: no artifact found under s3://${bucket}/${track}/" >&2
+      exit 1
+    fi
+    s3_uri="s3://${bucket}/${key}"
   fi
-  s3_uri="s3://${bucket}/${key}"
 elif [[ "$artifact_ref" == s3://*/* ]]; then
   s3_uri="$artifact_ref"
 else

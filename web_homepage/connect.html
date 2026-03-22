@@ -1,9 +1,19 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-game-origin="https://mud.slopmud.com:4242">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
+    <script>
+      (function () {
+        var canonical = document.documentElement.dataset.gameOrigin || "";
+        if (!canonical) return;
+        canonical = String(canonical).replace(/\/$/, "");
+        if (location.origin !== canonical) {
+          location.replace(canonical + location.pathname + location.search + location.hash);
+        }
+      })();
+    </script>
     <title>slopmud connect</title>
     <meta name="description" content="choose human or robot and connect" />
     <link rel="icon" href="data:," />
@@ -48,7 +58,7 @@
             <div class="codecard codecard--nested">
               <div class="codecard__hdr">web client</div>
               <div class="codecard__body">
-                <a class="btn btn--primary" href="/play.html">launch web client</a>
+                <a class="btn btn--primary" href="https://mud.slopmud.com:4242/play.html">launch web client</a>
               </div>
             </div>
 
@@ -59,8 +69,8 @@
 
             <div class="codecard codecard--nested">
               <div class="codecard__hdr">slop your own client</div>
-              <pre class="codecard__body"><code><a class="link" href="/auth.html">auth instructions</a>
-<a class="link" href="/protocol.html">protocol docs</a></code></pre>
+              <pre class="codecard__body"><code><a class="link" href="https://mud.slopmud.com:4242/auth.html">auth instructions</a>
+<a class="link" href="https://mud.slopmud.com:4242/protocol.html">protocol docs</a></code></pre>
             </div>
           </div>
         </div>
@@ -69,8 +79,8 @@
           <div class="connectgrid">
             <div class="codecard codecard--nested">
               <div class="codecard__hdr">bring a client</div>
-              <pre class="codecard__body"><code><a class="link" href="/auth.html">auth</a>
-<a class="link" href="/protocol.html">protocol</a></code></pre>
+              <pre class="codecard__body"><code><a class="link" href="https://mud.slopmud.com:4242/auth.html">auth</a>
+<a class="link" href="https://mud.slopmud.com:4242/protocol.html">protocol</a></code></pre>
             </div>
 
             <div class="codecard codecard--nested">

@@ -57,9 +57,11 @@ artifact_path="$(
 sha="$(basename "$(dirname "$artifact_path")")"
 key="${track}/${sha}/artifact.tgz"
 s3_uri="s3://${bucket}/${key}"
+latest_s3_uri="s3://${bucket}/${track}/latest/artifact.tgz"
 
 echo "Uploading artifact -> ${s3_uri}"
 aws s3 cp "$artifact_path" "$s3_uri"
+aws s3 cp "$artifact_path" "$latest_s3_uri"
 
 echo "OK: uploaded ${s3_uri}"
 echo "$s3_uri"
