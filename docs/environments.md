@@ -58,6 +58,39 @@ just hot-deploy-slopmud prd
 This relies on `scripts/cicd/slopmud-shuttle-assets`, which installs the new broker binary and restarts the
 systemd unit without overwriting an existing unit file by default.
 
+## Asset Build And Deploy Flow
+
+The important split is:
+
+- cloud-init user data re-registers DNS after spot instance replacement
+- CI and local deploy flows both build the same artifact shape
+- on-host install/redeploy is handled by `slopmud-shuttle-assets`
+
+```mermaid
+flowchart TD
+  A[Feature worktree<br/>/tmp/slopmud-wt-...] --> B[Local build or just hot-deploy-slopmud]
+  A --> C[Push branch]
+  C --> D[GitHub Actions enterprise-cicd.yml]
+  D --> E[Build artifact.tgz]
+  E --> F[S3 assets bucket]
+
+  G[Terraform mudbox stack] --> H[Launch template + ASG]
+  H --> I[EC2 instance boot]
+  I --> J[cloud-init per-boot DNS script]
+  J --> K[Route53 updates apex A and mud/www CNAMEs]
+
+  L[scripts/cicd/bootstrap_runner.sh] --> M[/usr/local/bin/slopmud-shuttle-assets]
+  F --> M
+  B --> N[scripts/cicd/hot_deploy_slopmud.sh]
+  N --> M
+  M --> O[/opt/slopmud/assets/<env>/<sha>/]
+  M --> P[/opt/slopmud/bin/slopmud-<env> and shard-01-<env>]
+  P --> Q[systemd restart]
+  Q --> R[Broker + shard + web serve new assets]
+```
+
+For prod recovery after instance replacement, Terraform/cloud-init handles DNS reachability and the instance role handles S3/SSM reads. The actual app bits still need either CI deploy promotion or a local `just hot-deploy-slopmud prd` style redeploy to install the artifact on the replacement host.
+
 ## How to verify a `dev` push reaches mud.slopmud.com
 
 For this repo, a push to `dev` should trigger `.github/workflows/enterprise-cicd.yml` and run:

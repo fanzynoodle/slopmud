@@ -144,6 +144,27 @@ fi
 if [[ -n "${GOOGLE_OAUTH_CLIENT_SECRET_SSM:-}" ]]; then
   echo "Environment=GOOGLE_OAUTH_CLIENT_SECRET_SSM=${GOOGLE_OAUTH_CLIENT_SECRET_SSM}" >>"$tmp_unit"
 fi
+if [[ -n "${SLOPMUD_OIDC_SSO_AUTH_URL_SSM:-}" ]]; then
+  echo "Environment=SLOPMUD_OIDC_SSO_AUTH_URL_SSM=${SLOPMUD_OIDC_SSO_AUTH_URL_SSM}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_OIDC_SSO_TOKEN_URL_SSM:-}" ]]; then
+  echo "Environment=SLOPMUD_OIDC_SSO_TOKEN_URL_SSM=${SLOPMUD_OIDC_SSO_TOKEN_URL_SSM}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_OIDC_SSO_USERINFO_URL_SSM:-}" ]]; then
+  echo "Environment=SLOPMUD_OIDC_SSO_USERINFO_URL_SSM=${SLOPMUD_OIDC_SSO_USERINFO_URL_SSM}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_OIDC_SSO_CLIENT_ID_SSM:-}" ]]; then
+  echo "Environment=SLOPMUD_OIDC_SSO_CLIENT_ID_SSM=${SLOPMUD_OIDC_SSO_CLIENT_ID_SSM}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_OIDC_SSO_CLIENT_SECRET_SSM:-}" ]]; then
+  echo "Environment=SLOPMUD_OIDC_SSO_CLIENT_SECRET_SSM=${SLOPMUD_OIDC_SSO_CLIENT_SECRET_SSM}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_OIDC_SSO_REDIRECT_URI_SSM:-}" ]]; then
+  echo "Environment=SLOPMUD_OIDC_SSO_REDIRECT_URI_SSM=${SLOPMUD_OIDC_SSO_REDIRECT_URI_SSM}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_OIDC_SSO_SCOPE_SSM:-}" ]]; then
+  echo "Environment=SLOPMUD_OIDC_SSO_SCOPE_SSM=${SLOPMUD_OIDC_SSO_SCOPE_SSM}" >>"$tmp_unit"
+fi
 
 # Optional: Compliance portal (access-key login, log downloads, bans, transparency log).
 if [[ -n "${SLOPMUD_COMPLIANCE_ENABLED:-}" ]]; then
@@ -205,13 +226,34 @@ if [[ -n "${SLOPMUD_ADMIN_ADDR:-}" ]]; then
 fi
 
 exec_start="${REMOTE_BIN}"
-if [[ -n "${GOOGLE_OAUTH_CLIENT_ID_SSM:-}" || -n "${GOOGLE_OAUTH_CLIENT_SECRET_SSM:-}" || -n "${SLOPMUD_COMPLIANCE_PORTAL_CONFIG_JSON_SSM:-}" || -n "${SLOPMUD_COMPLIANCE_SMTP_PASSWORD_SSM:-}" ]]; then
+if [[ -n "${GOOGLE_OAUTH_CLIENT_ID_SSM:-}" || -n "${GOOGLE_OAUTH_CLIENT_SECRET_SSM:-}" || -n "${SLOPMUD_OIDC_SSO_AUTH_URL_SSM:-}" || -n "${SLOPMUD_OIDC_SSO_TOKEN_URL_SSM:-}" || -n "${SLOPMUD_OIDC_SSO_USERINFO_URL_SSM:-}" || -n "${SLOPMUD_OIDC_SSO_CLIENT_ID_SSM:-}" || -n "${SLOPMUD_OIDC_SSO_CLIENT_SECRET_SSM:-}" || -n "${SLOPMUD_OIDC_SSO_REDIRECT_URI_SSM:-}" || -n "${SLOPMUD_OIDC_SSO_SCOPE_SSM:-}" || -n "${SLOPMUD_COMPLIANCE_PORTAL_CONFIG_JSON_SSM:-}" || -n "${SLOPMUD_COMPLIANCE_SMTP_PASSWORD_SSM:-}" ]]; then
   exec_start="/bin/bash -ceu ' \
     if [[ -n \"\${GOOGLE_OAUTH_CLIENT_ID_SSM}\" ]]; then \
       export GOOGLE_OAUTH_CLIENT_ID=\"\$(aws ssm get-parameter --name \"\${GOOGLE_OAUTH_CLIENT_ID_SSM}\" --with-decryption --query Parameter.Value --output text)\"; \
     fi; \
     if [[ -n \"\${GOOGLE_OAUTH_CLIENT_SECRET_SSM}\" ]]; then \
       export GOOGLE_OAUTH_CLIENT_SECRET=\"\$(aws ssm get-parameter --name \"\${GOOGLE_OAUTH_CLIENT_SECRET_SSM}\" --with-decryption --query Parameter.Value --output text)\"; \
+    fi; \
+    if [[ -n \"\${SLOPMUD_OIDC_SSO_AUTH_URL_SSM}\" ]]; then \
+      export SLOPMUD_OIDC_SSO_AUTH_URL=\"\$(aws ssm get-parameter --name \"\${SLOPMUD_OIDC_SSO_AUTH_URL_SSM}\" --with-decryption --query Parameter.Value --output text)\"; \
+    fi; \
+    if [[ -n \"\${SLOPMUD_OIDC_SSO_TOKEN_URL_SSM}\" ]]; then \
+      export SLOPMUD_OIDC_SSO_TOKEN_URL=\"\$(aws ssm get-parameter --name \"\${SLOPMUD_OIDC_SSO_TOKEN_URL_SSM}\" --with-decryption --query Parameter.Value --output text)\"; \
+    fi; \
+    if [[ -n \"\${SLOPMUD_OIDC_SSO_USERINFO_URL_SSM}\" ]]; then \
+      export SLOPMUD_OIDC_SSO_USERINFO_URL=\"\$(aws ssm get-parameter --name \"\${SLOPMUD_OIDC_SSO_USERINFO_URL_SSM}\" --with-decryption --query Parameter.Value --output text)\"; \
+    fi; \
+    if [[ -n \"\${SLOPMUD_OIDC_SSO_CLIENT_ID_SSM}\" ]]; then \
+      export SLOPMUD_OIDC_SSO_CLIENT_ID=\"\$(aws ssm get-parameter --name \"\${SLOPMUD_OIDC_SSO_CLIENT_ID_SSM}\" --with-decryption --query Parameter.Value --output text)\"; \
+    fi; \
+    if [[ -n \"\${SLOPMUD_OIDC_SSO_CLIENT_SECRET_SSM}\" ]]; then \
+      export SLOPMUD_OIDC_SSO_CLIENT_SECRET=\"\$(aws ssm get-parameter --name \"\${SLOPMUD_OIDC_SSO_CLIENT_SECRET_SSM}\" --with-decryption --query Parameter.Value --output text)\"; \
+    fi; \
+    if [[ -n \"\${SLOPMUD_OIDC_SSO_REDIRECT_URI_SSM}\" ]]; then \
+      export SLOPMUD_OIDC_SSO_REDIRECT_URI=\"\$(aws ssm get-parameter --name \"\${SLOPMUD_OIDC_SSO_REDIRECT_URI_SSM}\" --with-decryption --query Parameter.Value --output text)\"; \
+    fi; \
+    if [[ -n \"\${SLOPMUD_OIDC_SSO_SCOPE_SSM}\" ]]; then \
+      export SLOPMUD_OIDC_SSO_SCOPE=\"\$(aws ssm get-parameter --name \"\${SLOPMUD_OIDC_SSO_SCOPE_SSM}\" --with-decryption --query Parameter.Value --output text)\"; \
     fi; \
     if [[ -n \"\${SLOPMUD_COMPLIANCE_PORTAL_CONFIG_JSON_SSM}\" ]]; then \
       export SLOPMUD_COMPLIANCE_PORTAL_CONFIG_JSON=\"\$(aws ssm get-parameter --name \"\${SLOPMUD_COMPLIANCE_PORTAL_CONFIG_JSON_SSM}\" --with-decryption --query Parameter.Value --output text)\"; \

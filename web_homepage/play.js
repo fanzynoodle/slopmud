@@ -1,8 +1,17 @@
 (() => {
-  const GAME_ORIGIN = "https://mud.slopmud.com:4242";
-  // Ensure the web client always runs from the OAuth/game web origin.
-  if (location.origin !== GAME_ORIGIN) {
-    const to = `${GAME_ORIGIN}${location.pathname}${location.search}${location.hash}`;
+  function isLocalHost(hostname) {
+    const h = String(hostname || "").trim().toLowerCase();
+    return h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h.endsWith(".localhost");
+  }
+
+  const configuredGameOrigin = String(
+    window.SLOPMUD_GAME_ORIGIN || document.documentElement.dataset.gameOrigin || "",
+  )
+    .trim()
+    .replace(/\/$/, "");
+  // Optionally force a canonical game origin when the page declares one.
+  if (configuredGameOrigin && !isLocalHost(location.hostname) && location.origin !== configuredGameOrigin) {
+    const to = `${configuredGameOrigin}${location.pathname}${location.search}${location.hash}`;
     location.replace(to);
     return;
   }
@@ -23,15 +32,10 @@
   const menuNewSession = document.getElementById("menu-new-session");
 
   const dlgConnect = document.getElementById("dlg-connect");
-  const dlgAuthGate = document.getElementById("dlg-auth-gate");
   const dlgOnline = document.getElementById("dlg-online");
   const dlgAccount = document.getElementById("dlg-account");
   const dlgSso = document.getElementById("dlg-sso");
   const dlgSettings = document.getElementById("dlg-settings");
-
-  const btnGatePassword = document.getElementById("btn-gate-password");
-  const btnGateSlopsso = document.getElementById("btn-gate-slopsso");
-  const btnGateGoogle = document.getElementById("btn-gate-google");
 
   const btnConnect = document.getElementById("btn-connect");
   const btnDisconnect = document.getElementById("btn-disconnect");
@@ -73,16 +77,126 @@
 
   let ssoScanBuf = "";
   let lastSsoUrl = "";
+  let lastAutoFollowedSsoUrl = "";
 
   let oauthProviders = { google: false, oidc: false };
   let oauthIdentity = null; // { provider, email?, sub? }
   let oauthPollTimer = null;
+  let oauthCallbackHandoffActive = false;
+  let oauthCallbackHandoffTimer = null;
+  let oauthCallbackWebAuthReady = false;
+  let oauthCallbackOutputBuffer = "";
 
-  let authGateChosen = false;
+  let pendingAuthName = "";
+  let pendingOauthNameSubmitted = false;
 
   const LS_WS_URL = "slopmud_ws_url";
   const LS_AUTOSCROLL = "slopmud_autoscroll";
   const LS_RESUME_TOKEN = "slopmud_resume_token";
+  const LS_PENDING_OAUTH_METHOD = "slopmud_pending_oauth_method";
+  const LS_PENDING_OAUTH_NAME = "slopmud_pending_oauth_name";
+  const OAUTH_CALLBACK_STALE_BANNER = "slopmud (alpha)\r\ncharacter creation (step 1/4)\r\nname: ";
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function normalizeOauthMethod(method) {
+    const m = String(method || "").trim().toLowerCase();
+    if (m === "google") return "google";
+    if (m === "oidc" || m === "slopsso") return "oidc";
+    return "";
+  }
+
+  function setPendingOauthChoice(method, name) {
+    try {
+      localStorage.setItem(LS_PENDING_OAUTH_METHOD, String(method || "").trim().toLowerCase());
+      localStorage.setItem(LS_PENDING_OAUTH_NAME, String(name || "").trim());
+    } catch {
+      // ignore
+    }
+  }
+
+  function getPendingOauthChoice() {
+    try {
+      return {
+        method: String(localStorage.getItem(LS_PENDING_OAUTH_METHOD) || "").trim().toLowerCase(),
+        name: String(localStorage.getItem(LS_PENDING_OAUTH_NAME) || "").trim(),
+      };
+    } catch {
+      return { method: "", name: "" };
+    }
+  }
+
+  function clearPendingOauthChoice() {
+    try {
+      localStorage.removeItem(LS_PENDING_OAUTH_METHOD);
+      localStorage.removeItem(LS_PENDING_OAUTH_NAME);
+    } catch {
+      // ignore
+    }
+    pendingOauthNameSubmitted = false;
+  }
+
+  function finishOauthCallbackHandoff() {
+    oauthCallbackHandoffActive = false;
+    oauthCallbackWebAuthReady = false;
+    if (oauthCallbackHandoffTimer) {
+      clearTimeout(oauthCallbackHandoffTimer);
+      oauthCallbackHandoffTimer = null;
+    }
+    setInputEnabled(true);
+  }
+
+  function beginOauthCallbackHandoff() {
+    oauthCallbackHandoffActive = true;
+    oauthCallbackWebAuthReady = false;
+    oauthCallbackOutputBuffer = "";
+    if (oauthCallbackHandoffTimer) {
+      clearTimeout(oauthCallbackHandoffTimer);
+      oauthCallbackHandoffTimer = null;
+    }
+    setStatus("connecting", "completing sign-in");
+    setInputEnabled(false);
+    appendLine("# completing sign-in...");
+    oauthCallbackHandoffTimer = setTimeout(() => {
+      if (!oauthCallbackHandoffActive) return;
+      oauthCallbackHandoffActive = false;
+      oauthCallbackHandoffTimer = null;
+      appendLine("# sign-in finished; continue in the terminal prompt below");
+      setInputEnabled(true);
+    }, 8000);
+  }
+
+  function maybeFinishOauthCallbackHandoff() {
+    if (!oauthCallbackHandoffActive) return;
+    const tail = term ? String(term.textContent || "").slice(-1500) : "";
+    if (
+      tail.includes("Orientation Wing") ||
+      tail.includes("character creation (step 2/4)") ||
+      tail.includes("auth method:")
+    ) {
+      finishOauthCallbackHandoff();
+    }
+  }
+
+  function appendDuringOauthCallbackHandoff(chunk) {
+    oauthCallbackOutputBuffer += String(chunk || "");
+
+    if (oauthCallbackOutputBuffer.startsWith(OAUTH_CALLBACK_STALE_BANNER)) {
+      if (oauthCallbackOutputBuffer.length <= OAUTH_CALLBACK_STALE_BANNER.length) {
+        return;
+      }
+      const rest = oauthCallbackOutputBuffer.slice(OAUTH_CALLBACK_STALE_BANNER.length);
+      oauthCallbackOutputBuffer = "";
+      if (rest) append(rest);
+      return;
+    }
+
+    const out = oauthCallbackOutputBuffer;
+    oauthCallbackOutputBuffer = "";
+    if (out) append(out);
+  }
 
   function updateSsoUrl(url) {
     const u = String(url || "").trim();
@@ -106,9 +220,25 @@
     // Keep a rolling buffer to handle URLs split across frames.
     ssoScanBuf = (ssoScanBuf + s).slice(-4096);
 
-    // Broker prints: "open this url in a browser to sign in:\r\n  https://.../auth/google?code=...\r\n"
-    const m = ssoScanBuf.match(/https?:\/\/[^\s]+\/auth\/google\?code=[A-Za-z0-9]+/);
-    if (m && m[0] && m[0] !== lastSsoUrl) updateSsoUrl(m[0]);
+    // Broker prints: "open this url in a browser to sign in:\r\n  https://.../auth/<provider>?code=...\r\n"
+    const m = ssoScanBuf.match(/https?:\/\/[^\s]+\/auth\/(?:google|oidc)\?code=[A-Za-z0-9]+/);
+    if (m && m[0] && m[0] !== lastSsoUrl) {
+      updateSsoUrl(m[0]);
+      maybeAutoFollowLegacySsoUrl(m[0]);
+    }
+  }
+
+  function maybeAutoFollowLegacySsoUrl(url) {
+    const u = String(url || "").trim();
+    if (!u) return;
+    if (oauthIdentity) return;
+    if (u === lastAutoFollowedSsoUrl) return;
+    lastAutoFollowedSsoUrl = u;
+    try {
+      window.location.href = u;
+    } catch {
+      appendLine("# failed to open sso url automatically");
+    }
   }
 
   function isValidResumeToken(t) {
@@ -168,9 +298,6 @@
     btnAuthLoginSso && (btnAuthLoginSso.disabled = !canUseSso);
     btnAuthCreateSso && (btnAuthCreateSso.disabled = !canUseSso);
 
-    // Auth gate buttons mirror provider availability.
-    btnGateGoogle && (btnGateGoogle.disabled = !oauthProviders.google);
-    btnGateSlopsso && (btnGateSlopsso.disabled = !oauthProviders.oidc);
   }
 
   async function loadOauthProviders() {
@@ -297,10 +424,11 @@
     }, 500);
   }
 
-  async function setWebAuth(action, method, name = "", password) {
+  async function setWebAuth(action, method, name = "", password, opts = {}) {
     const token = getOrCreateResumeToken();
     const body = { resume: token, action, method, name };
     if (password !== undefined) body.password = password;
+    const quiet = !!opts.quiet;
     try {
       const r = await fetch("/api/webauth", {
         method: "POST",
@@ -309,22 +437,38 @@
       });
       const d = await r.json().catch(() => null);
       if (!r.ok || !d || d.type !== "ok") {
-        appendLine(`# auth failed: ${(d && d.message) || r.status}`);
+        if (!quiet) appendLine(`# auth failed: ${(d && d.message) || r.status}`);
         return false;
       }
       return true;
     } catch {
-      appendLine("# auth failed: network error");
+      if (!quiet) appendLine("# auth failed: network error");
       return false;
     }
   }
 
-  async function setAutoSsoWebAuth() {
-    await refreshOauthStatus();
-    const provider = oauthIdentity && oauthIdentity.provider ? String(oauthIdentity.provider) : "";
-    const method = provider.toLowerCase();
-    if (method !== "google" && method !== "oidc") return false;
-    return setWebAuth("auto", method, "");
+  async function setAutoSsoWebAuth(opts = {}) {
+    const timeoutMs = Math.max(1000, Number(opts.timeoutMs) || 12_000);
+    const deadline = Date.now() + timeoutMs;
+    const pending = getPendingOauthChoice();
+    const expectedMethod = normalizeOauthMethod(opts.method || pending.method);
+
+    while (Date.now() < deadline) {
+      await refreshOauthStatus();
+
+      const identityMethod = normalizeOauthMethod(
+        oauthIdentity && oauthIdentity.provider ? String(oauthIdentity.provider) : "",
+      );
+      const method = identityMethod || expectedMethod;
+      if (method) {
+        const ok = await setWebAuth("auto", method, "", undefined, { quiet: true });
+        if (ok) return true;
+      }
+
+      await sleep(250);
+    }
+
+    return false;
   }
 
   function withResumeToken(url, token) {
@@ -358,9 +502,32 @@
     return `${proto}//${location.host}/ws`;
   }
 
+  function normalizeStoredWsUrl(raw) {
+    const fallback = defaultWsUrl();
+    const value = String(raw || "").trim();
+    if (!value) return fallback;
+
+    try {
+      const u = new URL(value, fallback);
+      if (u.protocol === "http:") u.protocol = "ws:";
+      if (u.protocol === "https:") u.protocol = "wss:";
+
+      // For the public hosted client, stale saved websocket targets must not
+      // override the canonical game origin/port after deploys.
+      if (!isLocalHost(location.hostname)) {
+        if (u.host !== location.host || u.pathname !== "/ws") return fallback;
+      }
+
+      return u.toString();
+    } catch {
+      return fallback;
+    }
+  }
+
   function loadSettings() {
-    const u = localStorage.getItem(LS_WS_URL);
-    if (wsUrlEl) wsUrlEl.value = (u && u.trim()) || defaultWsUrl();
+    const u = normalizeStoredWsUrl(localStorage.getItem(LS_WS_URL));
+    if (wsUrlEl) wsUrlEl.value = u;
+    localStorage.setItem(LS_WS_URL, u);
 
     const s = localStorage.getItem(LS_AUTOSCROLL);
     if (optScroll) optScroll.checked = s === null ? true : s === "1";
@@ -415,11 +582,37 @@
     lineEl && lineEl.focus();
   }
 
+  function maybeAutoSubmitPendingOauthName() {
+    if (pendingOauthNameSubmitted) return;
+    const pending = getPendingOauthChoice();
+    if (!pending.name) return;
+    if (!sock || sock.readyState !== WebSocket.OPEN) return;
+    if (oauthCallbackHandoffActive) return;
+
+    const tail = term ? String(term.textContent || "").slice(-1200) : "";
+    if (!(tail.includes("\r\nname:") || tail.endsWith("name: "))) return;
+    if (tail.includes("auth method:")) return;
+
+    pendingOauthNameSubmitted = true;
+    pendingAuthName = pending.name;
+    sendText(`${pending.name}\n`);
+    clearPendingOauthChoice();
+  }
+
   function setInputEnabled(on) {
     if (!lineEl) return;
     lineEl.disabled = !on;
     if (!on) lineEl.placeholder = "choose an auth method to connect";
     else lineEl.placeholder = "type here, press Enter";
+  }
+
+  async function waitForSocketOpen(timeoutMs = 12000) {
+    const deadline = Date.now() + Math.max(1000, Number(timeoutMs) || 12000);
+    while (Date.now() < deadline) {
+      if (sock && sock.readyState === WebSocket.OPEN) return true;
+      await sleep(50);
+    }
+    return false;
   }
 
   function connect() {
@@ -446,7 +639,7 @@
     ws.addEventListener("open", () => {
       setStatus("connected", displayUrl);
       appendLine(`# connected: ${displayUrl}`);
-      setInputEnabled(true);
+      if (!oauthCallbackHandoffActive) setInputEnabled(true);
       lineEl && lineEl.focus();
       const hadReconnectAttempts = reconnectAttempts > 0;
       reconnectAttempts = 0;
@@ -472,13 +665,19 @@
     ws.addEventListener("message", (ev) => {
       if (typeof ev.data === "string") {
         scanForSsoUrl(ev.data);
-        append(ev.data);
+        if (oauthCallbackHandoffActive) appendDuringOauthCallbackHandoff(ev.data);
+        else append(ev.data);
+        maybeAutoSubmitPendingOauthName();
+        maybeFinishOauthCallbackHandoff();
         return;
       }
       if (ev.data instanceof ArrayBuffer) {
         const s = decoder.decode(new Uint8Array(ev.data));
         scanForSsoUrl(s);
-        append(s);
+        if (oauthCallbackHandoffActive) appendDuringOauthCallbackHandoff(s);
+        else append(s);
+        maybeAutoSubmitPendingOauthName();
+        maybeFinishOauthCallbackHandoff();
         return;
       }
       // Blob fallback
@@ -486,7 +685,10 @@
         ev.data.arrayBuffer().then((ab) => {
           const s = decoder.decode(new Uint8Array(ab));
           scanForSsoUrl(s);
-          append(s);
+          if (oauthCallbackHandoffActive) appendDuringOauthCallbackHandoff(s);
+          else append(s);
+          maybeAutoSubmitPendingOauthName();
+          maybeFinishOauthCallbackHandoff();
         });
       }
     });
@@ -551,6 +753,29 @@
     if (!lineEl) return;
     const raw = lineEl.value;
     lineEl.value = "";
+    if (oauthCallbackHandoffActive) {
+      appendLine("# completing sign-in; please wait");
+      return;
+    }
+    const trimmed = raw.trim();
+    const lower = trimmed.toLowerCase();
+    const termTail = term ? String(term.textContent || "").slice(-1200) : "";
+
+    if ((termTail.includes("\r\nauth method:") || termTail.includes("\nauth method:")) &&
+        (lower === "google" || lower === "oidc" || lower === "slopsso")) {
+      const method = lower === "google" ? "google" : "oidc";
+      if (!pendingAuthName) {
+        appendLine("# missing character name");
+        return;
+      }
+      setPendingOauthChoice(method, pendingAuthName);
+      startOauth(method, { redirect: true });
+      return;
+    }
+
+    if ((termTail.includes("\r\nname:") || termTail.endsWith("name: ")) && !termTail.includes("auth method:")) {
+      pendingAuthName = trimmed;
+    }
 
     // Client-side escape hatch: start a new session (clear resume token) so you can
     // authenticate as a different account name after reload.
@@ -664,50 +889,6 @@
       });
   }
 
-  dlgAuthGate &&
-    dlgAuthGate.addEventListener("close", () => {
-      // If the user closes the gate without picking a method, put them into the connect dialog.
-      if (authGateChosen) return;
-      if (sock && (sock.readyState === WebSocket.OPEN || sock.readyState === WebSocket.CONNECTING)) return;
-      openDialog(dlgConnect, authNameEl || wsUrlEl);
-    });
-
-  btnGatePassword &&
-    btnGatePassword.addEventListener("click", async () => {
-      authGateChosen = true;
-      try {
-        dlgAuthGate && dlgAuthGate.close();
-      } catch {
-        // ignore
-      }
-      // Password mode is terminal-first: connect immediately and let the MUD prompt.
-      await connectFreshSession();
-      lineEl && lineEl.focus();
-    });
-
-  btnGateSlopsso &&
-    btnGateSlopsso.addEventListener("click", () => {
-      authGateChosen = true;
-      try {
-        dlgAuthGate && dlgAuthGate.close();
-      } catch {
-        // ignore
-      }
-      // Go straight to the IdP (no mud UI yet).
-      oauthProviders.oidc && startOauth("oidc", { redirect: true });
-    });
-
-  btnGateGoogle &&
-    btnGateGoogle.addEventListener("click", () => {
-      authGateChosen = true;
-      try {
-        dlgAuthGate && dlgAuthGate.close();
-      } catch {
-        // ignore
-      }
-      oauthProviders.google && startOauth("google", { redirect: true });
-    });
-
   btnConnect && btnConnect.addEventListener("click", () => {
     shouldReconnect = true;
     connect();
@@ -744,6 +925,7 @@
   }
 
   async function doAuthPassword(action) {
+    clearPendingOauthChoice();
     const name = readAuthName();
     const pw = authPasswordEl ? authPasswordEl.value : "";
     if (!name) return;
@@ -764,6 +946,7 @@
   }
 
   async function doAuthSso(action) {
+    clearPendingOauthChoice();
     const name = readAuthName();
     if (!name) return;
     if (!oauthIdentity || !oauthIdentity.provider) {
@@ -894,7 +1077,8 @@
       saveSettings();
     });
 
-  // Always ask the user how they want to auth before opening a WebSocket.
+  // Terminal-first auth model: connect immediately, then let the broker prompt for auth
+  // after character name. OAuth callbacks still auto-complete via WEB_AUTH.
   {
     const h = String(location.hash || "");
     if (h.startsWith("#oauth=")) {
@@ -904,20 +1088,46 @@
       } catch {
         // ignore
       }
-      authGateChosen = true;
       if (oauthResult === "ok") {
         // After OAuth callback, connect immediately (no extra connect dialog).
-        connectFreshSession(async () => {
-          await setAutoSsoWebAuth();
-        }).catch(() => {
+        beginOauthCallbackHandoff();
+        Promise.resolve()
+          .then(async () => {
+            shouldReconnect = true;
+            connect();
+            const connected = await waitForSocketOpen();
+            if (!connected) {
+              appendLine("# sign-in finished; continue in the terminal prompt below");
+              finishOauthCallbackHandoff();
+              return;
+            }
+
+            const pending = getPendingOauthChoice();
+            const expectedMethod = normalizeOauthMethod(pending.method);
+            const ok = await setAutoSsoWebAuth({ method: expectedMethod });
+
+            if (!ok) {
+              appendLine("# sign-in finished; continue in the terminal prompt below");
+              finishOauthCallbackHandoff();
+              return;
+            }
+
+            oauthCallbackWebAuthReady = true;
+            clearPendingOauthChoice();
+          })
+          .catch(() => {
           // ignore
         });
         lineEl && lineEl.focus();
       } else {
-        openInitialAuthGate();
+        shouldReconnect = true;
+        connect();
+        lineEl && lineEl.focus();
       }
     } else {
-      openInitialAuthGate();
+      shouldReconnect = true;
+      connect();
+      lineEl && lineEl.focus();
     }
   }
 })();

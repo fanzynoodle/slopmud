@@ -8,7 +8,7 @@ use axum::{
     Router,
     extract::{ConnectInfo, Host, Query, State, ws},
     http::{StatusCode, Uri, header},
-    response::{Html, IntoResponse, Redirect},
+    response::{Html, IntoResponse, Redirect, Response},
     routing::{get, post},
 };
 use axum_server::tls_rustls::RustlsConfig;
@@ -54,6 +54,30 @@ ENV:
 "
     );
     std::process::exit(2);
+}
+
+async fn serve_static_no_cache(path: PathBuf, content_type: &'static str) -> Response {
+    match tokio::fs::read(&path).await {
+        Ok(body) => {
+            let mut resp = Response::new(axum::body::Body::from(body));
+            let headers = resp.headers_mut();
+            headers.insert(
+                header::CONTENT_TYPE,
+                header::HeaderValue::from_static(content_type),
+            );
+            headers.insert(
+                header::CACHE_CONTROL,
+                header::HeaderValue::from_static("no-cache, no-store, must-revalidate"),
+            );
+            headers.insert(header::PRAGMA, header::HeaderValue::from_static("no-cache"));
+            headers.insert(header::EXPIRES, header::HeaderValue::from_static("0"));
+            resp
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            StatusCode::NOT_FOUND.into_response()
+        }
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -422,6 +446,16 @@ async fn api_oauth_start(
             m.insert(state_code.clone(), pending);
         }
         "oidc" => {
+            let path = web_pending_path(&state.oauth.dir, "oidc", &state_code);
+            if let Err(e) = write_web_pending(&path, &pending) {
+                warn!(err = %e, path=%path.display(), "failed to persist oidc web pending");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    axum::Json(OAuthStartResp::Err {
+                        message: "failed to persist oauth state".to_string(),
+                    }),
+                );
+            }
             let mut m = state.oauth.web_pending_oidc.lock().await;
             m.insert(state_code.clone(), pending);
         }
@@ -701,7 +735,7 @@ struct GoogleOAuthPending {
     error: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct WebOAuthPending {
     resume: String,
     verifier: String,
@@ -724,6 +758,27 @@ fn pending_path(dir: &Path, code: &str) -> PathBuf {
     let mut p = dir.to_path_buf();
     p.push(format!("{}.json", code));
     p
+}
+
+fn web_pending_path(dir: &Path, provider: &str, code: &str) -> PathBuf {
+    let mut p = dir.to_path_buf();
+    p.push(format!("web-{provider}-{code}.json"));
+    p
+}
+
+fn write_web_pending(path: &Path, pending: &WebOAuthPending) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, serde_json::to_string_pretty(pending)?)?;
+    std::fs::rename(&tmp, path)?;
+    Ok(())
+}
+
+fn read_web_pending(path: &Path) -> anyhow::Result<WebOAuthPending> {
+    let s = std::fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&s)?)
 }
 
 fn base64url_sha256(s: &str) -> String {
@@ -1205,8 +1260,9 @@ async fn oidc_auth_start(
         .unwrap_or_default()
         .as_secs();
 
+    let path = web_pending_path(&st.oauth.dir, "oidc", code);
     let pending = { st.oauth.web_pending_oidc.lock().await.get(code).cloned() };
-    let Some(p) = pending else {
+    let Some(p) = pending.or_else(|| read_web_pending(&path).ok()) else {
         return (
             axum::http::StatusCode::NOT_FOUND,
             "unknown code
@@ -1217,6 +1273,7 @@ async fn oidc_auth_start(
     if now_unix.saturating_sub(p.created_unix) > 15 * 60 {
         let mut m = st.oauth.web_pending_oidc.lock().await;
         m.remove(code);
+        let _ = std::fs::remove_file(&path);
         return (
             axum::http::StatusCode::BAD_REQUEST,
             "oauth expired
@@ -1251,8 +1308,9 @@ async fn oidc_auth_callback(
             .into_response();
     };
 
+    let path = web_pending_path(&st.oauth.dir, "oidc", state_code);
     let pending = st.oauth.web_pending_oidc.lock().await.get(state_code).cloned();
-    let Some(pending) = pending else {
+    let Some(pending) = pending.or_else(|| read_web_pending(&path).ok()) else {
         return (
             axum::http::StatusCode::NOT_FOUND,
             "unknown state
@@ -1377,6 +1435,7 @@ async fn oidc_auth_callback(
     }
     // Consume the one-time web state after successful completion.
     st.oauth.web_pending_oidc.lock().await.remove(state_code);
+    let _ = std::fs::remove_file(&path);
 
     oauth_popup(true, "ok")
 }
@@ -1746,13 +1805,8 @@ impl WebSessionState {
         }
     }
 
-    fn buffer_take_all(&mut self) -> Vec<Vec<u8>> {
-        let mut out = Vec::new();
-        while let Some(b) = self.buffer.pop_front() {
-            out.push(b);
-        }
-        self.buffer_bytes = 0;
-        out
+    fn buffer_snapshot(&self) -> Vec<Vec<u8>> {
+        self.buffer.iter().cloned().collect()
     }
 }
 
@@ -1883,14 +1937,12 @@ impl WebSession {
     async fn deliver_output(&self, data: Vec<u8>) {
         let ws_tx = {
             let mut st = self.state.lock().await;
-            if let Some(att) = st.attached.as_ref() {
-                att.ws_tx.clone()
-            } else {
-                st.buffer_push(data);
-                return;
-            }
+            st.buffer_push(data.clone());
+            st.attached.as_ref().map(|att| att.ws_tx.clone())
         };
-        let _ = ws_tx.send(ws::Message::Binary(data)).await;
+        if let Some(ws_tx) = ws_tx {
+            let _ = ws_tx.send(ws::Message::Binary(data)).await;
+        }
     }
 
     async fn detach_ws(&self, attach_id: u64) {
@@ -1922,7 +1974,7 @@ impl WebSession {
             let prev_cancel = st.attached.take().map(|a| a.cancel);
             st.attach_seq = st.attach_seq.saturating_add(1);
             let attach_id = st.attach_seq;
-            let buffered = st.buffer_take_all();
+            let buffered = st.buffer_snapshot();
             st.attached = Some(AttachedWs {
                 id: attach_id,
                 ws_tx: ws_tx.clone(),
@@ -2186,12 +2238,28 @@ async fn main() {
     tokio::spawn(state.web_sessions.clone().sweep_loop());
 
     let service = ServeDir::new(&cfg.static_dir);
+    let play_html_path = cfg.static_dir.join("play.html");
+    let play_js_path = cfg.static_dir.join("play.js");
     let app_https = Router::new()
         .route(
             "/healthz",
             get(|| async {
                 "ok
 "
+            }),
+        )
+        .route(
+            "/play.html",
+            get({
+                let path = play_html_path.clone();
+                move || serve_static_no_cache(path.clone(), "text/html; charset=utf-8")
+            }),
+        )
+        .route(
+            "/play.js",
+            get({
+                let path = play_js_path.clone();
+                move || serve_static_no_cache(path.clone(), "text/javascript; charset=utf-8")
             }),
         )
         .route("/api/online", get(api_online))

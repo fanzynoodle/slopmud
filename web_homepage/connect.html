@@ -1,9 +1,19 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-game-origin="https://mud.slopmud.com:4242">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
+    <script>
+      (function () {
+        var canonical = document.documentElement.dataset.gameOrigin || "";
+        if (!canonical) return;
+        canonical = String(canonical).replace(/\/$/, "");
+        if (location.origin !== canonical) {
+          location.replace(canonical + location.pathname + location.search + location.hash);
+        }
+      })();
+    </script>
     <title>slopmud connect</title>
     <meta name="description" content="choose human or robot and connect" />
     <link rel="icon" href="data:," />

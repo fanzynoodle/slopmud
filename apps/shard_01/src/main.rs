@@ -994,6 +994,7 @@ struct Config {
     bartender_emote_ms: u64,
     mob_wander_ms: u64,
     raft_log_path: PathBuf,
+    players_path: PathBuf,
     bootstrap_admins: Vec<String>,
     bootstrap_admin_sso: Vec<String>,
 }
@@ -1026,6 +1027,9 @@ fn parse_args() -> Config {
 
     let raft_log_path: PathBuf = std::env::var("SHARD_RAFT_LOG")
         .unwrap_or_else(|_| "var/shard_01_raft.jsonl".to_string())
+        .into();
+    let players_path: PathBuf = std::env::var("SHARD_PLAYERS_PATH")
+        .unwrap_or_else(|_| "var/shard_01_players.json".to_string())
         .into();
     let bootstrap_admins: Vec<String> = std::env::var("SHARD_BOOTSTRAP_ADMINS")
         .ok()
@@ -1065,6 +1069,7 @@ fn parse_args() -> Config {
         bartender_emote_ms,
         mob_wander_ms,
         raft_log_path,
+        players_path,
         bootstrap_admins,
         bootstrap_admin_sso,
     }
@@ -2335,6 +2340,129 @@ struct World {
     raft: raftlog::RaftLog<groups::GroupLogEntry>,
     raft_watch: HashSet<CharacterId>,
     groups: groups::GroupStore,
+    players_path: PathBuf,
+    players: HashMap<String, PlayerSnapshot>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct AbilityScoresSnapshot {
+    str_: i32,
+    dex: i32,
+    con: i32,
+    int_: i32,
+    wis: i32,
+    cha: i32,
+}
+
+impl From<AbilityScores> for AbilityScoresSnapshot {
+    fn from(v: AbilityScores) -> Self {
+        Self {
+            str_: v.str_,
+            dex: v.dex,
+            con: v.con,
+            int_: v.int_,
+            wis: v.wis,
+            cha: v.cha,
+        }
+    }
+}
+
+impl From<AbilityScoresSnapshot> for AbilityScores {
+    fn from(v: AbilityScoresSnapshot) -> Self {
+        Self {
+            str_: v.str_,
+            dex: v.dex,
+            con: v.con,
+            int_: v.int_,
+            wis: v.wis,
+            cha: v.cha,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct PlayerSnapshot {
+    name: String,
+    principal: String,
+    is_bot: bool,
+    bot_ever: bool,
+    bot_ever_since_ms: Option<u64>,
+    bot_mode_changed_ms: u64,
+    friends: Vec<String>,
+    room_id: String,
+    autoassist: bool,
+    follow_leader: bool,
+    drink_level: u32,
+    gold: u32,
+    inv: HashMap<String, u32>,
+    quest: HashMap<String, String>,
+    class: String,
+    level: u32,
+    xp: u32,
+    skill_points: u32,
+    skills: HashMap<String, u32>,
+    race: String,
+    sex: String,
+    pronouns: String,
+    stats: AbilityScoresSnapshot,
+    hp: i32,
+    max_hp: i32,
+    mana: i32,
+    max_mana: i32,
+    stamina: i32,
+    max_stamina: i32,
+    pvp_enabled: bool,
+    equip: HashMap<String, String>,
+}
+
+impl PlayerSnapshot {
+    fn from_character(c: &Character) -> Option<Self> {
+        let race = c.race?;
+        let class = c.class?;
+        let mut friends = c.friends.iter().cloned().collect::<Vec<_>>();
+        friends.sort();
+
+        let mut equip = HashMap::new();
+        for &slot in items::EquipSlot::all() {
+            if let Some(item) = c.equip.get(slot) {
+                equip.insert(slot.as_str().to_string(), item.clone());
+            }
+        }
+
+        Some(Self {
+            name: c.name.clone(),
+            principal: c.principal.clone(),
+            is_bot: c.is_bot,
+            bot_ever: c.bot_ever,
+            bot_ever_since_ms: c.bot_ever_since_ms,
+            bot_mode_changed_ms: c.bot_mode_changed_ms,
+            friends,
+            room_id: c.room_id.clone(),
+            autoassist: c.autoassist,
+            follow_leader: c.follow_leader,
+            drink_level: c.drink_level,
+            gold: c.gold,
+            inv: c.inv.clone(),
+            quest: c.quest.clone(),
+            class: class.as_str().to_string(),
+            level: c.level,
+            xp: c.xp,
+            skill_points: c.skill_points,
+            skills: c.skills.clone(),
+            race: race.as_str().to_string(),
+            sex: c.sex.as_str().to_string(),
+            pronouns: c.pronouns.as_str().to_string(),
+            stats: c.stats.into(),
+            hp: c.hp,
+            max_hp: c.max_hp,
+            mana: c.mana,
+            max_mana: c.max_mana,
+            stamina: c.stamina,
+            max_stamina: c.max_stamina,
+            pvp_enabled: c.pvp_enabled,
+            equip,
+        })
+    }
 }
 
 impl World {
@@ -2344,6 +2472,7 @@ impl World {
         bartender_emote_ms: u64,
         mob_wander_ms: u64,
         raft_log_path: PathBuf,
+        players_path: PathBuf,
         bootstrap_admins: Vec<String>,
         bootstrap_admin_sso: Vec<String>,
     ) -> anyhow::Result<Self> {
@@ -2384,10 +2513,174 @@ impl World {
             raft,
             raft_watch: HashSet::new(),
             groups,
+            players_path: players_path.clone(),
+            players: load_player_snapshots(&players_path),
         };
 
         w.ensure_genesis_groups(&bootstrap_admins, &bootstrap_admin_sso)?;
         Ok(w)
+    }
+
+    fn persist_player_snapshots(&self) -> anyhow::Result<()> {
+        if let Some(parent) = self.players_path.parent() {
+            std::fs::create_dir_all(parent).with_context(|| {
+                format!("create players dir {}", parent.display())
+            })?;
+        }
+
+        let mut snapshots = self.players.values().cloned().collect::<Vec<_>>();
+        snapshots.sort_by(|a, b| a.principal.cmp(&b.principal).then(a.name.cmp(&b.name)));
+
+        let tmp = self.players_path.with_extension("json.tmp");
+        std::fs::write(&tmp, serde_json::to_string_pretty(&snapshots)?)
+            .with_context(|| format!("write players tmp {}", tmp.display()))?;
+        std::fs::rename(&tmp, &self.players_path).with_context(|| {
+            format!(
+                "rename players tmp {} -> {}",
+                tmp.display(),
+                self.players_path.display()
+            )
+        })?;
+        Ok(())
+    }
+
+    fn remember_player(&mut self, c: &Character) {
+        let Some(snapshot) = PlayerSnapshot::from_character(c) else {
+            return;
+        };
+        self.players.insert(snapshot.principal.clone(), snapshot);
+        if let Err(e) = self.persist_player_snapshots() {
+            warn!(err = %e, "failed to persist player snapshot");
+        }
+    }
+
+    fn remember_player_by_id(&mut self, cid: CharacterId) {
+        let Some(snapshot) = self.chars.get(&cid).and_then(PlayerSnapshot::from_character) else {
+            return;
+        };
+        self.players.insert(snapshot.principal.clone(), snapshot);
+        if let Err(e) = self.persist_player_snapshots() {
+            warn!(err = %e, "failed to persist player snapshot");
+        }
+    }
+
+    fn persist_live_players(&mut self) {
+        let snapshots = self
+            .chars
+            .values()
+            .filter_map(PlayerSnapshot::from_character)
+            .collect::<Vec<_>>();
+        for snapshot in snapshots {
+            self.players.insert(snapshot.principal.clone(), snapshot);
+        }
+        if let Err(e) = self.persist_player_snapshots() {
+            warn!(err = %e, "failed to persist live player snapshots");
+        }
+    }
+
+    fn spawn_or_restore_character(
+        &mut self,
+        session: SessionId,
+        name: String,
+        principal: String,
+        auth_caps: HashSet<groups::Capability>,
+        is_bot: bool,
+        race: Race,
+        class: Class,
+        sex: Sex,
+        pronouns: PronounKey,
+    ) -> CharacterId {
+        if let Some(snapshot) = self.players.get(&principal).cloned() {
+            return self.restore_character(session, snapshot, principal, auth_caps);
+        }
+
+        self.spawn_character(
+            session, name, principal, auth_caps, is_bot, race, class, sex, pronouns,
+        )
+    }
+
+    fn restore_character(
+        &mut self,
+        session: SessionId,
+        snapshot: PlayerSnapshot,
+        principal: String,
+        auth_caps: HashSet<groups::Capability>,
+    ) -> CharacterId {
+        let cid = self.next_char_id;
+        self.next_char_id = self.next_char_id.saturating_add(1);
+
+        let room_id = if self.rooms.has_room(&snapshot.room_id) {
+            snapshot.room_id
+        } else {
+            self.rooms.start_room().to_string()
+        };
+        let race = Race::parse(&snapshot.race).unwrap_or(Race::Human);
+        let class = Class::parse(&snapshot.class).unwrap_or(Class::Fighter);
+        let sex = Sex::parse(&snapshot.sex).unwrap_or(Sex::None);
+        let pronouns = PronounKey::parse(&snapshot.pronouns)
+            .unwrap_or_else(|| PronounKey::default_for_sex(sex));
+        let mut equip = Equipment::new();
+        for (slot, item) in snapshot.equip {
+            if let Some(slot) = items::EquipSlot::parse(&slot) {
+                equip.set(slot, item);
+            }
+        }
+
+        let c = Character {
+            id: cid,
+            controller: Some(session),
+            created_by: Some(session),
+            name: snapshot.name,
+            principal,
+            auth_caps,
+            is_bot: snapshot.is_bot,
+            bot_ever: snapshot.bot_ever,
+            bot_ever_since_ms: snapshot.bot_ever_since_ms,
+            bot_mode_changed_ms: snapshot.bot_mode_changed_ms,
+            friends: snapshot.friends.into_iter().collect(),
+            room_id: room_id.clone(),
+            autoassist: snapshot.autoassist,
+            follow_leader: snapshot.follow_leader,
+            drink_level: snapshot.drink_level,
+            gold: snapshot.gold,
+            inv: snapshot.inv,
+            quest: snapshot.quest,
+            class: Some(class),
+            level: snapshot.level.max(1),
+            xp: snapshot.xp,
+            skill_points: snapshot.skill_points,
+            skills: snapshot.skills,
+            skill_cd_ms: HashMap::new(),
+            race: Some(race),
+            sex,
+            pronouns,
+            stats: snapshot.stats.into(),
+            hp: snapshot.hp.max(1).min(snapshot.max_hp.max(1)),
+            max_hp: snapshot.max_hp.max(1),
+            mana: snapshot.mana.max(0).min(snapshot.max_mana.max(0)),
+            max_mana: snapshot.max_mana.max(0),
+            stamina: snapshot.stamina.max(0).min(snapshot.max_stamina.max(0)),
+            max_stamina: snapshot.max_stamina.max(0),
+            last_mana_regen_ms: self.now_ms,
+            last_stamina_regen_ms: self.now_ms,
+            pvp_enabled: snapshot.pvp_enabled,
+            stunned_until_ms: 0,
+            combat: CombatState::new(self.now_ms),
+            equip,
+        };
+
+        self.chars.insert(cid, c);
+        self.occupants.entry(room_id).or_default().insert(cid);
+
+        let ss = self.sessions.entry(session).or_insert(SessionState {
+            controlled: Vec::new(),
+            active: cid,
+            pending_confirm: None,
+        });
+        ss.controlled.push(cid);
+        ss.active = cid;
+
+        cid
     }
 
     fn render_uptime(&self) -> String {
@@ -2654,6 +2947,7 @@ impl World {
             self.party_invites.remove(&cid);
             self.party_leave(cid);
             if let Some(c) = self.chars.remove(&cid) {
+                self.remember_player(&c);
                 if let Some(s) = self.occupants.get_mut(&c.room_id) {
                     s.remove(&cid);
                     if s.is_empty() {
@@ -3883,6 +4177,7 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
         cfg.bartender_emote_ms,
         cfg.mob_wander_ms,
         cfg.raft_log_path.clone(),
+        cfg.players_path.clone(),
         cfg.bootstrap_admins.clone(),
         cfg.bootstrap_admin_sso.clone(),
     )?;
@@ -3969,7 +4264,7 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     .and_then(PronounKey::parse)
                     .unwrap_or_else(|| PronounKey::default_for_sex(sex));
 
-                let cid = world.spawn_character(
+                let cid = world.spawn_or_restore_character(
                     session,
                     name.clone(),
                     principal,
@@ -3985,9 +4280,11 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     .get(&cid)
                     .expect("spawn_character inserts char");
                 let room_id = c.room_id.clone();
+                let build_prompt = render_build_prompt(c);
 
                 let join_msg = format!("* {name} joined");
                 world.broadcast_room(&mut fw, &room_id, &join_msg).await?;
+                world.remember_player_by_id(cid);
 
                 let mut hi = format!(
                     "hi {name}\r\n(type: help, rules, look, stats, kill <mob>, go <exit>, exit)\r\n"
@@ -4000,7 +4297,7 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
                     pronouns.as_str(),
                 ));
                 hi.push_str(&world.render_room_for(&room_id, session));
-                hi.push_str(&render_build_prompt(c));
+                hi.push_str(&build_prompt);
                 write_resp_async(&mut fw, RESP_OUTPUT, session, hi.as_bytes()).await?;
             }
             ShardReq::Detach { session } => {
@@ -8599,7 +8896,27 @@ async fn handle_broker(stream: TcpStream, rooms: rooms::Rooms, cfg: Config) -> a
     }
 
     // Broker disconnected: drop all in-memory session state.
+    world.persist_live_players();
     Ok(())
+}
+
+fn load_player_snapshots(path: &Path) -> HashMap<String, PlayerSnapshot> {
+    let Ok(s) = std::fs::read_to_string(path) else {
+        return HashMap::new();
+    };
+    let Ok(v) = serde_json::from_str::<Vec<PlayerSnapshot>>(&s) else {
+        warn!(path = %path.display(), "failed to parse player snapshot file");
+        return HashMap::new();
+    };
+
+    let mut out = HashMap::new();
+    for snapshot in v {
+        if snapshot.principal.trim().is_empty() {
+            continue;
+        }
+        out.insert(snapshot.principal.clone(), snapshot);
+    }
+    out
 }
 
 async fn process_due_events(

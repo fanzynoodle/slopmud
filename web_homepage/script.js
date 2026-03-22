@@ -1,11 +1,25 @@
 (() => {
-  const GAME_ORIGIN = "https://mud.slopmud.com:4242";
+  function isLocalHost(hostname) {
+    const h = String(hostname || "").trim().toLowerCase();
+    return h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h.endsWith(".localhost");
+  }
+
+  const configuredGameOrigin = String(
+    window.SLOPMUD_GAME_ORIGIN || document.documentElement.dataset.gameOrigin || "",
+  )
+    .trim()
+    .replace(/\/$/, "");
   // Keep landing and game web lifecycles split: selected pages must always run from the game origin.
   const p = String(location.pathname || "");
   const mustUseGameOrigin =
     p === "/connect.html" || p === "/play.html" || p === "/auth.html" || p === "/protocol.html";
-  if (mustUseGameOrigin && location.origin !== GAME_ORIGIN) {
-    const to = `${GAME_ORIGIN}${p}${location.search}${location.hash}`;
+  if (
+    configuredGameOrigin &&
+    mustUseGameOrigin &&
+    !isLocalHost(location.hostname) &&
+    location.origin !== configuredGameOrigin
+  ) {
+    const to = `${configuredGameOrigin}${p}${location.search}${location.hash}`;
     location.replace(to);
     return;
   }

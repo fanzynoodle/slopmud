@@ -223,6 +223,19 @@ def run_sso_create_flow(driver):
     _wait_term(driver, "Orientation Wing", timeout_s=20.0)
 
 
+def run_sso_login_flow(driver):
+    deadline = time.time() + 20.0
+    last = ""
+    while time.time() < deadline:
+        last = _term_text(driver)
+        if "Orientation Wing" in last:
+            return
+        if "character creation (step 2/4)" in last:
+            raise RuntimeError(f"fresh slopsso login fell back into setup:\n{last[-2000:]}")
+        time.sleep(0.05)
+    raise TimeoutError(f"timeout waiting for slopsso relogin into world; got:\n{last[-2000:]}")
+
+
 def main():
     broker_bind, shard_bind, web_bind, oidc_bind = _pick_ports()
     oidc_issuer = f"http://{oidc_bind}"
@@ -235,7 +248,10 @@ def main():
 
     run_id = str(time.time_ns())
     accounts_path = f"/tmp/slopmud_accounts_e2e_web_slopsso_reg_selenium_{run_id}.json"
+    players_path = f"/tmp/slopmud_players_e2e_web_slopsso_reg_selenium_{run_id}.json"
     env["SLOPMUD_ACCOUNTS_PATH"] = accounts_path
+    env["SLOPMUD_PLAYERS_PATH"] = players_path
+    env["SHARD_PLAYERS_PATH"] = players_path
     env["SESSION_TCP_ADDR"] = broker_bind
 
     # OIDC SSO provider (internal_oidc) with self-serve registration/reset.
@@ -257,6 +273,10 @@ def main():
 
     env["BIND"] = web_bind
     env["STATIC_DIR"] = "web_homepage"
+    env["SLOPMUD_OIDC_TOKEN_URL"] = f"{oidc_issuer}/token"
+    env["SLOPMUD_OIDC_CLIENT_ID"] = oidc_client_id
+    env["SLOPMUD_OIDC_CLIENT_SECRET"] = oidc_client_secret
+    env["SLOPMUD_OIDC_SCOPE"] = "slopmud:session"
     env["SLOPMUD_OIDC_SSO_AUTH_URL"] = f"{oidc_issuer}/authorize"
     env["SLOPMUD_OIDC_SSO_TOKEN_URL"] = f"{oidc_issuer}/token"
     env["SLOPMUD_OIDC_SSO_USERINFO_URL"] = f"{oidc_issuer}/userinfo"
@@ -307,13 +327,11 @@ def main():
         d = new_chrome(prof)
         try:
             d.get(f"http://{web_bind}/play.html")
-
-            # Auth gate must appear before any terminal connection.
-            _wait_dialog_open(d, "dlg-auth-gate", timeout_s=12.0)
-
-            # SlopSSO button should be enabled (OIDC configured).
-            _wait_enabled_id(d, "btn-gate-slopsso", timeout_s=12.0)
-            _click_id(d, "btn-gate-slopsso", timeout_s=12.0)
+            _wait_term(d, "name:", timeout_s=20.0)
+            name = f"SsoReg{run_id[-6:]}"
+            _send_line(d, name)
+            _wait_term(d, "type: password | google | slopsso", timeout_s=20.0)
+            _send_line(d, "slopsso")
 
             # We should now be on the IdP Sign in page (no mud UI).
             _wait_url_contains(d, oidc_bind, timeout_s=12.0)
@@ -362,10 +380,25 @@ def main():
                 raise RuntimeError(f"duplicate name prompt detected:\n{term[-2000:]}")
 
             if "character creation (step 2/4)" not in term:
-                name = f"SsoReg{run_id[-6:]}"
                 _send_line(d, name)
 
             run_sso_create_flow(d)
+
+            # Fresh browser state: prove the same OIDC identity can sign in again and
+            # restore directly into the world instead of re-running setup.
+            d.execute_script("localStorage.removeItem('slopmud_resume_token');")
+            d.get(f"http://{web_bind}/play.html")
+            _wait_term(d, "name:", timeout_s=20.0)
+            _send_line(d, name)
+            _wait_term(d, "type: password | google | slopsso", timeout_s=20.0)
+            _send_line(d, "slopsso")
+            _wait_url_contains(d, oidc_bind, timeout_s=12.0)
+            _set_input_name(d, "username", uname, timeout_s=10.0)
+            _set_input_name(d, "password", pw, timeout_s=10.0)
+            _wait_el(d, "css selector", "button[type='submit']", timeout_s=10.0).click()
+            _wait_url_contains(d, web_bind, timeout_s=14.0)
+            _wait_url_path_endswith(d, "/play.html", timeout_s=14.0)
+            run_sso_login_flow(d)
 
         finally:
             d.quit()

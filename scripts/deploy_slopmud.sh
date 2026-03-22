@@ -41,9 +41,9 @@ ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
   set -euo pipefail; \
   if command -v apt-get >/dev/null 2>&1; then \
     sudo DEBIAN_FRONTEND=noninteractive apt-get update -y; \
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates; \
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates awscli; \
   elif command -v dnf >/dev/null 2>&1; then \
-    sudo dnf -y install ca-certificates; \
+    sudo dnf -y install ca-certificates awscli; \
   else \
     echo 'Unsupported OS (need apt-get or dnf)'; exit 2; \
   fi; \
@@ -97,6 +97,18 @@ if [[ -n "${SLOPMUD_OIDC_TOKEN_URL:-}" ]]; then
     [[ -n "${SLOPMUD_OIDC_SCOPE:-}" ]] && echo "Environment=SLOPMUD_OIDC_SCOPE=${SLOPMUD_OIDC_SCOPE}"
   } >>"$tmp_unit"
 fi
+if [[ -n "${SLOPMUD_OIDC_TOKEN_URL_SSM:-}" ]]; then
+  echo "Environment=SLOPMUD_OIDC_TOKEN_URL_SSM=${SLOPMUD_OIDC_TOKEN_URL_SSM}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_OIDC_CLIENT_ID_SSM:-}" ]]; then
+  echo "Environment=SLOPMUD_OIDC_CLIENT_ID_SSM=${SLOPMUD_OIDC_CLIENT_ID_SSM}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_OIDC_CLIENT_SECRET_SSM:-}" ]]; then
+  echo "Environment=SLOPMUD_OIDC_CLIENT_SECRET_SSM=${SLOPMUD_OIDC_CLIENT_SECRET_SSM}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_OIDC_SCOPE_SSM:-}" ]]; then
+  echo "Environment=SLOPMUD_OIDC_SCOPE_SSM=${SLOPMUD_OIDC_SCOPE_SSM}" >>"$tmp_unit"
+fi
 
 # Optional: Google SSO handoff (slopmud broker + slopmud_web share a directory).
 if [[ -n "${SLOPMUD_GOOGLE_OAUTH_DIR:-}" ]]; then
@@ -109,6 +121,9 @@ fi
 # Optional: runtime config.
 if [[ -n "${SLOPMUD_ACCOUNTS_PATH:-}" ]]; then
   echo "Environment=SLOPMUD_ACCOUNTS_PATH=${SLOPMUD_ACCOUNTS_PATH}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_PLAYERS_PATH:-}" ]]; then
+  echo "Environment=SLOPMUD_PLAYERS_PATH=${SLOPMUD_PLAYERS_PATH}" >>"$tmp_unit"
 fi
 if [[ -n "${SLOPMUD_LOCALE:-}" ]]; then
   echo "Environment=SLOPMUD_LOCALE=${SLOPMUD_LOCALE}" >>"$tmp_unit"
@@ -146,8 +161,27 @@ if [[ -n "${SLOPMUD_EVENTLOG_UPLOAD_SCAN_INTERVAL_S:-}" ]]; then
   echo "Environment=SLOPMUD_EVENTLOG_UPLOAD_SCAN_INTERVAL_S=${SLOPMUD_EVENTLOG_UPLOAD_SCAN_INTERVAL_S}" >>"$tmp_unit"
 fi
 
+exec_start="${SLOPMUD_REMOTE_BIN}"
+if [[ -n "${SLOPMUD_OIDC_TOKEN_URL_SSM:-}" || -n "${SLOPMUD_OIDC_CLIENT_ID_SSM:-}" || -n "${SLOPMUD_OIDC_CLIENT_SECRET_SSM:-}" || -n "${SLOPMUD_OIDC_SCOPE_SSM:-}" ]]; then
+  exec_start="/bin/bash -ceu ' \
+    if [[ -n \"\${SLOPMUD_OIDC_TOKEN_URL_SSM}\" ]]; then \
+      export SLOPMUD_OIDC_TOKEN_URL=\"\$(aws ssm get-parameter --name \"\${SLOPMUD_OIDC_TOKEN_URL_SSM}\" --with-decryption --query Parameter.Value --output text)\"; \
+    fi; \
+    if [[ -n \"\${SLOPMUD_OIDC_CLIENT_ID_SSM}\" ]]; then \
+      export SLOPMUD_OIDC_CLIENT_ID=\"\$(aws ssm get-parameter --name \"\${SLOPMUD_OIDC_CLIENT_ID_SSM}\" --with-decryption --query Parameter.Value --output text)\"; \
+    fi; \
+    if [[ -n \"\${SLOPMUD_OIDC_CLIENT_SECRET_SSM}\" ]]; then \
+      export SLOPMUD_OIDC_CLIENT_SECRET=\"\$(aws ssm get-parameter --name \"\${SLOPMUD_OIDC_CLIENT_SECRET_SSM}\" --with-decryption --query Parameter.Value --output text)\"; \
+    fi; \
+    if [[ -n \"\${SLOPMUD_OIDC_SCOPE_SSM}\" ]]; then \
+      export SLOPMUD_OIDC_SCOPE=\"\$(aws ssm get-parameter --name \"\${SLOPMUD_OIDC_SCOPE_SSM}\" --with-decryption --query Parameter.Value --output text)\"; \
+    fi; \
+    exec \"${SLOPMUD_REMOTE_BIN}\"; \
+  '"
+fi
+
 cat >>"$tmp_unit" <<EOF
-ExecStart=${SLOPMUD_REMOTE_BIN}
+ExecStart=${exec_start}
 Restart=always
 RestartSec=2
 NoNewPrivileges=true

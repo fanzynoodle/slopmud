@@ -171,11 +171,17 @@ locals {
     var.ssm_read_parameter_names,
     (var.compliance_portal_config_json_ssm_name != "" ? [var.compliance_portal_config_json_ssm_name] : []),
   ))
+  ssm_write_param_names = distinct(var.ssm_write_parameter_names)
 
   ssm_read_param_arns = [
     for n in local.ssm_read_param_names :
     "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(n, "/")}"
   ]
+  ssm_write_param_arns = [
+    for n in local.ssm_write_param_names :
+    "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(n, "/")}"
+  ]
+  bootstrap_restore_bundle_key = var.bootstrap_restore_bundle_key != "" ? var.bootstrap_restore_bundle_key : "bootstrap/${var.name_prefix}/rebootstrap.tgz"
 }
 
 data "aws_iam_policy_document" "ssm_read_params" {
@@ -228,6 +234,39 @@ resource "aws_iam_role_policy_attachment" "ssm_read_params" {
 
   role       = aws_iam_role.ssm[0].name
   policy_arn = aws_iam_policy.ssm_read_params[0].arn
+}
+
+data "aws_iam_policy_document" "ssm_write_params" {
+  count = var.enable_compute && length(local.ssm_write_param_arns) > 0 ? 1 : 0
+
+  statement {
+    sid    = "SsmWriteParameters"
+    effect = "Allow"
+    actions = [
+      "ssm:PutParameter",
+      "ssm:DeleteParameter",
+      "ssm:AddTagsToResource",
+      "ssm:RemoveTagsFromResource",
+    ]
+    resources = local.ssm_write_param_arns
+  }
+}
+
+resource "aws_iam_policy" "ssm_write_params" {
+  count = var.enable_compute && length(local.ssm_write_param_arns) > 0 ? 1 : 0
+
+  name_prefix = "${var.name_prefix}-ssmwrite-"
+  description = "Allow the instance to write specific SSM parameters (for cached TLS material)."
+  policy      = data.aws_iam_policy_document.ssm_write_params[0].json
+
+  tags = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ssm_write_params" {
+  count = var.enable_compute && length(local.ssm_write_param_arns) > 0 ? 1 : 0
+
+  role       = aws_iam_role.ssm[0].name
+  policy_arn = aws_iam_policy.ssm_write_params[0].arn
 }
 
 resource "aws_ssm_parameter" "compliance_portal_config_json" {
@@ -421,8 +460,7 @@ resource "aws_launch_template" "this" {
     security_groups             = [aws_security_group.this[0].id]
   }
 
-  user_data = var.dns_admin_enabled && (var.create_hosted_zone || var.dns_admin_zone_id != "") ? (
-    base64encode(<<EOT
+  user_data = base64encode(<<EOT
     #!/usr/bin/env bash
     set -euxo pipefail
 
@@ -431,6 +469,7 @@ resource "aws_launch_template" "this" {
     #!/usr/bin/env bash
     set -uo pipefail
 
+    DNS_ENABLED="${var.dns_admin_enabled && (var.create_hosted_zone || var.dns_admin_zone_id != "") ? 1 : 0}"
     ZONE_ID="${local.dns_admin_zone_id}"
     REGION="${var.region}"
     APEX="${local.zone_apex}"
@@ -438,6 +477,10 @@ resource "aws_launch_template" "this" {
     ${join("\n", local.dns_registration_names)}
     NAMES
     )
+
+    if [ "$DNS_ENABLED" != "1" ]; then
+      exit 0
+    fi
 
     if ! command -v aws >/dev/null 2>&1; then
       if command -v apt-get >/dev/null 2>&1; then
@@ -495,11 +538,57 @@ resource "aws_launch_template" "this" {
     echo "registered dns: ip=$PUBLIC_IP dns=$PUBLIC_DNS"
     SCRIPT
 
+    cat >/var/lib/cloud/scripts/per-boot/91-${var.name_prefix}-restore-stack.sh <<'SCRIPT'
+    #!/usr/bin/env bash
+    set -uo pipefail
+
+    BOOTSTRAP_RESTORE_ENABLED="${var.bootstrap_restore_enabled ? 1 : 0}"
+    export AWS_REGION="${var.region}"
+    export AWS_DEFAULT_REGION="${var.region}"
+    bundle_uri="s3://${local.assets_bucket_name}/${local.bootstrap_restore_bundle_key}"
+    work_root="/opt/slopmud/rebootstrap"
+    bundle_tgz="$work_root/bundle.tgz"
+    extract_dir="$work_root/extracted"
+
+    if [ "$BOOTSTRAP_RESTORE_ENABLED" != "1" ]; then
+      exit 0
+    fi
+
+    if ! command -v aws >/dev/null 2>&1; then
+      if command -v apt-get >/dev/null 2>&1; then
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -y && apt-get install -y awscli tar || true
+      elif command -v dnf >/dev/null 2>&1; then
+        dnf -y install awscli tar || true
+      fi
+    fi
+
+    if ! command -v aws >/dev/null 2>&1; then
+      echo "aws cli is unavailable; skipping stack restore"
+      exit 0
+    fi
+
+    install -d -m 0755 "$work_root" "$extract_dir"
+    if ! aws s3 cp "$bundle_uri" "$bundle_tgz"; then
+      echo "restore bundle not found at $bundle_uri; skipping stack restore"
+      exit 0
+    fi
+    rm -rf "$extract_dir"
+    mkdir -p "$extract_dir"
+    tar -xzf "$bundle_tgz" -C "$extract_dir"
+    "$extract_dir/run.sh" \
+      --bucket "${local.assets_bucket_name}" \
+      --track "${var.bootstrap_restore_track}" \
+      --env-prefix "${var.bootstrap_restore_env_prefix}" \
+      >>/var/log/slopmud-restore-stack.log 2>&1 || true
+    SCRIPT
+
     chmod 0755 /var/lib/cloud/scripts/per-boot/90-${var.name_prefix}-reregister-dns.sh
+    chmod 0755 /var/lib/cloud/scripts/per-boot/91-${var.name_prefix}-restore-stack.sh
     /var/lib/cloud/scripts/per-boot/90-${var.name_prefix}-reregister-dns.sh || true
+    /var/lib/cloud/scripts/per-boot/91-${var.name_prefix}-restore-stack.sh || true
 EOT
-    )
-  ) : null
+  )
 
   instance_market_options {
     market_type = "spot"
