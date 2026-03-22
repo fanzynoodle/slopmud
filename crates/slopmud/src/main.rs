@@ -4454,6 +4454,14 @@ async fn handle_conn(
             }
 
             if lc == "uptime" || lc == "uptime broker" || lc == "uptime session" {
+                fn fmt_uptime(secs: u64) -> String {
+                    let days = secs / 86_400;
+                    let hours = (secs % 86_400) / 3_600;
+                    let minutes = (secs % 3_600) / 60;
+                    let seconds = secs % 60;
+                    format!("{days}d {hours}h {minutes}m {seconds}s")
+                }
+
                 let now_unix = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -4467,7 +4475,7 @@ async fn handle_conn(
                     " - broker_started_unix: {}\r\n",
                     server_info.started_unix
                 ));
-                s.push_str(&format!(" - broker_uptime_s: {up_s}\r\n"));
+                s.push_str(&format!(" - broker_uptime: {}\r\n", fmt_uptime(up_s)));
                 s.push_str(&format!(" - broker_bind: {}\r\n", server_info.bind));
                 s.push_str(&format!(" - shard_addr: {}\r\n", server_info.shard_addr));
                 s.push_str(" - note: shard uptime/time via `uptime` (forwarded to shard)\r\n");
