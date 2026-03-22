@@ -2827,6 +2827,14 @@ impl World {
     }
 
     fn render_uptime(&self) -> String {
+        fn fmt_uptime(secs: u64) -> String {
+            let days = secs / 86_400;
+            let hours = (secs % 86_400) / 3_600;
+            let minutes = (secs % 3_600) / 60;
+            let seconds = secs % 60;
+            format!("{days}d {hours}h {minutes}m {seconds}s")
+        }
+
         let now_unix = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
@@ -2836,7 +2844,7 @@ impl World {
         s.push_str("uptime:\r\n");
         s.push_str(&format!(" - shard_wall_unix: {now_unix}\r\n"));
         s.push_str(&format!(" - shard_started_unix: {}\r\n", self.started_unix));
-        s.push_str(&format!(" - shard_uptime_s: {up}\r\n"));
+        s.push_str(&format!(" - shard_uptime: {}\r\n", fmt_uptime(up)));
         s.push_str(&format!(" - world_time_ms: {}\r\n", self.now_ms));
         s
     }
