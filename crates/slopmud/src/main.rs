@@ -9,6 +9,7 @@ use argon2::Argon2;
 use bytes::Bytes;
 use chrono::{TimeZone, Utc};
 use compliance::LogStream;
+use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use memchr::memchr;
 use mudproto::session::SessionId;
 use mudproto::shard::{REQ_ATTACH, REQ_DETACH, REQ_INPUT, ShardResp};
@@ -250,7 +251,7 @@ fn usage_and_exit() -> ! {
     eprintln!(
         "slopmud (session broker)\n\n\
 USAGE:\n  slopmud [--bind HOST:PORT] [--shard-addr HOST:PORT]\n\n\
-ENV:\n  SLOPMUD_BIND               default 0.0.0.0:4000\n  SHARD_ADDR                 default 127.0.0.1:5000\n  NODE_ID                    optional (for logs only)\n  SLOPMUD_ACCOUNTS_PATH       optional; default accounts.json (in WorkingDirectory)\n  SLOPMUD_LOCALE              optional; default en\n  SLOPMUD_ADMIN_BIND          optional; default 127.0.0.1:4011 (local admin JSON)\n  SLOPMUD_BANS_PATH           optional; default locks/bans.json\n  SBC_ADMIN_SOCK              optional; default /run/slopmud/sbc-admin.sock\n  SBC_EVENTS_SOCK             optional; default /run/slopmud/sbc-events.sock\n  SLOPMUD_EMAIL_MODE          optional; default disabled (disabled | ses | smtp | file)\n  SLOPMUD_EMAIL_FROM          required for ses/smtp; optional for file\n  SLOPMUD_SMTP_HOST           required for smtp\n  SLOPMUD_SMTP_PORT           optional; default 587\n  SLOPMUD_SMTP_USERNAME       optional\n  SLOPMUD_SMTP_PASSWORD       optional\n  SLOPMUD_EMAIL_FILE_DIR      optional; default /tmp/slopmud_email_outbox\n  SLOPMUD_EVENTLOG_ENABLED    optional; default 0\n  SLOPMUD_EVENTLOG_SPOOL_DIR  optional; default locks/eventlog\n  SLOPMUD_EVENTLOG_FLUSH_INTERVAL_S optional; default 60\n  SLOPMUD_EVENTLOG_S3_BUCKET  optional; if set, uploads target this bucket\n  SLOPMUD_EVENTLOG_S3_PREFIX  optional; default slopmud/eventlog\n  SLOPMUD_EVENTLOG_UPLOAD_ENABLED optional; default 0\n  SLOPMUD_EVENTLOG_UPLOAD_DELETE_LOCAL optional; default 1\n  SLOPMUD_EVENTLOG_UPLOAD_SCAN_INTERVAL_S optional; default 600\n  SLOPMUD_NEARLINE_ENABLED    optional; default 1\n  SLOPMUD_NEARLINE_DIR        optional; default locks/nearline_scrollback\n  SLOPMUD_NEARLINE_MAX_SEGMENTS optional; default 12\n  SLOPMUD_NEARLINE_SEGMENT_MAX_BYTES optional; default 2000000\n  SLOPMUD_GOOGLE_OAUTH_DIR    optional; default locks/google_oauth (shared with static_web)\n  SLOPMUD_GOOGLE_AUTH_BASE_URL optional; default http://127.0.0.1:8080 (where to open OAuth in browser)\n  SLOPMUD_OIDC_TOKEN_URL      optional; if set, mint a session token at login\n  SLOPMUD_OIDC_CLIENT_ID      required if token url set\n  SLOPMUD_OIDC_CLIENT_SECRET  required if token url set\n  SLOPMUD_OIDC_SCOPE          optional; default slopmud:session\n"
+ENV:\n  SLOPMUD_BIND               default 0.0.0.0:4000\n  SHARD_ADDR                 default 127.0.0.1:5000\n  NODE_ID                    optional (for logs only)\n  SLOPMUD_ACCOUNTS_PATH       optional; default accounts.json (in WorkingDirectory)\n  SLOPMUD_LOCALE              optional; default en\n  SLOPMUD_ADMIN_BIND          optional; default 127.0.0.1:4011 (local admin JSON)\n  SLOPMUD_BANS_PATH           optional; default locks/bans.json\n  SBC_ADMIN_SOCK              optional; default /run/slopmud/sbc-admin.sock\n  SBC_EVENTS_SOCK             optional; default /run/slopmud/sbc-events.sock\n  SLOPMUD_EMAIL_MODE          optional; default disabled (disabled | ses | smtp | file)\n  SLOPMUD_EMAIL_FROM          required for ses/smtp; optional for file\n  SLOPMUD_SMTP_HOST           required for smtp\n  SLOPMUD_SMTP_PORT           optional; default 587\n  SLOPMUD_SMTP_USERNAME       optional\n  SLOPMUD_SMTP_PASSWORD       optional\n  SLOPMUD_EMAIL_FILE_DIR      optional; default /tmp/slopmud_email_outbox\n  SLOPMUD_EVENTLOG_ENABLED    optional; default 0\n  SLOPMUD_EVENTLOG_SPOOL_DIR  optional; default locks/eventlog\n  SLOPMUD_EVENTLOG_FLUSH_INTERVAL_S optional; default 60\n  SLOPMUD_EVENTLOG_S3_BUCKET  optional; if set, uploads target this bucket\n  SLOPMUD_EVENTLOG_S3_PREFIX  optional; default slopmud/eventlog\n  SLOPMUD_EVENTLOG_UPLOAD_ENABLED optional; default 0\n  SLOPMUD_EVENTLOG_UPLOAD_DELETE_LOCAL optional; default 1\n  SLOPMUD_EVENTLOG_UPLOAD_SCAN_INTERVAL_S optional; default 600\n  SLOPMUD_NEARLINE_ENABLED    optional; default 1\n  SLOPMUD_NEARLINE_DIR        optional; default locks/nearline_scrollback\n  SLOPMUD_NEARLINE_MAX_SEGMENTS optional; default 12\n  SLOPMUD_NEARLINE_SEGMENT_MAX_BYTES optional; default 2000000\n  SLOPMUD_GOOGLE_OAUTH_DIR    optional; default locks/google_oauth (shared with static_web)\n  SLOPMUD_GOOGLE_AUTH_BASE_URL optional; default http://127.0.0.1:8080 (where to open OAuth in browser)\n  SLOPMUD_OIDC_TOKEN_URL      optional; if set, mint a session token at login\n  SLOPMUD_OIDC_CLIENT_ID      required if token url set\n  SLOPMUD_OIDC_CLIENT_SECRET  required if token url set\n  SLOPMUD_OIDC_SCOPE          optional; default slopmud:session\n  SLOPMUD_WEBAUTH_JWT_SECRET optional; if set, WEB_AUTH must include valid HS256 JWT proof from slopmud_web\n"
     );
     std::process::exit(2);
 }
@@ -276,6 +277,7 @@ struct Config {
     oidc_client_secret: Option<String>,
     #[allow(dead_code)]
     oidc_scope: Option<String>,
+    webauth_jwt_secret: Option<String>,
     locale: String,
 
     admin_bind: SocketAddr,
@@ -310,6 +312,10 @@ fn parse_args() -> Config {
     let oidc_client_id = std::env::var("SLOPMUD_OIDC_CLIENT_ID").ok();
     let oidc_client_secret = std::env::var("SLOPMUD_OIDC_CLIENT_SECRET").ok();
     let oidc_scope = std::env::var("SLOPMUD_OIDC_SCOPE").ok();
+    let webauth_jwt_secret = std::env::var("SLOPMUD_WEBAUTH_JWT_SECRET")
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
     let locale = std::env::var("SLOPMUD_LOCALE").unwrap_or_else(|_| "en".to_string());
 
     let admin_bind: SocketAddr = std::env::var("SLOPMUD_ADMIN_BIND")
@@ -421,6 +427,7 @@ fn parse_args() -> Config {
         oidc_client_id,
         oidc_client_secret,
         oidc_scope,
+        webauth_jwt_secret,
         locale,
         admin_bind,
         bans_path,
@@ -1500,7 +1507,7 @@ async fn handle_account_command(
                     let (email, google_email) = {
                         let a = accounts.lock().await;
                         match a.by_name.get(name) {
-                            Some(r) => (r.email.clone(), r.google_email.clone()),
+                            Some(r) => (r.email.clone(), r.auth_email_for_method("google")),
                             None => (None, None),
                         }
                     };
@@ -1567,6 +1574,64 @@ async fn handle_account_command(
         }
         _ => account_usage_text(),
     }
+}
+
+async fn handle_whoami_command(
+    sessions: &Arc<tokio::sync::Mutex<HashMap<SessionId, SessionInfo>>>,
+    session: SessionId,
+) -> String {
+    let si = {
+        let m = sessions.lock().await;
+        m.get(&session).cloned()
+    };
+    let Some(si) = si else {
+        return "whoami: not attached\r\n> ".to_string();
+    };
+
+    let mut s = String::new();
+    s.push_str("whoami:\r\n");
+    s.push_str(&format!(" - name: {}\r\n", si.name));
+    s.push_str(&format!(" - race: {}\r\n", si.race));
+    s.push_str(&format!(" - class: {}\r\n", si.class));
+    s.push_str(&format!(" - sex: {}\r\n", si.sex));
+    s.push_str(&format!(" - pronouns: {}\r\n", si.pronouns));
+    s.push_str(&format!(" - role: {}\r\n", if si.is_bot { "bot" } else { "player" }));
+    s.push_str(&format!(" - held: {}\r\n", if si.held { "yes" } else { "no" }));
+    s.push_str(&format!(" - peer_ip: {}\r\n", si.peer_ip));
+    s.push_str("\r\n> ");
+    s
+}
+
+async fn handle_who_command(
+    sessions: &Arc<tokio::sync::Mutex<HashMap<SessionId, SessionInfo>>>,
+) -> String {
+    let names = {
+        let m = sessions.lock().await;
+        let mut out = m
+            .values()
+            .map(|si| {
+                if si.is_bot {
+                    format!("{} [bot]", si.name)
+                } else {
+                    si.name.clone()
+                }
+            })
+            .collect::<Vec<_>>();
+        out.sort_unstable();
+        out
+    };
+
+    let mut s = String::new();
+    s.push_str("who:\r\n");
+    if names.is_empty() {
+        s.push_str(" - (none)\r\n");
+    } else {
+        for name in names {
+            s.push_str(&format!(" - {name}\r\n"));
+        }
+    }
+    s.push_str("\r\n> ");
+    s
 }
 
 #[derive(Debug, Clone)]
@@ -1664,17 +1729,27 @@ enum ConnState {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+struct AccountAuthIdentity {
+    method: String, // google | oidc | future methods
+    sub: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    email: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct AccountRec {
     name: String,
     #[serde(default)]
     pw_hash: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    auth_identities: Vec<AccountAuthIdentity>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     google_sub: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     google_email: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     oidc_sub: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     oidc_email: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     caps: Option<Vec<String>>,
@@ -1682,6 +1757,78 @@ struct AccountRec {
     #[serde(default)]
     email: Option<String>,
     created_unix: u64,
+}
+
+impl AccountRec {
+    fn absorb_legacy_auth_fields(&mut self) {
+        if let Some(sub) = self.google_sub.clone() {
+            let email = self.google_email.clone();
+            let _ = self.link_auth_identity("google", &sub, email);
+        }
+        if let Some(sub) = self.oidc_sub.clone() {
+            let email = self.oidc_email.clone();
+            let _ = self.link_auth_identity("oidc", &sub, email);
+        }
+        self.google_sub = None;
+        self.google_email = None;
+        self.oidc_sub = None;
+        self.oidc_email = None;
+    }
+
+    fn has_auth_method(&self, method: &str) -> bool {
+        let method = method.trim().to_ascii_lowercase();
+        self.auth_identities.iter().any(|id| id.method == method)
+    }
+
+    fn has_auth_identity(&self, method: &str, sub: &str) -> bool {
+        let method = method.trim().to_ascii_lowercase();
+        let sub = sub.trim();
+        self.auth_identities
+            .iter()
+            .any(|id| id.method == method && id.sub == sub)
+    }
+
+    fn auth_email_for_method(&self, method: &str) -> Option<String> {
+        let method = method.trim().to_ascii_lowercase();
+        self.auth_identities
+            .iter()
+            .find(|id| id.method == method)
+            .and_then(|id| id.email.clone())
+    }
+
+    fn auth_email_for_identity(&self, method: &str, sub: &str) -> Option<String> {
+        let method = method.trim().to_ascii_lowercase();
+        let sub = sub.trim();
+        self.auth_identities
+            .iter()
+            .find(|id| id.method == method && id.sub == sub)
+            .and_then(|id| id.email.clone())
+    }
+
+    fn link_auth_identity(&mut self, method: &str, sub: &str, email: Option<String>) -> bool {
+        let method = method.trim().to_ascii_lowercase();
+        let sub = sub.trim();
+        if method.is_empty() || sub.is_empty() {
+            return false;
+        }
+        if let Some(existing) = self
+            .auth_identities
+            .iter_mut()
+            .find(|id| id.method == method && id.sub == sub)
+        {
+            if email.is_some() && existing.email != email {
+                existing.email = email;
+                return true;
+            }
+            return false;
+        }
+        self.auth_identities.push(AccountAuthIdentity {
+            method,
+            sub: sub.to_string(),
+            email,
+        });
+        true
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1698,11 +1845,13 @@ struct GoogleOAuthPending {
     google_email: Option<String>,
     #[serde(default)]
     error: Option<String>,
+    #[serde(default)]
+    return_to: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct WebAuthReq {
-    action: String, // login | create | auto
+    action: String, // login | create | auto | link
     method: String, // password | google | oidc
     name: String,
     #[serde(default)]
@@ -1717,6 +1866,80 @@ struct WebAuthReq {
     oidc_email: Option<String>,
     #[serde(default)]
     caps: Option<Vec<String>>,
+    #[serde(default)]
+    jwt: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct WebAuthJwtClaims {
+    iss: String,
+    aud: String,
+    iat: usize,
+    nbf: usize,
+    exp: usize,
+    action: String,
+    method: String,
+    name: String,
+    #[serde(default)]
+    google_sub: Option<String>,
+    #[serde(default)]
+    google_email: Option<String>,
+    #[serde(default)]
+    oidc_sub: Option<String>,
+    #[serde(default)]
+    oidc_email: Option<String>,
+    #[serde(default)]
+    caps: Option<Vec<String>>,
+}
+
+fn verify_webauth_jwt(cfg: &Config, req: &WebAuthReq) -> Result<(), &'static str> {
+    let Some(secret) = cfg.webauth_jwt_secret.as_deref() else {
+        return Ok(());
+    };
+    let tok = req.jwt.as_deref().map(str::trim).unwrap_or("");
+    if tok.is_empty() {
+        return Err("missing jwt");
+    }
+
+    let mut v = Validation::new(Algorithm::HS256);
+    v.set_audience(&["slopmud_broker"]);
+    v.set_issuer(&["slopmud_web"]);
+    v.leeway = 5;
+
+    let claims = match jsonwebtoken::decode::<WebAuthJwtClaims>(
+        tok,
+        &DecodingKey::from_secret(secret.as_bytes()),
+        &v,
+    ) {
+        Ok(c) => c.claims,
+        Err(_) => return Err("bad jwt"),
+    };
+
+    if claims.action.trim().to_ascii_lowercase() != req.action.trim().to_ascii_lowercase() {
+        return Err("jwt action mismatch");
+    }
+    if claims.method.trim().to_ascii_lowercase() != req.method.trim().to_ascii_lowercase() {
+        return Err("jwt method mismatch");
+    }
+    if claims.name.trim() != req.name.trim() {
+        return Err("jwt name mismatch");
+    }
+    if claims.google_sub != req.google_sub {
+        return Err("jwt google_sub mismatch");
+    }
+    if claims.google_email != req.google_email {
+        return Err("jwt google_email mismatch");
+    }
+    if claims.oidc_sub != req.oidc_sub {
+        return Err("jwt oidc_sub mismatch");
+    }
+    if claims.oidc_email != req.oidc_email {
+        return Err("jwt oidc_email mismatch");
+    }
+    if claims.caps != req.caps {
+        return Err("jwt caps mismatch");
+    }
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -1730,7 +1953,8 @@ impl Accounts {
         let mut by_name = HashMap::new();
         if let Ok(s) = std::fs::read_to_string(&path) {
             if let Ok(v) = serde_json::from_str::<Vec<AccountRec>>(&s) {
-                for a in v {
+                for mut a in v {
+                    a.absorb_legacy_auth_fields();
                     by_name.insert(a.name.clone(), a);
                 }
             }
@@ -1740,12 +1964,35 @@ impl Accounts {
 
     fn save(&self) -> anyhow::Result<()> {
         let mut v = self.by_name.values().cloned().collect::<Vec<_>>();
+        for rec in v.iter_mut() {
+            rec.absorb_legacy_auth_fields();
+        }
         v.sort_by(|a, b| a.name.cmp(&b.name));
         let s = serde_json::to_string_pretty(&v)?;
         let tmp = format!("{}.tmp", self.path);
         std::fs::write(&tmp, s)?;
         std::fs::rename(&tmp, &self.path)?;
         Ok(())
+    }
+
+    fn linked_names_for_identity(&self, method: &str, sub: &str) -> Vec<String> {
+        self.by_name
+            .values()
+            .filter_map(|r| {
+                if r.has_auth_identity(method, sub) {
+                    Some(r.name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    }
+
+    fn identity_linked_to_other_account(&self, method: &str, sub: &str, name: &str) -> bool {
+        let name = name.trim().to_ascii_lowercase();
+        self.by_name.values().any(|r| {
+            r.name.trim().to_ascii_lowercase() != name && r.has_auth_identity(method, sub)
+        })
     }
 }
 
@@ -2355,6 +2602,7 @@ async fn handle_admin_conn(
                             AccountRec {
                                 name: uname.clone(),
                                 pw_hash: Some(hash),
+                                auth_identities: Vec::new(),
                                 google_sub: None,
                                 google_email: None,
                                 oidc_sub: None,
@@ -2956,7 +3204,10 @@ async fn handle_conn(
                     // in-band character creation prompts. Only accept this from trusted loopback
                     // peers (static_web / slopmud_web).
                     if trusted_proxy_peer {
-                        if let Some(rest) = line.strip_prefix("WEB_AUTH ") {
+                        let webauth_rest = line
+                            .strip_prefix("WEB_AUTH ")
+                            .or_else(|| line.strip_prefix("GMCP Slopmud.WebAuth "));
+                        if let Some(rest) = webauth_rest {
                             let req: WebAuthReq = match serde_json::from_str(rest) {
                                 Ok(v) => v,
                                 Err(_) => {
@@ -2966,6 +3217,11 @@ async fn handle_conn(
                                     continue;
                                 }
                             };
+                            if let Err(msg) = verify_webauth_jwt(&cfg, &req) {
+                                let out = format!("web_auth: {msg}\r\nname: ");
+                                let _ = write_tx.send(Bytes::from(out)).await;
+                                continue;
+                            }
 
                             let action = req.action.trim().to_ascii_lowercase();
                             let method = req.method.trim().to_ascii_lowercase();
@@ -2989,17 +3245,7 @@ async fn handle_conn(
 
                                 let linked_names = {
                                     let a = accounts.lock().await;
-                                    a.by_name
-                                        .values()
-                                        .filter_map(|r| {
-                                            let linked = if method == "google" {
-                                                r.google_sub.as_deref() == Some(sub)
-                                            } else {
-                                                r.oidc_sub.as_deref() == Some(sub)
-                                            };
-                                            if linked { Some(r.name.clone()) } else { None }
-                                        })
-                                        .collect::<Vec<_>>()
+                                    a.linked_names_for_identity(&method, sub)
                                 };
 
                                 match linked_names.as_slice() {
@@ -3020,6 +3266,11 @@ async fn handle_conn(
                                                 caps: req.caps.clone(),
                                             }
                                         });
+                                        let _ = write_tx
+                                            .send(Bytes::from_static(
+                                                b"web_auth: no linked character yet; enter a character name to create/link\r\nname: ",
+                                            ))
+                                            .await;
                                         continue;
                                     }
                                     [only] => {
@@ -3107,6 +3358,7 @@ async fn handle_conn(
                                                 AccountRec {
                                                     name: uname.clone(),
                                                     pw_hash: Some(hash),
+                                                    auth_identities: Vec::new(),
                                                     google_sub: None,
                                                     google_email: None,
                                                     oidc_sub: None,
@@ -3190,7 +3442,10 @@ async fn handle_conn(
                                         },
                                     }
                                 }
-                                ("create", "google") | ("login", "google") | ("auto", "google") => {
+                                ("create", "google")
+                                | ("login", "google")
+                                | ("auto", "google")
+                                | ("link", "google") => {
                                     let sub = req.google_sub.as_deref().unwrap_or("").trim();
                                     if sub.is_empty() {
                                         let _ = write_tx
@@ -3210,7 +3465,101 @@ async fn handle_conn(
                                             a.by_name.get(&uname).cloned()
                                         };
 
-                                        if action == "login" || action == "auto" {
+                                        if action == "link" {
+                                            let pw = req.password.as_deref().unwrap_or("").as_bytes();
+                                            if pw.is_empty() {
+                                                let _ = write_tx
+                                                    .send(Bytes::from_static(
+                                                        b"web_auth: missing password for link\r\nname: ",
+                                                    ))
+                                                    .await;
+                                                false
+                                            } else {
+                                                let mut a = accounts.lock().await;
+                                                if a.identity_linked_to_other_account(
+                                                    "google",
+                                                    sub,
+                                                    &uname,
+                                                ) {
+                                                    let _ = write_tx
+                                                        .send(Bytes::from_static(
+                                                            b"web_auth: google identity already linked to another account\r\nname: ",
+                                                        ))
+                                                        .await;
+                                                    false
+                                                } else {
+                                                    let linked_email = match a.by_name.get_mut(&uname) {
+                                                        None => {
+                                                            let _ = write_tx
+                                                                .send(Bytes::from_static(
+                                                                    b"web_auth: account not found\r\nname: ",
+                                                                ))
+                                                                .await;
+                                                            None
+                                                        }
+                                                        Some(r) => match r.pw_hash.as_deref() {
+                                                            None => {
+                                                                let _ = write_tx
+                                                                    .send(Bytes::from_static(
+                                                                        b"web_auth: account has no password set\r\nname: ",
+                                                                    ))
+                                                                    .await;
+                                                                None
+                                                            }
+                                                            Some(hash) => {
+                                                                let ok = if let Ok(ph) =
+                                                                    PasswordHash::new(hash)
+                                                                {
+                                                                    Argon2::default()
+                                                                        .verify_password(pw, &ph)
+                                                                        .is_ok()
+                                                                } else {
+                                                                    false
+                                                                };
+                                                                if !ok {
+                                                                    let _ = write_tx
+                                                                        .send(Bytes::from_static(
+                                                                            b"web_auth: bad password\r\nname: ",
+                                                                        ))
+                                                                        .await;
+                                                                    None
+                                                                } else {
+                                                                    let _ = r.link_auth_identity(
+                                                                        "google",
+                                                                        sub,
+                                                                        email.clone(),
+                                                                    );
+                                                                    r.auth_email_for_identity(
+                                                                        "google",
+                                                                        sub,
+                                                                    )
+                                                                    .or(email.clone())
+                                                                }
+                                                            }
+                                                        },
+                                                    };
+                                                    if let Some(linked_email) = linked_email {
+                                                        a.save()?;
+                                                        google_sub = Some(sub.to_string());
+                                                        google_email = Some(linked_email);
+                                                        auth_method = Some("google".to_string());
+                                                        auth_blob = Some(make_shard_auth_blob(
+                                                            &uname,
+                                                            "google",
+                                                            Some(sub),
+                                                            google_email.as_deref(),
+                                                            None,
+                                                            None,
+                                                            req.caps.as_deref(),
+                                                        ));
+                                                        name = Some(uname.clone());
+                                                        true
+                                                    } else {
+                                                        false
+                                                    }
+                                                }
+                                            }
+                                        } else if action == "login" || action == "auto" {
                                             match exists {
                                                 None => {
                                                     let _ = write_tx
@@ -3221,7 +3570,7 @@ async fn handle_conn(
                                                     false
                                                 }
                                                 Some(r) => {
-                                                    if r.google_sub.as_deref() != Some(sub) {
+                                                    if !r.has_auth_identity("google", sub) {
                                                         let _ = write_tx
                                                             .send(Bytes::from_static(
                                                                 b"web_auth: account not linked to google\r\nname: ",
@@ -3230,10 +3579,9 @@ async fn handle_conn(
                                                         false
                                                     } else {
                                                         google_sub = Some(sub.to_string());
-                                                        google_email = r
-                                                            .google_email
-                                                            .clone()
-                                                            .or(email.clone());
+                                                        google_email =
+                                                            r.auth_email_for_identity("google", sub)
+                                                                .or(email.clone());
                                                         auth_method = Some("google".to_string());
                                                         auth_blob = Some(make_shard_auth_blob(
                                                             &uname,
@@ -3257,43 +3605,70 @@ async fn handle_conn(
                                                 .await;
                                             false
                                         } else {
-                                            {
+                                            let created = {
                                                 let mut a = accounts.lock().await;
-                                                a.by_name.insert(
-                                                    uname.clone(),
-                                                    AccountRec {
-                                                        name: uname.clone(),
-                                                        pw_hash: None,
-                                                        google_sub: Some(sub.to_string()),
-                                                        google_email: email.clone(),
-                                                        oidc_sub: None,
-                                                        oidc_email: None,
-                                                        caps: None,
-                                                        email: None,
-                                                        created_unix: now_unix,
-                                                    },
-                                                );
-                                                a.save()?;
+                                                if a.identity_linked_to_other_account(
+                                                    "google",
+                                                    sub,
+                                                    &uname,
+                                                ) {
+                                                    false
+                                                } else {
+                                                    a.by_name.insert(
+                                                        uname.clone(),
+                                                        AccountRec {
+                                                            name: uname.clone(),
+                                                            pw_hash: None,
+                                                            auth_identities: vec![
+                                                                AccountAuthIdentity {
+                                                                    method: "google".to_string(),
+                                                                    sub: sub.to_string(),
+                                                                    email: email.clone(),
+                                                                },
+                                                            ],
+                                                            google_sub: None,
+                                                            google_email: None,
+                                                            oidc_sub: None,
+                                                            oidc_email: None,
+                                                            caps: None,
+                                                            email: None,
+                                                            created_unix: now_unix,
+                                                        },
+                                                    );
+                                                    a.save()?;
+                                                    true
+                                                }
+                                            };
+                                            if !created {
+                                                let _ = write_tx
+                                                    .send(Bytes::from_static(
+                                                        b"web_auth: google identity already linked to another account\r\nname: ",
+                                                    ))
+                                                    .await;
+                                                false
+                                            } else {
+                                                google_sub = Some(sub.to_string());
+                                                google_email = email.clone();
+                                                auth_method = Some("google".to_string());
+                                                auth_blob = Some(make_shard_auth_blob(
+                                                    &uname,
+                                                    "google",
+                                                    Some(sub),
+                                                    google_email.as_deref(),
+                                                    None,
+                                                    None,
+                                                    req.caps.as_deref(),
+                                                ));
+                                                name = Some(uname.clone());
+                                                true
                                             }
-
-                                            google_sub = Some(sub.to_string());
-                                            google_email = email.clone();
-                                            auth_method = Some("google".to_string());
-                                            auth_blob = Some(make_shard_auth_blob(
-                                                &uname,
-                                                "google",
-                                                Some(sub),
-                                                google_email.as_deref(),
-                                                None,
-                                                None,
-                                                req.caps.as_deref(),
-                                            ));
-                                            name = Some(uname.clone());
-                                            true
                                         }
                                     }
                                 }
-                                ("create", "oidc") | ("login", "oidc") | ("auto", "oidc") => {
+                                ("create", "oidc")
+                                | ("login", "oidc")
+                                | ("auto", "oidc")
+                                | ("link", "oidc") => {
                                     let sub = req.oidc_sub.as_deref().unwrap_or("").trim();
                                     if sub.is_empty() {
                                         let _ = write_tx
@@ -3313,7 +3688,101 @@ async fn handle_conn(
                                             a.by_name.get(&uname).cloned()
                                         };
 
-                                        if action == "login" || action == "auto" {
+                                        if action == "link" {
+                                            let pw = req.password.as_deref().unwrap_or("").as_bytes();
+                                            if pw.is_empty() {
+                                                let _ = write_tx
+                                                    .send(Bytes::from_static(
+                                                        b"web_auth: missing password for link\r\nname: ",
+                                                    ))
+                                                    .await;
+                                                false
+                                            } else {
+                                                let mut a = accounts.lock().await;
+                                                if a.identity_linked_to_other_account(
+                                                    "oidc",
+                                                    sub,
+                                                    &uname,
+                                                ) {
+                                                    let _ = write_tx
+                                                        .send(Bytes::from_static(
+                                                            b"web_auth: oidc identity already linked to another account\r\nname: ",
+                                                        ))
+                                                        .await;
+                                                    false
+                                                } else {
+                                                    let linked_email = match a.by_name.get_mut(&uname) {
+                                                        None => {
+                                                            let _ = write_tx
+                                                                .send(Bytes::from_static(
+                                                                    b"web_auth: account not found\r\nname: ",
+                                                                ))
+                                                                .await;
+                                                            None
+                                                        }
+                                                        Some(r) => match r.pw_hash.as_deref() {
+                                                            None => {
+                                                                let _ = write_tx
+                                                                    .send(Bytes::from_static(
+                                                                        b"web_auth: account has no password set\r\nname: ",
+                                                                    ))
+                                                                    .await;
+                                                                None
+                                                            }
+                                                            Some(hash) => {
+                                                                let ok = if let Ok(ph) =
+                                                                    PasswordHash::new(hash)
+                                                                {
+                                                                    Argon2::default()
+                                                                        .verify_password(pw, &ph)
+                                                                        .is_ok()
+                                                                } else {
+                                                                    false
+                                                                };
+                                                                if !ok {
+                                                                    let _ = write_tx
+                                                                        .send(Bytes::from_static(
+                                                                            b"web_auth: bad password\r\nname: ",
+                                                                        ))
+                                                                        .await;
+                                                                    None
+                                                                } else {
+                                                                    let _ = r.link_auth_identity(
+                                                                        "oidc",
+                                                                        sub,
+                                                                        email.clone(),
+                                                                    );
+                                                                    r.auth_email_for_identity(
+                                                                        "oidc",
+                                                                        sub,
+                                                                    )
+                                                                    .or(email.clone())
+                                                                }
+                                                            }
+                                                        },
+                                                    };
+                                                    if let Some(linked_email) = linked_email {
+                                                        a.save()?;
+                                                        oidc_sub = Some(sub.to_string());
+                                                        oidc_email = Some(linked_email);
+                                                        auth_method = Some("oidc".to_string());
+                                                        auth_blob = Some(make_shard_auth_blob(
+                                                            &uname,
+                                                            "oidc",
+                                                            None,
+                                                            None,
+                                                            Some(sub),
+                                                            oidc_email.as_deref(),
+                                                            req.caps.as_deref(),
+                                                        ));
+                                                        name = Some(uname.clone());
+                                                        true
+                                                    } else {
+                                                        false
+                                                    }
+                                                }
+                                            }
+                                        } else if action == "login" || action == "auto" {
                                             match exists {
                                                 None => {
                                                     let _ = write_tx
@@ -3324,7 +3793,7 @@ async fn handle_conn(
                                                     false
                                                 }
                                                 Some(r) => {
-                                                    if r.oidc_sub.as_deref() != Some(sub) {
+                                                    if !r.has_auth_identity("oidc", sub) {
                                                         let _ = write_tx
                                                             .send(Bytes::from_static(
                                                                 b"web_auth: account not linked to oidc\r\nname: ",
@@ -3334,7 +3803,8 @@ async fn handle_conn(
                                                     } else {
                                                         oidc_sub = Some(sub.to_string());
                                                         oidc_email =
-                                                            r.oidc_email.clone().or(email.clone());
+                                                            r.auth_email_for_identity("oidc", sub)
+                                                                .or(email.clone());
                                                         auth_method = Some("oidc".to_string());
                                                         auth_blob = Some(make_shard_auth_blob(
                                                             &uname,
@@ -3358,39 +3828,63 @@ async fn handle_conn(
                                                 .await;
                                             false
                                         } else {
-                                            {
+                                            let created = {
                                                 let mut a = accounts.lock().await;
-                                                a.by_name.insert(
-                                                    uname.clone(),
-                                                    AccountRec {
-                                                        name: uname.clone(),
-                                                        pw_hash: None,
-                                                        google_sub: None,
-                                                        google_email: None,
-                                                        oidc_sub: Some(sub.to_string()),
-                                                        oidc_email: email.clone(),
-                                                        caps: None,
-                                                        email: None,
-                                                        created_unix: now_unix,
-                                                    },
-                                                );
-                                                a.save()?;
+                                                if a.identity_linked_to_other_account(
+                                                    "oidc",
+                                                    sub,
+                                                    &uname,
+                                                ) {
+                                                    false
+                                                } else {
+                                                    a.by_name.insert(
+                                                        uname.clone(),
+                                                        AccountRec {
+                                                            name: uname.clone(),
+                                                            pw_hash: None,
+                                                            auth_identities: vec![
+                                                                AccountAuthIdentity {
+                                                                    method: "oidc".to_string(),
+                                                                    sub: sub.to_string(),
+                                                                    email: email.clone(),
+                                                                },
+                                                            ],
+                                                            google_sub: None,
+                                                            google_email: None,
+                                                            oidc_sub: None,
+                                                            oidc_email: None,
+                                                            caps: None,
+                                                            email: None,
+                                                            created_unix: now_unix,
+                                                        },
+                                                    );
+                                                    a.save()?;
+                                                    true
+                                                }
+                                            };
+                                            if !created {
+                                                let _ = write_tx
+                                                    .send(Bytes::from_static(
+                                                        b"web_auth: oidc identity already linked to another account\r\nname: ",
+                                                    ))
+                                                    .await;
+                                                false
+                                            } else {
+                                                oidc_sub = Some(sub.to_string());
+                                                oidc_email = email.clone();
+                                                auth_method = Some("oidc".to_string());
+                                                auth_blob = Some(make_shard_auth_blob(
+                                                    &uname,
+                                                    "oidc",
+                                                    None,
+                                                    None,
+                                                    Some(sub),
+                                                    oidc_email.as_deref(),
+                                                    req.caps.as_deref(),
+                                                ));
+                                                name = Some(uname.clone());
+                                                true
                                             }
-
-                                            oidc_sub = Some(sub.to_string());
-                                            oidc_email = email.clone();
-                                            auth_method = Some("oidc".to_string());
-                                            auth_blob = Some(make_shard_auth_blob(
-                                                &uname,
-                                                "oidc",
-                                                None,
-                                                None,
-                                                Some(sub),
-                                                oidc_email.as_deref(),
-                                                req.caps.as_deref(),
-                                            ));
-                                            name = Some(uname.clone());
-                                            true
                                         }
                                     }
                                 }
@@ -3455,7 +3949,7 @@ async fn handle_conn(
                                 };
                                 match exists {
                                     Some(r) => {
-                                        if r.google_sub.as_deref() != Some(sub.as_str()) {
+                                        if !r.has_auth_identity("google", sub.as_str()) {
                                             let _ = write_tx
                                                 .send(Bytes::from_static(
                                                     b"name already taken\r\nname: ",
@@ -3464,7 +3958,9 @@ async fn handle_conn(
                                             continue;
                                         }
                                         google_sub = Some(sub.clone());
-                                        google_email = r.google_email.clone().or(email.clone());
+                                        google_email =
+                                            r.auth_email_for_identity("google", sub.as_str())
+                                                .or(email.clone());
                                         auth_method = Some("google".to_string());
                                         auth_blob = Some(make_shard_auth_blob(
                                             &n,
@@ -3497,8 +3993,15 @@ async fn handle_conn(
                                                 AccountRec {
                                                     name: n.clone(),
                                                     pw_hash: None,
-                                                    google_sub: Some(sub.clone()),
-                                                    google_email: email.clone(),
+                                                    auth_identities: vec![
+                                                        AccountAuthIdentity {
+                                                            method: "google".to_string(),
+                                                            sub: sub.clone(),
+                                                            email: email.clone(),
+                                                        },
+                                                    ],
+                                                    google_sub: None,
+                                                    google_email: None,
                                                     oidc_sub: None,
                                                     oidc_email: None,
                                                     caps: None,
@@ -3539,7 +4042,7 @@ async fn handle_conn(
                                 };
                                 match exists {
                                     Some(r) => {
-                                        if r.oidc_sub.as_deref() != Some(sub.as_str()) {
+                                        if !r.has_auth_identity("oidc", sub.as_str()) {
                                             let _ = write_tx
                                                 .send(Bytes::from_static(
                                                     b"name already taken\r\nname: ",
@@ -3548,7 +4051,9 @@ async fn handle_conn(
                                             continue;
                                         }
                                         oidc_sub = Some(sub.clone());
-                                        oidc_email = r.oidc_email.clone().or(email.clone());
+                                        oidc_email =
+                                            r.auth_email_for_identity("oidc", sub.as_str())
+                                                .or(email.clone());
                                         auth_method = Some("oidc".to_string());
                                         auth_blob = Some(make_shard_auth_blob(
                                             &n,
@@ -3581,10 +4086,17 @@ async fn handle_conn(
                                                 AccountRec {
                                                     name: n.clone(),
                                                     pw_hash: None,
+                                                    auth_identities: vec![
+                                                        AccountAuthIdentity {
+                                                            method: "oidc".to_string(),
+                                                            sub: sub.clone(),
+                                                            email: email.clone(),
+                                                        },
+                                                    ],
                                                     google_sub: None,
                                                     google_email: None,
-                                                    oidc_sub: Some(sub.clone()),
-                                                    oidc_email: email.clone(),
+                                                    oidc_sub: None,
+                                                    oidc_email: None,
                                                     caps: None,
                                                     email: None,
                                                     created_unix: now_unix,
@@ -3629,11 +4141,167 @@ async fn handle_conn(
                     continue;
                 }
                 ConnState::NeedAuthMethod => {
-                    let line = String::from_utf8_lossy(&line_bytes)
-                        .trim()
-                        .to_ascii_lowercase();
+                    let line_raw = String::from_utf8_lossy(&line_bytes).trim().to_string();
+                    let line = line_raw.to_ascii_lowercase();
                     if line.is_empty() {
                         continue;
+                    }
+
+                    if trusted_proxy_peer {
+                        let webauth_rest = line_raw
+                            .strip_prefix("WEB_AUTH ")
+                            .or_else(|| line_raw.strip_prefix("GMCP Slopmud.WebAuth "));
+                        if let Some(rest) = webauth_rest {
+                            let req: WebAuthReq = match serde_json::from_str(rest) {
+                                Ok(v) => v,
+                                Err(_) => {
+                                    let _ = write_tx
+                                        .send(Bytes::from_static(
+                                            b"web_auth: bad json\r\nplease type: password | google\r\n> ",
+                                        ))
+                                        .await;
+                                    continue;
+                                }
+                            };
+                            if let Err(msg) = verify_webauth_jwt(&cfg, &req) {
+                                let out =
+                                    format!("web_auth: {msg}\r\nplease type: password | google\r\n> ");
+                                let _ = write_tx.send(Bytes::from(out)).await;
+                                continue;
+                            }
+
+                            let action = req.action.trim().to_ascii_lowercase();
+                            let method = req.method.trim().to_ascii_lowercase();
+                            if action == "auto" && (method == "google" || method == "oidc") {
+                                let sub = if method == "google" {
+                                    req.google_sub.as_deref().unwrap_or("").trim()
+                                } else {
+                                    req.oidc_sub.as_deref().unwrap_or("").trim()
+                                };
+                                if sub.is_empty() {
+                                    let _ = write_tx
+                                        .send(Bytes::from_static(
+                                            b"web_auth: missing provider sub\r\nplease type: password | google\r\n> ",
+                                        ))
+                                        .await;
+                                    continue;
+                                }
+
+                                let mut uname = name.clone().unwrap_or_default();
+                                if uname.is_empty() {
+                                    uname = sanitize_name(&req.name);
+                                }
+                                if uname.is_empty() {
+                                    let linked_names = {
+                                        let a = accounts.lock().await;
+                                        a.linked_names_for_identity(&method, sub)
+                                    };
+                                    if linked_names.len() == 1 {
+                                        uname = linked_names[0].clone();
+                                    }
+                                }
+                                if uname.is_empty() {
+                                    pending_auto_webauth = Some(if method == "google" {
+                                        PendingAutoWebAuth::Google {
+                                            sub: sub.to_string(),
+                                            email: req.google_email.clone(),
+                                            caps: req.caps.clone(),
+                                        }
+                                    } else {
+                                        PendingAutoWebAuth::Oidc {
+                                            sub: sub.to_string(),
+                                            email: req.oidc_email.clone(),
+                                            caps: req.caps.clone(),
+                                        }
+                                    });
+                                    state = ConnState::NeedName;
+                                    let _ = write_tx.send(Bytes::from_static(b"name: ")).await;
+                                    continue;
+                                }
+
+                                let email = if method == "google" {
+                                    req.google_email.clone()
+                                } else {
+                                    req.oidc_email.clone()
+                                };
+                                let now_unix = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs();
+                                {
+                                    let mut a = accounts.lock().await;
+                                    if let Some(r) = a.by_name.get(&uname) {
+                                        if !r.has_auth_identity(&method, sub) {
+                                            let _ = write_tx
+                                                .send(Bytes::from_static(
+                                                    b"name already taken\r\nplease type: password | google\r\n> ",
+                                                ))
+                                                .await;
+                                            continue;
+                                        }
+                                    } else {
+                                        a.by_name.insert(
+                                            uname.clone(),
+                                            AccountRec {
+                                                name: uname.clone(),
+                                                pw_hash: None,
+                                                auth_identities: vec![AccountAuthIdentity {
+                                                    method: method.clone(),
+                                                    sub: sub.to_string(),
+                                                    email: email.clone(),
+                                                }],
+                                                google_sub: None,
+                                                google_email: None,
+                                                oidc_sub: None,
+                                                oidc_email: None,
+                                                caps: None,
+                                                email: None,
+                                                created_unix: now_unix,
+                                            },
+                                        );
+                                        a.save()?;
+                                    }
+                                }
+
+                                if method == "google" {
+                                    google_sub = Some(sub.to_string());
+                                    google_email = email.clone();
+                                    auth_method = Some("google".to_string());
+                                    auth_blob = Some(make_shard_auth_blob(
+                                        &uname,
+                                        "google",
+                                        Some(sub),
+                                        email.as_deref(),
+                                        None,
+                                        None,
+                                        req.caps.as_deref(),
+                                    ));
+                                } else {
+                                    oidc_sub = Some(sub.to_string());
+                                    oidc_email = email.clone();
+                                    auth_method = Some("oidc".to_string());
+                                    auth_blob = Some(make_shard_auth_blob(
+                                        &uname,
+                                        "oidc",
+                                        None,
+                                        None,
+                                        Some(sub),
+                                        email.as_deref(),
+                                        req.caps.as_deref(),
+                                    ));
+                                }
+
+                                name = Some(uname);
+                                pending_auto_webauth = None;
+                                state = ConnState::NeedBotDisclosure;
+                                let _ = write_tx
+                                    .send(Bytes::from_static(
+                                        b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
+                                    ))
+                                    .await;
+                                continue;
+                            }
+                        }
                     }
 
                     let uname = name.as_deref().expect("name set");
@@ -3676,7 +4344,7 @@ async fn handle_conn(
                         "google" => {
                             auth_method = Some("google".to_string());
                             if let Some(r) = rec.as_ref() {
-                                if r.google_sub.is_none() {
+                                if !r.has_auth_method("google") {
                                     let _ = write_tx
                                         .send(Bytes::from_static(
                                             b"account not linked to google; use password\r\n> ",
@@ -3710,6 +4378,7 @@ async fn handle_conn(
                                 google_sub: None,
                                 google_email: None,
                                 error: None,
+                                return_to: None,
                             };
 
                             let mut path = PathBuf::from(&cfg.google_oauth_dir);
@@ -3738,11 +4407,209 @@ async fn handle_conn(
                     }
                 }
                 ConnState::NeedGoogleWait => {
-                    let line = String::from_utf8_lossy(&line_bytes)
-                        .trim()
-                        .to_ascii_lowercase();
-                    if line.is_empty() {
+                    let line_raw = String::from_utf8_lossy(&line_bytes).trim().to_string();
+                    if line_raw.is_empty() {
                         continue;
+                    }
+                    let line = line_raw.to_ascii_lowercase();
+
+                    // Allow trusted web proxy auth to complete an OAuth-waiting session without
+                    // requiring a manual `check` command.
+                    if trusted_proxy_peer {
+                        let webauth_rest = line_raw
+                            .strip_prefix("WEB_AUTH ")
+                            .or_else(|| line_raw.strip_prefix("GMCP Slopmud.WebAuth "));
+                        if let Some(rest) = webauth_rest {
+                            let req: WebAuthReq = match serde_json::from_str(rest) {
+                                Ok(v) => v,
+                                Err(_) => {
+                                    let _ = write_tx
+                                        .send(Bytes::from_static(
+                                            b"web_auth: bad json\r\ntype: check | cancel\r\n> ",
+                                        ))
+                                        .await;
+                                    continue;
+                                }
+                            };
+                            if let Err(msg) = verify_webauth_jwt(&cfg, &req) {
+                                let out = format!("web_auth: {msg}\r\ntype: check | cancel\r\n> ");
+                                let _ = write_tx.send(Bytes::from(out)).await;
+                                continue;
+                            }
+
+                            let action = req.action.trim().to_ascii_lowercase();
+                            let method = req.method.trim().to_ascii_lowercase();
+                            if action != "auto" || (method != "google" && method != "oidc") {
+                                let _ = write_tx
+                                    .send(Bytes::from_static(
+                                        b"type: check | cancel\r\n> ",
+                                    ))
+                                    .await;
+                                continue;
+                            }
+
+                            let sub = if method == "google" {
+                                req.google_sub.as_deref().unwrap_or("").trim()
+                            } else {
+                                req.oidc_sub.as_deref().unwrap_or("").trim()
+                            };
+                            if sub.is_empty() {
+                                let msg = if method == "google" {
+                                    b"web_auth: missing google_sub\r\ntype: check | cancel\r\n> "
+                                        .as_slice()
+                                } else {
+                                    b"web_auth: missing oidc_sub\r\ntype: check | cancel\r\n> "
+                                        .as_slice()
+                                };
+                                let _ = write_tx.send(Bytes::copy_from_slice(msg)).await;
+                                continue;
+                            }
+
+                            let mut uname = name.clone().unwrap_or_default();
+                            if uname.is_empty() {
+                                uname = sanitize_name(&req.name);
+                            }
+                            if uname.is_empty() {
+                                let linked_names = {
+                                    let a = accounts.lock().await;
+                                    a.linked_names_for_identity(&method, sub)
+                                };
+                                if linked_names.len() == 1 {
+                                    uname = linked_names[0].clone();
+                                }
+                            }
+                            if uname.is_empty() {
+                                let _ = write_tx
+                                    .send(Bytes::from_static(
+                                        b"web_auth: no linked character found\r\ntype: check | cancel\r\n> ",
+                                    ))
+                                    .await;
+                                continue;
+                            }
+
+                            let now_unix = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs();
+                            let email = if method == "google" {
+                                req.google_email.clone()
+                            } else {
+                                req.oidc_email.clone()
+                            };
+
+                            {
+                                let mut a = accounts.lock().await;
+                                if let Some(r) = a.by_name.get(&uname) {
+                                    if !r.has_auth_identity(&method, sub) {
+                                        let _ = write_tx
+                                            .send(Bytes::from_static(
+                                                b"name already taken\r\nbye\r\n",
+                                            ))
+                                            .await;
+                                        break 'read;
+                                    }
+                                } else {
+                                    a.by_name.insert(
+                                        uname.clone(),
+                                        AccountRec {
+                                            name: uname.clone(),
+                                            pw_hash: None,
+                                            auth_identities: vec![AccountAuthIdentity {
+                                                method: method.clone(),
+                                                sub: sub.to_string(),
+                                                email: email.clone(),
+                                            }],
+                                            google_sub: None,
+                                            google_email: None,
+                                            oidc_sub: None,
+                                            oidc_email: None,
+                                            caps: None,
+                                            email: None,
+                                            created_unix: now_unix,
+                                        },
+                                    );
+                                    a.save()?;
+                                }
+                            }
+
+                            if method == "google" {
+                                google_sub = Some(sub.to_string());
+                                google_email = email.clone();
+                                auth_method = Some("google".to_string());
+                                auth_blob = Some(make_shard_auth_blob(
+                                    &uname,
+                                    "google",
+                                    Some(sub),
+                                    email.as_deref(),
+                                    None,
+                                    None,
+                                    req.caps.as_deref(),
+                                ));
+                            } else {
+                                oidc_sub = Some(sub.to_string());
+                                oidc_email = email.clone();
+                                auth_method = Some("oidc".to_string());
+                                auth_blob = Some(make_shard_auth_blob(
+                                    &uname,
+                                    "oidc",
+                                    None,
+                                    None,
+                                    Some(sub),
+                                    email.as_deref(),
+                                    req.caps.as_deref(),
+                                ));
+                            }
+                            name = Some(uname);
+
+                            if let Some(code) = google_oauth_code.take() {
+                                let mut path = PathBuf::from(&cfg.google_oauth_dir);
+                                path.push(format!("{}.json", code));
+                                let _ = std::fs::remove_file(&path);
+                            }
+
+                            let mut resumed_live = false;
+                            if let Some(nm) = name.as_deref() {
+                                let prior = {
+                                    let m = sessions.lock().await;
+                                    m.iter()
+                                        .find(|(sid, s)| {
+                                            **sid != session
+                                                && s.name.eq_ignore_ascii_case(nm)
+                                        })
+                                        .map(|(sid, s)| (*sid, s.clone()))
+                                };
+                                if let Some((old_sid, old)) = prior {
+                                    let _ = old.disconnect_tx.send(true);
+                                    {
+                                        let mut m = sessions.lock().await;
+                                        m.remove(&old_sid);
+                                    }
+                                    let _ = shard_tx
+                                        .send(ShardMsg {
+                                            t: REQ_DETACH,
+                                            session: old_sid,
+                                            body: Bytes::new(),
+                                        })
+                                        .await;
+                                    is_bot = Some(old.is_bot);
+                                    race = Some(old.race);
+                                    class = Some(old.class);
+                                    sex = Some(old.sex);
+                                    pronouns = Some(old.pronouns);
+                                    state = ConnState::NeedSex;
+                                    resumed_live = true;
+                                }
+                            }
+                            if !resumed_live {
+                                state = ConnState::NeedBotDisclosure;
+                                let _ = write_tx
+                                    .send(Bytes::from_static(
+                                        b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
+                                    ))
+                                    .await;
+                                continue;
+                            }
+                        }
                     }
 
                     let Some(code) = google_oauth_code.as_deref() else {
@@ -3848,7 +4715,7 @@ async fn handle_conn(
                             {
                                 let mut a = accounts.lock().await;
                                 if let Some(r) = a.by_name.get(&uname) {
-                                    if r.google_sub.as_deref() != Some(sub) {
+                                    if !r.has_auth_identity("google", sub) {
                                         let _ = write_tx
                                             .send(Bytes::from_static(
                                                 b"name already taken\r\nbye\r\n",
@@ -3862,8 +4729,15 @@ async fn handle_conn(
                                         AccountRec {
                                             name: uname.clone(),
                                             pw_hash: None,
-                                            google_sub: Some(sub.to_string()),
-                                            google_email: email.clone(),
+                                            auth_identities: vec![
+                                                AccountAuthIdentity {
+                                                    method: "google".to_string(),
+                                                    sub: sub.to_string(),
+                                                    email: email.clone(),
+                                                },
+                                            ],
+                                            google_sub: None,
+                                            google_email: None,
                                             oidc_sub: None,
                                             oidc_email: None,
                                             caps: None,
@@ -3985,6 +4859,7 @@ async fn handle_conn(
                             AccountRec {
                                 name: uname,
                                 pw_hash: Some(hash),
+                                auth_identities: Vec::new(),
                                 google_sub: None,
                                 google_email: None,
                                 oidc_sub: None,
@@ -4014,13 +4889,47 @@ async fn handle_conn(
                     ));
 
                     line_bytes.zeroize();
-                    state = ConnState::NeedBotDisclosure;
-                    let _ = write_tx
-                        .send(Bytes::from_static(
-                            b"character creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                        ))
-                        .await;
-                    continue;
+                    let mut resumed_live = false;
+                    if let Some(nm) = name.as_deref() {
+                        let prior = {
+                            let m = sessions.lock().await;
+                            m.iter()
+                                .find(|(sid, s)| {
+                                    **sid != session && s.name.eq_ignore_ascii_case(nm)
+                                })
+                                .map(|(sid, s)| (*sid, s.clone()))
+                        };
+                        if let Some((old_sid, old)) = prior {
+                            let _ = old.disconnect_tx.send(true);
+                            {
+                                let mut m = sessions.lock().await;
+                                m.remove(&old_sid);
+                            }
+                            let _ = shard_tx
+                                .send(ShardMsg {
+                                    t: REQ_DETACH,
+                                    session: old_sid,
+                                    body: Bytes::new(),
+                                })
+                                .await;
+                            is_bot = Some(old.is_bot);
+                            race = Some(old.race);
+                            class = Some(old.class);
+                            sex = Some(old.sex);
+                            pronouns = Some(old.pronouns);
+                            state = ConnState::NeedSex;
+                            resumed_live = true;
+                        }
+                    }
+                    if !resumed_live {
+                        state = ConnState::NeedBotDisclosure;
+                        let _ = write_tx
+                            .send(Bytes::from_static(
+                                b"character creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
+                            ))
+                            .await;
+                        continue;
+                    }
                 }
                 ConnState::NeedPasswordLogin => {
                     let uname = name.as_deref().expect("name set");
@@ -4128,13 +5037,47 @@ async fn handle_conn(
                     ));
 
                     line_bytes.zeroize();
-                    state = ConnState::NeedBotDisclosure;
-                    let _ = write_tx
-                        .send(Bytes::from_static(
-                            b"character creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                        ))
-                        .await;
-                    continue;
+                    let mut resumed_live = false;
+                    if let Some(nm) = name.as_deref() {
+                        let prior = {
+                            let m = sessions.lock().await;
+                            m.iter()
+                                .find(|(sid, s)| {
+                                    **sid != session && s.name.eq_ignore_ascii_case(nm)
+                                })
+                                .map(|(sid, s)| (*sid, s.clone()))
+                        };
+                        if let Some((old_sid, old)) = prior {
+                            let _ = old.disconnect_tx.send(true);
+                            {
+                                let mut m = sessions.lock().await;
+                                m.remove(&old_sid);
+                            }
+                            let _ = shard_tx
+                                .send(ShardMsg {
+                                    t: REQ_DETACH,
+                                    session: old_sid,
+                                    body: Bytes::new(),
+                                })
+                                .await;
+                            is_bot = Some(old.is_bot);
+                            race = Some(old.race);
+                            class = Some(old.class);
+                            sex = Some(old.sex);
+                            pronouns = Some(old.pronouns);
+                            state = ConnState::NeedSex;
+                            resumed_live = true;
+                        }
+                    }
+                    if !resumed_live {
+                        state = ConnState::NeedBotDisclosure;
+                        let _ = write_tx
+                            .send(Bytes::from_static(
+                                b"character creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
+                            ))
+                            .await;
+                        continue;
+                    }
                 }
                 ConnState::NeedBotDisclosure => {
                     let line = String::from_utf8_lossy(&line_bytes).trim().to_string();
@@ -4509,6 +5452,18 @@ async fn handle_conn(
             if lc == "account" || lc.starts_with("account ") {
                 let nm = name.as_deref().unwrap_or("");
                 let out = handle_account_command(&accounts, nm, &line).await;
+                let _ = write_tx.send(Bytes::from(out)).await;
+                continue;
+            }
+
+            if lc == "whoami" {
+                let out = handle_whoami_command(&sessions, session).await;
+                let _ = write_tx.send(Bytes::from(out)).await;
+                continue;
+            }
+
+            if lc == "who" {
+                let out = handle_who_command(&sessions).await;
                 let _ = write_tx.send(Bytes::from(out)).await;
                 continue;
             }
