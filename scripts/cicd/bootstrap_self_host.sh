@@ -52,7 +52,6 @@ install_system_packages() {
       curl \
       git \
       jq \
-      just \
       libssl-dev \
       pkg-config \
       python3 \
@@ -67,7 +66,6 @@ install_system_packages() {
       gcc-c++ \
       git \
       jq \
-      just \
       make \
       openssl-devel \
       pkgconf-pkg-config \

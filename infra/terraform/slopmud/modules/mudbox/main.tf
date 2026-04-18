@@ -507,16 +507,16 @@ BOOTSTRAP_GITHUB_RUNNER_REPO="${var.bootstrap_github_runner_repo}"
 BOOTSTRAP_GITHUB_TOKEN_SSM_NAME="${var.bootstrap_github_token_ssm_name}"
 BOOTSTRAP_GITHUB_RUNNER_LABELS="${var.bootstrap_github_runner_labels}"
 
-if [ "$BOOTSTRAP_SELF_HOST" = "1" ]; then
-  if command -v apt-get >/dev/null 2>&1; then
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update -y
-    apt-get install -y awscli ca-certificates curl git just jq python3 rsync
-  elif command -v dnf >/dev/null 2>&1; then
-    dnf -y install awscli ca-certificates curl git just jq python3 rsync
-  fi
+  if [ "$BOOTSTRAP_SELF_HOST" = "1" ]; then
+    if command -v apt-get >/dev/null 2>&1; then
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -y
+      apt-get install -y awscli ca-certificates curl git jq python3 rsync
+    elif command -v dnf >/dev/null 2>&1; then
+      dnf -y install awscli ca-certificates curl git jq python3 rsync
+    fi
 
-  install -d -m 0755 /opt/slopmud-bootstrap
+    install -d -m 0755 /opt/slopmud-bootstrap
   repo_dir=/opt/slopmud-bootstrap/repo
   if [ -d "$repo_dir/.git" ]; then
     git -C "$repo_dir" fetch --depth 1 origin "$BOOTSTRAP_REPO_REF"
@@ -526,7 +526,7 @@ if [ "$BOOTSTRAP_SELF_HOST" = "1" ]; then
   fi
 
   cd "$repo_dir"
-  just bootstrap-self-host \
+  ./scripts/cicd/bootstrap_self_host.sh \
     "$BOOTSTRAP_ENV_NAME" \
     "$BOOTSTRAP_GITHUB_RUNNER_REPO" \
     "$BOOTSTRAP_GITHUB_TOKEN_SSM_NAME" \
