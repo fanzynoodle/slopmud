@@ -158,6 +158,13 @@ variable "bootstrap_github_token_ssm_name" {
   default     = ""
 }
 
+variable "bootstrap_github_token_ssm_value" {
+  type        = string
+  description = "Value for bootstrap_github_token_ssm_name. Keep this out of git; pass via TF_VAR_bootstrap_github_token_ssm_value at apply time."
+  default     = ""
+  sensitive   = true
+}
+
 variable "bootstrap_github_runner_labels" {
   type        = string
   description = "Custom labels passed when registering the self-hosted GitHub runner."
