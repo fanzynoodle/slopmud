@@ -169,6 +169,7 @@ data "aws_iam_policy_document" "dns_admin" {
 locals {
   ssm_read_param_names = distinct(concat(
     var.ssm_read_parameter_names,
+    (var.bootstrap_env_file_ssm_name != "" ? [var.bootstrap_env_file_ssm_name] : []),
     (var.bootstrap_github_token_ssm_name != "" ? [var.bootstrap_github_token_ssm_name] : []),
     (var.compliance_portal_config_json_ssm_name != "" ? [var.compliance_portal_config_json_ssm_name] : []),
   ))
@@ -503,6 +504,7 @@ BOOTSTRAP_SELF_HOST="${var.bootstrap_self_host_enabled ? "1" : "0"}"
 BOOTSTRAP_REPO_URL="${var.bootstrap_repo_url}"
 BOOTSTRAP_REPO_REF="${var.bootstrap_repo_ref}"
 BOOTSTRAP_ENV_NAME="${var.bootstrap_env_name}"
+BOOTSTRAP_ENV_FILE_SSM_NAME="${var.bootstrap_env_file_ssm_name}"
 BOOTSTRAP_GITHUB_RUNNER_REPO="${var.bootstrap_github_runner_repo}"
 BOOTSTRAP_GITHUB_TOKEN_SSM_NAME="${var.bootstrap_github_token_ssm_name}"
 BOOTSTRAP_GITHUB_RUNNER_LABELS="${var.bootstrap_github_runner_labels}"
@@ -526,6 +528,17 @@ BOOTSTRAP_GITHUB_RUNNER_LABELS="${var.bootstrap_github_runner_labels}"
   fi
 
   cd "$repo_dir"
+  if [ -n "$BOOTSTRAP_ENV_FILE_SSM_NAME" ]; then
+    install -d -m 0755 "$repo_dir/env"
+    aws ssm get-parameter \
+      --region "${var.region}" \
+      --name "$BOOTSTRAP_ENV_FILE_SSM_NAME" \
+      --with-decryption \
+      --query Parameter.Value \
+      --output text >"$repo_dir/env/$BOOTSTRAP_ENV_NAME.env.tmp"
+    mv "$repo_dir/env/$BOOTSTRAP_ENV_NAME.env.tmp" "$repo_dir/env/$BOOTSTRAP_ENV_NAME.env"
+  fi
+
   ./scripts/cicd/bootstrap_self_host.sh \
     "$BOOTSTRAP_ENV_NAME" \
     "$BOOTSTRAP_GITHUB_RUNNER_REPO" \

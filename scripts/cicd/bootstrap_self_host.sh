@@ -780,6 +780,34 @@ resolve_env_file() {
   return 1
 }
 
+synthesize_oauth_env_file() {
+  local oauth_env_file="env/${env_name}-oauth.env"
+  if [[ -f "${oauth_env_file}" ]]; then
+    return 0
+  fi
+
+  cat >"${oauth_env_file}" <<EOF
+# Generated during first-boot bootstrap when env/${env_name}-oauth.env is not present in Git.
+source "\$(dirname "\${BASH_SOURCE[0]}")/${env_name}.env"
+
+DOMAIN=\${HOST}
+REMOTE_BIN=/opt/slopmud/bin/slopmud_web
+HTTP_BIND=0.0.0.0:4282
+HTTPS_BIND=0.0.0.0:4242
+SESSION_TCP_ADDR=\${SLOPMUD_BIND}
+WEB_SERVICE_NAME=slopmud-web-${env_name}-oauth
+
+TLS_DST_DIR=/etc/slopmud/tls/mud
+TLS_CERT=/etc/slopmud/tls/mud/fullchain.pem
+TLS_KEY=/etc/slopmud/tls/mud/privkey.pem
+CERTBOT_CERT_NAME=\${HOST}
+CERTBOT_DOMAINS="\${HOST}"
+
+SLOPMUD_GOOGLE_AUTH_BASE_URL=https://\${HOST}:4242
+GOOGLE_OAUTH_REDIRECT_URI=https://\${HOST}:4242/auth/google/callback
+EOF
+}
+
 main() {
   local base_env_file landing_env_file web_env_file
 
@@ -793,6 +821,7 @@ main() {
     exit 2
   fi
 
+  synthesize_oauth_env_file
   landing_env_file="$(resolve_env_file "${env_name}_landing" || resolve_env_file "${env_name}-landing" || printf '%s\n' "${base_env_file}")"
   web_env_file="$(resolve_env_file "${env_name}-oauth" || printf '%s\n' "${base_env_file}")"
 

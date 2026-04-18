@@ -140,6 +140,12 @@ variable "bootstrap_env_name" {
   default     = "prd"
 }
 
+variable "bootstrap_env_file_ssm_name" {
+  type        = string
+  description = "Optional SSM SecureString parameter containing the base env/<env>.env file used by first-boot host bootstrap."
+  default     = ""
+}
+
 variable "bootstrap_github_runner_repo" {
   type        = string
   description = "GitHub repo in owner/name form for self-hosted runner registration. Empty skips runner registration."
