@@ -184,7 +184,7 @@ install_github_runner_local() {
         --with-decryption \
         --query Parameter.Value \
         --output text
-    )"
+    )" || github_token=""
   fi
 
   if [[ -z "${github_token}" ]]; then
