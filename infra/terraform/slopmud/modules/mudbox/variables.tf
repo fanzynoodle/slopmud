@@ -116,6 +116,48 @@ variable "assets_bucket_force_destroy" {
   default     = false
 }
 
+variable "bootstrap_self_host_enabled" {
+  type        = bool
+  description = "Whether cloud-init should clone the slopmud repo and run the host-local bootstrap after DNS registration."
+  default     = false
+}
+
+variable "bootstrap_repo_url" {
+  type        = string
+  description = "Git URL for the repo that cloud-init should clone for first-boot host bootstrap."
+  default     = "https://github.com/fanzynoodle/slopmud.git"
+}
+
+variable "bootstrap_repo_ref" {
+  type        = string
+  description = "Git ref (branch/tag) to check out for first-boot host bootstrap."
+  default     = "main"
+}
+
+variable "bootstrap_env_name" {
+  type        = string
+  description = "Env/track passed to the host-local bootstrap script."
+  default     = "prd"
+}
+
+variable "bootstrap_github_runner_repo" {
+  type        = string
+  description = "GitHub repo in owner/name form for self-hosted runner registration. Empty skips runner registration."
+  default     = ""
+}
+
+variable "bootstrap_github_token_ssm_name" {
+  type        = string
+  description = "Optional SSM SecureString parameter containing a GitHub token that can mint runner registration tokens."
+  default     = ""
+}
+
+variable "bootstrap_github_runner_labels" {
+  type        = string
+  description = "Custom labels passed when registering the self-hosted GitHub runner."
+  default     = "mud"
+}
+
 variable "ssm_read_parameter_names" {
   type        = list(string)
   description = "Optional list of SSM Parameter Store names that the instance role may read (useful for app secrets like OAuth client secrets). Example: /slopmud/prd/google_oauth_client_secret"

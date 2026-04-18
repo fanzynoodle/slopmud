@@ -7,15 +7,15 @@ terraform {
 }
 
 inputs = {
-  name_prefix    = "mudbox"
-  enable_compute = true
-  os             = "debian12"
-  instance_type  = "t3a.small"
+  name_prefix     = "mudbox"
+  enable_compute  = true
+  os              = "debian12"
+  instance_type   = "t3a.small"
   root_volume_gib = 30
-  spot_max_price = ""
+  spot_max_price  = ""
 
-  zone_name        = "slopmud.com"
-  record_name      = "mud"
+  zone_name          = "slopmud.com"
+  record_name        = "mud"
   create_hosted_zone = true
 
   # Set this when you know what you want mud.slopmud.com to point at.
@@ -45,6 +45,17 @@ inputs = {
   # Optional: create + allow-read a compliance portal config JSON parameter (value should be passed via TF_VAR_...).
   # compliance_portal_config_json_ssm_name  = "/slopmud/prd/compliance_portal_config_json"
   # compliance_portal_config_json_ssm_value = "<json>"
+
+  # After the replacement instance re-registers DNS, clone the repo and bootstrap the host locally.
+  # The runner token parameter should contain a GitHub token capable of POSTing
+  # /repos/<owner>/<repo>/actions/runners/registration-token.
+  bootstrap_self_host_enabled     = true
+  bootstrap_repo_url              = "https://github.com/fanzynoodle/slopmud.git"
+  bootstrap_repo_ref              = "agent/20260418-bootstrap-from-head"
+  bootstrap_env_name              = "prd"
+  bootstrap_github_runner_repo    = "fanzynoodle/slopmud"
+  bootstrap_github_token_ssm_name = "/slopmud/prd/github_runner_bootstrap_token"
+  bootstrap_github_runner_labels  = "mud"
 
   # SBC enforcement enable switch.
   # The record is created when name is set; `enabled` toggles the A-record value to avoid NXDOMAIN negative caching.

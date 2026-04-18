@@ -117,20 +117,14 @@ certbot-issue-web email="" env="prd" domain="" staging="0":
     if [ "{{staging}}" = "1" ]; then args="--test-cert"; fi; \
     emargs="--register-unsafely-without-email"; \
     if [ -n "${email}" ]; then emargs="-m ${email}"; fi; \
-    # Domains: if CERTBOT_DOMAINS is set (space-separated), use it; otherwise default to base + www.base.\n    dargs=\"\"; \
-    if [ -n \"${CERTBOT_DOMAINS:-}\" ]; then \
-      for d in ${CERTBOT_DOMAINS}; do dargs=\"$dargs -d $d\"; done; \
+    dargs=""; \
+    if [ -n "${CERTBOT_DOMAINS:-}" ]; then \
+      for d in ${CERTBOT_DOMAINS}; do dargs="$dargs -d $d"; done; \
     else \
-      dargs=\"-d ${base} -d www.${base}\"; \
+      dargs="-d ${base} -d www.${base}"; \
     fi; \
-    hook="bash -ceu '\'' \
-      dst=\"'\"'\"${dst_dir}\"'\"'\"\"; \
-      svc=\"'\"'\"${svc}\"'\"'\"\"; \
-      install -d -o slopmud -g slopmud -m 0750 \"${dst}\"; \
-      install -o slopmud -g slopmud -m 0640 \"${RENEWED_LINEAGE}/fullchain.pem\" \"${dst}/fullchain.pem\"; \
-      install -o slopmud -g slopmud -m 0640 \"${RENEWED_LINEAGE}/privkey.pem\" \"${dst}/privkey.pem\"; \
-      systemctl restart \"${svc}\" 2>/dev/null || true; \
-    '\''"; \
+    hook_name="slopmud-${ENV_NAME:-{{env}}}.sh"; \
+    hook="/etc/letsencrypt/renewal-hooks/deploy/${hook_name}"; \
     ssh {{ssh_opts}} -p "${SSH_PORT}" "${SSH_USER}@${HOST}" " \
       set -euo pipefail; \
       sudo certbot certonly --dns-route53 \
@@ -224,7 +218,7 @@ certbot-renew-host host ssh_user="admin" ssh_port="22" dry_run="0":
     else \
       sudo certbot renew; \
     fi; \
-    # Individual certs may have per-cert deploy hooks that restart the right service.\n    true; \
+    true; \
   '
 
 certbot-status env="prd":
@@ -262,7 +256,7 @@ https-smoke env="prd" domain="":
     base="{{domain}}"; \
     if [ -z "${base}" ]; then base="${DOMAIN}"; fi; \
     port="${HTTPS_BIND##*:}"; \
-    # Allow overriding via domain arg that already contains :port.\n    if [[ "${base}" == *:* ]]; then port=""; fi; \
+    if [[ "${base}" == *:* ]]; then port=""; fi; \
     hp=""; if [[ -n "${port}" && "${port}" != "443" ]]; then hp=":${port}"; fi; \
     curl -fsS "https://${base}${hp}/healthz" | sed -n "1p"; \
     curl -fsS "https://www.${base}${hp}/healthz" | sed -n "1p"; \
@@ -646,6 +640,10 @@ deploy-slopmud env="prd":
 # Fast deploy: use the CI-style asset tarball + slopmud-shuttle-assets (no unit rewrite by default).
 hot-deploy-slopmud env="prd":
   ./scripts/cicd/hot_deploy_slopmud.sh "env/{{env}}.env"
+
+# Host-local first-boot/bootstrap entrypoint.
+bootstrap-self-host env="prd" github_repo="" github_token_ssm="" runner_labels="mud":
+  ./scripts/cicd/bootstrap_self_host.sh "{{env}}" "{{github_repo}}" "{{github_token_ssm}}" "{{runner_labels}}"
 
 # Build a release artifact and upload it to the assets bucket for this env track.
 assets-publish env="prd":

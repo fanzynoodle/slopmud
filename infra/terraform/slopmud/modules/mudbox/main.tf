@@ -169,6 +169,7 @@ data "aws_iam_policy_document" "dns_admin" {
 locals {
   ssm_read_param_names = distinct(concat(
     var.ssm_read_parameter_names,
+    (var.bootstrap_github_token_ssm_name != "" ? [var.bootstrap_github_token_ssm_name] : []),
     (var.compliance_portal_config_json_ssm_name != "" ? [var.compliance_portal_config_json_ssm_name] : []),
   ))
 
@@ -423,80 +424,115 @@ resource "aws_launch_template" "this" {
 
   user_data = var.dns_admin_enabled && (var.create_hosted_zone || var.dns_admin_zone_id != "") ? (
     base64encode(<<EOT
-    #!/usr/bin/env bash
-    set -euxo pipefail
+#!/usr/bin/env bash
+set -euxo pipefail
 
-    install -d -m 0755 /var/lib/cloud/scripts/per-boot
-    cat >/var/lib/cloud/scripts/per-boot/90-${var.name_prefix}-reregister-dns.sh <<'SCRIPT'
-    #!/usr/bin/env bash
-    set -uo pipefail
+install -d -m 0755 /var/lib/cloud/scripts/per-boot
+cat >/var/lib/cloud/scripts/per-boot/90-${var.name_prefix}-reregister-dns.sh <<'SCRIPT'
+#!/usr/bin/env bash
+set -uo pipefail
 
-    ZONE_ID="${local.dns_admin_zone_id}"
-    REGION="${var.region}"
-    APEX="${local.zone_apex}"
-    CNAME_LIST=$(cat <<'NAMES'
-    ${join("\n", local.dns_registration_names)}
-    NAMES
-    )
+ZONE_ID="${local.dns_admin_zone_id}"
+REGION="${var.region}"
+APEX="${local.zone_apex}"
+CNAME_LIST=$(cat <<'NAMES'
+${join("\n", local.dns_registration_names)}
+NAMES
+)
 
-    if ! command -v aws >/dev/null 2>&1; then
-      if command -v apt-get >/dev/null 2>&1; then
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -y && apt-get install -y awscli || true
-      elif command -v dnf >/dev/null 2>&1; then
-        dnf -y install awscli || true
-      fi
-    fi
+if ! command -v aws >/dev/null 2>&1; then
+  if command -v apt-get >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y && apt-get install -y awscli || true
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf -y install awscli || true
+  fi
+fi
 
-    if ! command -v aws >/dev/null 2>&1; then
-      echo "aws cli is unavailable; skipping dns registration"
-      exit 0
-    fi
+if ! command -v aws >/dev/null 2>&1; then
+  echo "aws cli is unavailable; skipping dns registration"
+  exit 0
+fi
 
-    PUBLIC_IP=""
-    PUBLIC_DNS=""
-    for _ in $(seq 1 30); do
-      token=$(curl -fsS -m 2 -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" || true)
-      if [ -n "$token" ]; then
-        PUBLIC_IP=$(curl -fsS -m 2 -H "X-aws-ec2-metadata-token: $token" "http://169.254.169.254/latest/meta-data/public-ipv4" || true)
-        PUBLIC_DNS=$(curl -fsS -m 2 -H "X-aws-ec2-metadata-token: $token" "http://169.254.169.254/latest/meta-data/public-hostname" || true)
-      fi
-      if [ -n "$PUBLIC_IP" ] && [ -n "$PUBLIC_DNS" ]; then
-        break
-      fi
-      sleep 2
-    done
+PUBLIC_IP=""
+PUBLIC_DNS=""
+for _ in $(seq 1 30); do
+  token=$(curl -fsS -m 2 -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" || true)
+  if [ -n "$token" ]; then
+    PUBLIC_IP=$(curl -fsS -m 2 -H "X-aws-ec2-metadata-token: $token" "http://169.254.169.254/latest/meta-data/public-ipv4" || true)
+    PUBLIC_DNS=$(curl -fsS -m 2 -H "X-aws-ec2-metadata-token: $token" "http://169.254.169.254/latest/meta-data/public-hostname" || true)
+  fi
+  if [ -n "$PUBLIC_IP" ] && [ -n "$PUBLIC_DNS" ]; then
+    break
+  fi
+  sleep 2
+done
 
-    if [ -z "$PUBLIC_IP" ] || [ -z "$PUBLIC_DNS" ]; then
-      echo "could not determine public metadata; skipping dns registration"
-      exit 0
-    fi
+if [ -z "$PUBLIC_IP" ] || [ -z "$PUBLIC_DNS" ]; then
+  echo "could not determine public metadata; skipping dns registration"
+  exit 0
+fi
 
-    upsert_rr() {
-      name="$1"
-      rtype="$2"
-      value="$3"
-      change_batch=$(cat <<JSON
-    {"Changes":[{"Action":"UPSERT","ResourceRecordSet":{"Name":"$name","Type":"$rtype","TTL":60,"ResourceRecords":[{"Value":"$value"}]}}]}
-    JSON
-    )
-      aws route53 change-resource-record-sets \
-        --region "$REGION" \
-        --hosted-zone-id "$ZONE_ID" \
-        --change-batch "$change_batch" >/dev/null
-    }
+upsert_rr() {
+  name="$1"
+  rtype="$2"
+  value="$3"
+  change_batch=$(cat <<JSON
+{"Changes":[{"Action":"UPSERT","ResourceRecordSet":{"Name":"$name","Type":"$rtype","TTL":60,"ResourceRecords":[{"Value":"$value"}]}}]}
+JSON
+  )
+  aws route53 change-resource-record-sets \
+    --region "$REGION" \
+    --hosted-zone-id "$ZONE_ID" \
+    --change-batch "$change_batch" >/dev/null
+}
 
-    upsert_rr "$APEX" "A" "$PUBLIC_IP"
-    while IFS= read -r cname; do
-      [ -z "$cname" ] && continue
-      upsert_rr "$cname" "CNAME" "$PUBLIC_DNS"
-    done <<< "$CNAME_LIST"
+upsert_rr "$APEX" "A" "$PUBLIC_IP"
+while IFS= read -r cname; do
+  [ -z "$cname" ] && continue
+  upsert_rr "$cname" "CNAME" "$PUBLIC_DNS"
+done <<< "$CNAME_LIST"
 
-    echo "registered dns: ip=$PUBLIC_IP dns=$PUBLIC_DNS"
-    SCRIPT
+echo "registered dns: ip=$PUBLIC_IP dns=$PUBLIC_DNS"
+SCRIPT
 
-    chmod 0755 /var/lib/cloud/scripts/per-boot/90-${var.name_prefix}-reregister-dns.sh
-    /var/lib/cloud/scripts/per-boot/90-${var.name_prefix}-reregister-dns.sh || true
+chmod 0755 /var/lib/cloud/scripts/per-boot/90-${var.name_prefix}-reregister-dns.sh
+/var/lib/cloud/scripts/per-boot/90-${var.name_prefix}-reregister-dns.sh || true
+
+BOOTSTRAP_SELF_HOST="${var.bootstrap_self_host_enabled ? "1" : "0"}"
+BOOTSTRAP_REPO_URL="${var.bootstrap_repo_url}"
+BOOTSTRAP_REPO_REF="${var.bootstrap_repo_ref}"
+BOOTSTRAP_ENV_NAME="${var.bootstrap_env_name}"
+BOOTSTRAP_GITHUB_RUNNER_REPO="${var.bootstrap_github_runner_repo}"
+BOOTSTRAP_GITHUB_TOKEN_SSM_NAME="${var.bootstrap_github_token_ssm_name}"
+BOOTSTRAP_GITHUB_RUNNER_LABELS="${var.bootstrap_github_runner_labels}"
+
+if [ "$BOOTSTRAP_SELF_HOST" = "1" ]; then
+  if command -v apt-get >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y
+    apt-get install -y awscli ca-certificates curl git just jq python3 rsync
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf -y install awscli ca-certificates curl git just jq python3 rsync
+  fi
+
+  install -d -m 0755 /opt/slopmud-bootstrap
+  repo_dir=/opt/slopmud-bootstrap/repo
+  if [ -d "$repo_dir/.git" ]; then
+    git -C "$repo_dir" fetch --depth 1 origin "$BOOTSTRAP_REPO_REF"
+    git -C "$repo_dir" checkout -f FETCH_HEAD
+  else
+    git clone --depth 1 --branch "$BOOTSTRAP_REPO_REF" "$BOOTSTRAP_REPO_URL" "$repo_dir"
+  fi
+
+  cd "$repo_dir"
+  just bootstrap-self-host \
+    "$BOOTSTRAP_ENV_NAME" \
+    "$BOOTSTRAP_GITHUB_RUNNER_REPO" \
+    "$BOOTSTRAP_GITHUB_TOKEN_SSM_NAME" \
+    "$BOOTSTRAP_GITHUB_RUNNER_LABELS" \
+    2>&1 | tee /var/log/slopmud-bootstrap.log
+fi
 EOT
     )
   ) : null

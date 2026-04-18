@@ -30,8 +30,8 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
   ripgrep
 
 if ! id -u ghrunner >/dev/null 2>&1; then
-  echo "ERROR: expected runner user 'ghrunner' to exist on this host" >&2
-  exit 2
+  echo "Creating runner user: ghrunner"
+  sudo useradd --system --home /opt/actions-runner --create-home --shell /usr/sbin/nologin ghrunner
 fi
 
 echo "Installing rustup for ghrunner (if missing)"
