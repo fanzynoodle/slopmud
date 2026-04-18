@@ -54,6 +54,25 @@ run_as_current_user() {
   fi
 }
 
+activate_rust_toolchain() {
+  local target_user home_dir
+  if [[ "${SUDO_USER:-}" != "" && "${SUDO_USER}" != "root" ]]; then
+    target_user="${SUDO_USER}"
+  else
+    target_user="${USER:-root}"
+  fi
+
+  home_dir="$(getent passwd "${target_user}" | cut -d: -f6)"
+  if [[ -z "${home_dir}" || ! -x "${home_dir}/.cargo/bin/cargo" ]]; then
+    return 0
+  fi
+
+  export HOME="${home_dir}"
+  export CARGO_HOME="${home_dir}/.cargo"
+  export RUSTUP_HOME="${home_dir}/.rustup"
+  export PATH="${CARGO_HOME}/bin:${PATH}"
+}
+
 install_system_packages() {
   echo "Installing host bootstrap packages"
   if command -v apt-get >/dev/null 2>&1; then
@@ -105,6 +124,7 @@ ensure_rust_toolchain() {
     cargo --version
     rustc --version
   '
+  activate_rust_toolchain
 }
 
 wait_for_listen() {
