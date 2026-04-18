@@ -74,10 +74,11 @@ activate_rust_toolchain() {
 }
 
 ensure_build_swap() {
-  local mem_kib swap_total_kib swapfile=/swapfile build_jobs
+  local mem_kib swap_total_kib avail_kib swapfile=/swapfile build_jobs swap_kib
 
   mem_kib="$(awk '/MemTotal:/ {print $2}' /proc/meminfo)"
   swap_total_kib="$(awk '/SwapTotal:/ {print $2}' /proc/meminfo)"
+  avail_kib="$(df --output=avail -k / | tail -n 1 | tr -d ' ')"
   build_jobs="${CARGO_BUILD_JOBS:-1}"
 
   export CARGO_BUILD_JOBS="${build_jobs}"
@@ -86,9 +87,21 @@ ensure_build_swap() {
     return 0
   fi
 
+  if [[ "${avail_kib}" -lt 1048576 ]]; then
+    echo "WARN: less than 1 GiB free on /; skipping swapfile creation" >&2
+    return 0
+  fi
+
+  swap_kib=$(( avail_kib / 3 ))
+  if [[ "${swap_kib}" -lt 1048576 ]]; then
+    swap_kib=1048576
+  elif [[ "${swap_kib}" -gt 2097152 ]]; then
+    swap_kib=2097152
+  fi
+
   if [[ ! -f "${swapfile}" ]]; then
-    echo "Creating swapfile for low-memory first boot"
-    sudo fallocate -l 4G "${swapfile}" 2>/dev/null || sudo dd if=/dev/zero of="${swapfile}" bs=1M count=4096 status=progress
+    echo "Creating swapfile for low-memory first boot (${swap_kib} KiB)"
+    sudo fallocate -l "$(( swap_kib * 1024 ))" "${swapfile}" 2>/dev/null || sudo dd if=/dev/zero of="${swapfile}" bs=1K count="${swap_kib}" status=progress
     sudo chmod 600 "${swapfile}"
     sudo mkswap "${swapfile}" >/dev/null
   fi
