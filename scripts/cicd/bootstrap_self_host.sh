@@ -73,6 +73,31 @@ activate_rust_toolchain() {
   export PATH="${CARGO_HOME}/bin:${PATH}"
 }
 
+ensure_build_swap() {
+  local mem_kib swap_total_kib swapfile=/swapfile build_jobs
+
+  mem_kib="$(awk '/MemTotal:/ {print $2}' /proc/meminfo)"
+  swap_total_kib="$(awk '/SwapTotal:/ {print $2}' /proc/meminfo)"
+  build_jobs="${CARGO_BUILD_JOBS:-1}"
+
+  export CARGO_BUILD_JOBS="${build_jobs}"
+
+  if [[ "${swap_total_kib}" -gt 0 || "${mem_kib}" -ge 3000000 ]]; then
+    return 0
+  fi
+
+  if [[ ! -f "${swapfile}" ]]; then
+    echo "Creating swapfile for low-memory first boot"
+    sudo fallocate -l 4G "${swapfile}" 2>/dev/null || sudo dd if=/dev/zero of="${swapfile}" bs=1M count=4096 status=progress
+    sudo chmod 600 "${swapfile}"
+    sudo mkswap "${swapfile}" >/dev/null
+  fi
+
+  if ! sudo /sbin/swapon --show | grep -q "^${swapfile}"; then
+    sudo /sbin/swapon "${swapfile}"
+  fi
+}
+
 install_system_packages() {
   echo "Installing host bootstrap packages"
   if command -v apt-get >/dev/null 2>&1; then
@@ -832,6 +857,7 @@ main() {
   local base_env_file landing_env_file web_env_file
 
   install_system_packages
+  ensure_build_swap
   ensure_rust_toolchain
   install_github_runner_local "${env_name}" "${github_repo}" "${github_token_ssm}" "${runner_labels}"
 
