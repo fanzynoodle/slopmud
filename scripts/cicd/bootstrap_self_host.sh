@@ -34,10 +34,23 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
 run_as_current_user() {
+  local target_user home_dir
   if [[ "${SUDO_USER:-}" != "" && "${SUDO_USER}" != "root" ]]; then
-    sudo -u "${SUDO_USER}" -H bash -lc "$1"
+    target_user="${SUDO_USER}"
   else
-    bash -lc "$1"
+    target_user="${USER:-root}"
+  fi
+
+  home_dir="$(getent passwd "${target_user}" | cut -d: -f6)"
+  if [[ -z "${home_dir}" ]]; then
+    echo "ERROR: could not determine home directory for ${target_user}" >&2
+    exit 2
+  fi
+
+  if [[ "${target_user}" == "${USER:-root}" ]]; then
+    HOME="${home_dir}" bash -lc "$1"
+  else
+    sudo -u "${target_user}" -H env HOME="${home_dir}" bash -lc "$1"
   fi
 }
 
