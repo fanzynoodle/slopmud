@@ -40,10 +40,11 @@ data "aws_ssm_parameter" "al2023_ami" {
 }
 
 locals {
-  subnet_ids         = sort(data.aws_subnets.default.ids)
-  ami_id             = var.os == "al2023" ? data.aws_ssm_parameter.al2023_ami[0].value : data.aws_ami.debian12[0].id
-  assets_bucket_name = var.assets_bucket_name != "" ? var.assets_bucket_name : "slopmud-assets-${data.aws_caller_identity.current.account_id}-${var.region}"
-  zone_apex          = trim(var.zone_name, ".")
+  subnet_ids           = sort(data.aws_subnets.default.ids)
+  ami_id               = var.os == "al2023" ? data.aws_ssm_parameter.al2023_ami[0].value : data.aws_ami.debian12[0].id
+  ami_root_device_name = var.os == "al2023" ? "/dev/xvda" : data.aws_ami.debian12[0].root_device_name
+  assets_bucket_name   = var.assets_bucket_name != "" ? var.assets_bucket_name : "slopmud-assets-${data.aws_caller_identity.current.account_id}-${var.region}"
+  zone_apex            = trim(var.zone_name, ".")
   dns_registration_names = distinct(concat(
     ["${var.record_name}.${trim(var.zone_name, ".")}", "www.${trim(var.zone_name, ".")}"],
     [for name in var.extra_cname_record_names : "${name}.${trim(var.zone_name, ".")}"],
@@ -239,6 +240,18 @@ resource "aws_ssm_parameter" "compliance_portal_config_json" {
   description = "slopmud compliance portal config JSON"
   type        = "SecureString"
   value       = var.compliance_portal_config_json_ssm_value
+  overwrite   = true
+
+  tags = local.tags
+}
+
+resource "aws_ssm_parameter" "bootstrap_github_runner_token" {
+  count = var.enable_compute && var.bootstrap_github_token_ssm_name != "" && var.bootstrap_github_token_ssm_value != "" ? 1 : 0
+
+  name        = var.bootstrap_github_token_ssm_name
+  description = "slopmud GitHub runner bootstrap token"
+  type        = "SecureString"
+  value       = var.bootstrap_github_token_ssm_value
   overwrite   = true
 
   tags = local.tags
@@ -567,7 +580,7 @@ EOT
   }
 
   block_device_mappings {
-    device_name = "/dev/sda1"
+    device_name = local.ami_root_device_name
 
     ebs {
       volume_type           = "gp3"
