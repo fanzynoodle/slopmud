@@ -8,9 +8,11 @@ USAGE:
 
 Bootstraps a fresh host locally from a checked-out slopmud repo:
 - installs build/runtime dependencies
+- pulls the latest release artifact for the env track (S3) and uses its binaries/web assets when available
 - installs rust for the current user
 - bootstraps the GitHub Actions runner host + registers a runner when token access is configured
-- builds and installs shard, broker, internal_oidc, landing web, and OAuth web services
+- builds missing components from source only when the release artifact is incomplete
+- installs shard, broker, internal_oidc, landing web, and OAuth web services
 
 Arguments:
   env                Deployment env/track. Default: prd
@@ -24,6 +26,8 @@ env_name="${1:-prd}"
 github_repo="${2:-}"
 github_token_ssm="${3:-}"
 runner_labels="${4:-mud}"
+
+BOOTSTRAP_ARTIFACT_DIR=""
 
 if [[ "${env_name}" == "-h" || "${env_name}" == "--help" ]]; then
   usage
@@ -163,6 +167,114 @@ ensure_rust_toolchain() {
     rustc --version
   '
   activate_rust_toolchain
+}
+
+artifact_track_for_env() {
+  case "${1}" in
+    prd) echo "prod" ;;
+    dev|stg|sandbox) echo "${1}" ;;
+    *) echo "${1}" ;;
+  esac
+}
+
+prepare_release_artifact() {
+  local env_file="$1"
+  local track aws_region account_id bucket key s3_uri artifact_root sha now
+
+  if [[ ! -f "${env_file}" ]]; then
+    return 0
+  fi
+
+  (
+    set -a
+    # shellcheck disable=SC1090
+    source "${env_file}"
+    set +a
+
+    track="$(artifact_track_for_env "${ENV_NAME:-${env_name}}")"
+    aws_region="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
+
+    if ! account_id="$(aws sts get-caller-identity --query Account --output text 2>/dev/null)"; then
+      echo "WARN: unable to determine AWS account for artifact lookup; falling back to source builds" >&2
+      exit 0
+    fi
+
+    bucket="${ASSETS_BUCKET:-slopmud-assets-${account_id}-${aws_region}}"
+    if ! key="$(
+      aws s3api list-objects-v2 \
+        --bucket "${bucket}" \
+        --prefix "${track}/" \
+        --query 'reverse(sort_by(Contents,&LastModified))[?ends_with(Key, `artifact.tgz`)].Key | [0]' \
+        --output text \
+        2>/dev/null
+    )"; then
+      echo "WARN: unable to query latest release artifact under s3://${bucket}/${track}/; falling back to source builds" >&2
+      exit 0
+    fi
+
+    if [[ -z "${key}" || "${key}" == "None" ]]; then
+      echo "WARN: no release artifact found under s3://${bucket}/${track}/; falling back to source builds" >&2
+      exit 0
+    fi
+
+    s3_uri="s3://${bucket}/${key}"
+    sha="$(basename "$(dirname "${key}")")"
+    if [[ -z "${sha}" || "${sha}" == "." || "${sha}" == "/" ]]; then
+      now="$(date -u +%Y%m%dT%H%M%SZ)"
+      sha="latest-${now}"
+    fi
+
+    artifact_root="/opt/slopmud-bootstrap/assets/${env_name}/${sha}"
+    sudo install -d -m 0755 "${artifact_root}"
+    if ! aws s3 cp "${s3_uri}" "${artifact_root}/artifact.tgz" >/dev/null; then
+      echo "WARN: failed to download ${s3_uri}; falling back to source builds" >&2
+      exit 0
+    fi
+
+    if ! sudo tar -xzf "${artifact_root}/artifact.tgz" -C "${artifact_root}"; then
+      echo "WARN: failed to extract ${artifact_root}/artifact.tgz; falling back to source builds" >&2
+      exit 0
+    fi
+
+    if [[ ! -d "${artifact_root}/bin" ]]; then
+      echo "WARN: artifact ${s3_uri} missing bin/; falling back to source builds" >&2
+      exit 0
+    fi
+
+    sudo chown -R "${USER:-root}:${USER:-root}" "${artifact_root}" 2>/dev/null || true
+    printf '%s\n' "${artifact_root}"
+  )
+}
+
+resolve_binary_source() {
+  local package_name="$1"
+  local binary_name="$2"
+  local artifact_bin=""
+
+  if [[ -n "${BOOTSTRAP_ARTIFACT_DIR}" ]]; then
+    artifact_bin="${BOOTSTRAP_ARTIFACT_DIR}/bin/${binary_name}"
+    if [[ -x "${artifact_bin}" ]]; then
+      echo "Using release artifact binary: ${binary_name}"
+      printf '%s\n' "${artifact_bin}"
+      return 0
+    fi
+  fi
+
+  ./scripts/build_bookworm_release.sh "${package_name}"
+  printf 'target/release/%s\n' "${binary_name}"
+}
+
+resolve_web_homepage_source() {
+  if [[ -n "${BOOTSTRAP_ARTIFACT_DIR}" && -d "${BOOTSTRAP_ARTIFACT_DIR}/web_homepage" ]]; then
+    printf '%s\n' "${BOOTSTRAP_ARTIFACT_DIR}/web_homepage"
+    return 0
+  fi
+  printf 'web_homepage\n'
+}
+
+artifact_has_binary() {
+  local binary_name="$1"
+  [[ -n "${BOOTSTRAP_ARTIFACT_DIR}" && -x "${BOOTSTRAP_ARTIFACT_DIR}/bin/${binary_name}" ]]
 }
 
 wait_for_listen() {
@@ -363,17 +475,17 @@ deploy_slopmud_local() {
     : "${SLOPMUD_BIND:?missing SLOPMUD_BIND in env file}"
     : "${NODE_ID:?missing NODE_ID in env file}"
 
-    local remote_bin_dir tmp_unit unit_name port
+    local remote_bin_dir tmp_unit unit_name port bin_src
     remote_bin_dir="$(dirname "${SLOPMUD_REMOTE_BIN}")"
 
-    ./scripts/build_bookworm_release.sh slopmud
+    bin_src="$(resolve_binary_source slopmud slopmud)"
     ensure_slopmud_layout "${REMOTE_ROOT}" "${remote_bin_dir}"
     ensure_parent_owned_by_slopmud "${SLOPMUD_ACCOUNTS_PATH:-}"
     ensure_parent_owned_by_slopmud "${SLOPMUD_BANS_PATH:-}"
     ensure_dir_owned_by_slopmud "${SLOPMUD_GOOGLE_OAUTH_DIR:-}"
     ensure_dir_owned_by_slopmud "${SLOPMUD_EVENTLOG_SPOOL_DIR:-}"
 
-    sudo install -m 0755 -o root -g root target/release/slopmud "${SLOPMUD_REMOTE_BIN}"
+    sudo install -m 0755 -o root -g root "${bin_src}" "${SLOPMUD_REMOTE_BIN}"
 
     tmp_unit="$(mktemp)"
     trap 'rm -f "${tmp_unit}"' EXIT
@@ -466,12 +578,12 @@ deploy_shard_local() {
     : "${SHARD_REMOTE_BIN:?missing SHARD_REMOTE_BIN in env file}"
     : "${SHARD_BIND:?missing SHARD_BIND in env file}"
 
-    local remote_bin_dir tmp_unit unit_name exec_start port
+    local remote_bin_dir tmp_unit unit_name exec_start port bin_src
     remote_bin_dir="$(dirname "${SHARD_REMOTE_BIN}")"
 
-    ./scripts/build_bookworm_release.sh shard_01
+    bin_src="$(resolve_binary_source shard_01 shard_01)"
     ensure_slopmud_layout "${REMOTE_ROOT}" "${remote_bin_dir}"
-    sudo install -m 0755 -o root -g root target/release/shard_01 "${SHARD_REMOTE_BIN}"
+    sudo install -m 0755 -o root -g root "${bin_src}" "${SHARD_REMOTE_BIN}"
 
     tmp_unit="$(mktemp)"
     trap 'rm -f "${tmp_unit}"' EXIT
@@ -550,13 +662,13 @@ deploy_internal_oidc_local() {
     : "${OIDC_CLIENT_SECRET:?missing OIDC_CLIENT_SECRET in env file}"
     : "${OIDC_ED25519_SEED_B64:?missing OIDC_ED25519_SEED_B64 in env file}"
 
-    local remote_bin_dir tmp_unit unit_name port tls_bits oidc_https_bind oidc_tls_cert oidc_tls_key
+    local remote_bin_dir tmp_unit unit_name port tls_bits oidc_https_bind oidc_tls_cert oidc_tls_key bin_src
     remote_bin_dir="$(dirname "${OIDC_REMOTE_BIN}")"
 
-    ./scripts/build_bookworm_release.sh internal_oidc
+    bin_src="$(resolve_binary_source internal_oidc internal_oidc)"
     ensure_slopmud_layout "${REMOTE_ROOT}" "${remote_bin_dir}"
     ensure_parent_owned_by_slopmud "${OIDC_USERS_PATH:-}"
-    sudo install -m 0755 -o root -g root target/release/internal_oidc "${OIDC_REMOTE_BIN}"
+    sudo install -m 0755 -o root -g root "${bin_src}" "${OIDC_REMOTE_BIN}"
 
     mapfile -t tls_bits < <(resolve_tls "${OIDC_HTTPS_BIND:-}" "${OIDC_TLS_CERT:-}" "${OIDC_TLS_KEY:-}")
     oidc_https_bind="${tls_bits[0]}"
@@ -632,14 +744,15 @@ deploy_static_web_local() {
     : "${DOMAIN:?missing DOMAIN in env file}"
     : "${HTTP_BIND:?missing HTTP_BIND in env file}"
 
-    local remote_bin_dir tmp_unit unit_name port tls_bits https_bind tls_cert tls_key
+    local remote_bin_dir tmp_unit unit_name port tls_bits https_bind tls_cert tls_key bin_src web_src
     remote_bin_dir="$(dirname "${REMOTE_BIN}")"
 
-    ./scripts/build_bookworm_release.sh static_web
+    bin_src="$(resolve_binary_source static_web static_web)"
+    web_src="$(resolve_web_homepage_source)"
     ensure_slopmud_layout "${REMOTE_ROOT}" "${remote_bin_dir}" "${REMOTE_WEB}"
-    sudo rsync -a --delete --exclude README.md web_homepage/ "${REMOTE_WEB}/"
+    sudo rsync -a --delete --exclude README.md "${web_src}/" "${REMOTE_WEB}/"
     sudo chown -R slopmud:slopmud "${REMOTE_WEB}"
-    sudo install -m 0755 -o root -g root target/release/static_web "${REMOTE_BIN}"
+    sudo install -m 0755 -o root -g root "${bin_src}" "${REMOTE_BIN}"
 
     mapfile -t tls_bits < <(resolve_tls "${HTTPS_BIND:-}" "${TLS_CERT:-}" "${TLS_KEY:-}")
     https_bind="${tls_bits[0]}"
@@ -714,16 +827,17 @@ deploy_slopmud_web_local() {
     : "${DOMAIN:?missing DOMAIN in env file}"
     : "${HTTP_BIND:?missing HTTP_BIND in env file}"
 
-    local remote_bin_dir tmp_unit unit_name port tls_bits https_bind tls_cert tls_key exec_start
+    local remote_bin_dir tmp_unit unit_name port tls_bits https_bind tls_cert tls_key exec_start bin_src web_src
     remote_bin_dir="$(dirname "${REMOTE_BIN}")"
 
-    ./scripts/build_bookworm_release.sh slopmud_web
+    bin_src="$(resolve_binary_source slopmud_web slopmud_web)"
+    web_src="$(resolve_web_homepage_source)"
     ensure_slopmud_layout "${REMOTE_ROOT}" "${remote_bin_dir}" "${REMOTE_WEB}" "${REMOTE_ROOT}/env"
     ensure_dir_owned_by_slopmud "${SLOPMUD_GOOGLE_OAUTH_DIR:-}"
     ensure_parent_owned_by_slopmud "${SLOPMUD_ACCOUNTS_PATH:-}"
-    sudo rsync -a --delete --exclude README.md web_homepage/ "${REMOTE_WEB}/"
+    sudo rsync -a --delete --exclude README.md "${web_src}/" "${REMOTE_WEB}/"
     sudo chown -R slopmud:slopmud "${REMOTE_WEB}"
-    sudo install -m 0755 -o root -g root target/release/slopmud_web "${REMOTE_BIN}"
+    sudo install -m 0755 -o root -g root "${bin_src}" "${REMOTE_BIN}"
 
     mapfile -t tls_bits < <(resolve_tls "${HTTPS_BIND:-}" "${TLS_CERT:-}" "${TLS_KEY:-}")
     https_bind="${tls_bits[0]}"
@@ -840,8 +954,17 @@ resolve_env_file() {
 
 synthesize_oauth_env_file() {
   local oauth_env_file="env/${env_name}-oauth.env"
+  local artifact_oauth_env=""
   if [[ -f "${oauth_env_file}" ]]; then
     return 0
+  fi
+
+  if [[ -n "${BOOTSTRAP_ARTIFACT_DIR}" ]]; then
+    artifact_oauth_env="${BOOTSTRAP_ARTIFACT_DIR}/env/${env_name}-oauth.env"
+    if [[ -f "${artifact_oauth_env}" ]]; then
+      cp "${artifact_oauth_env}" "${oauth_env_file}"
+      return 0
+    fi
   fi
 
   cat >"${oauth_env_file}" <<EOF
@@ -867,18 +990,33 @@ EOF
 }
 
 main() {
-  local base_env_file landing_env_file web_env_file
-
-  install_system_packages
-  ensure_build_swap
-  ensure_rust_toolchain
-  install_github_runner_local "${env_name}" "${github_repo}" "${github_token_ssm}" "${runner_labels}"
+  local base_env_file landing_env_file web_env_file needs_local_build
 
   base_env_file="env/${env_name}.env"
   if [[ ! -f "${base_env_file}" ]]; then
     echo "ERROR: env file not found: ${base_env_file}" >&2
     exit 2
   fi
+
+  install_system_packages
+  BOOTSTRAP_ARTIFACT_DIR="$(prepare_release_artifact "${base_env_file}" || true)"
+  if [[ -n "${BOOTSTRAP_ARTIFACT_DIR}" ]]; then
+    echo "Using latest release artifact from ${BOOTSTRAP_ARTIFACT_DIR}"
+  fi
+
+  needs_local_build=0
+  if ! artifact_has_binary slopmud || ! artifact_has_binary shard_01 || ! artifact_has_binary internal_oidc || ! artifact_has_binary static_web || ! artifact_has_binary slopmud_web; then
+    needs_local_build=1
+  fi
+
+  if [[ "${needs_local_build}" == "1" ]]; then
+    ensure_build_swap
+    ensure_rust_toolchain
+  else
+    echo "Artifact contains full runtime payload; skipping local Rust bootstrap/build prerequisites"
+  fi
+
+  install_github_runner_local "${env_name}" "${github_repo}" "${github_token_ssm}" "${runner_labels}"
 
   synthesize_oauth_env_file
   landing_env_file="$(resolve_env_file "${env_name}_landing" || resolve_env_file "${env_name}-landing" || printf '%s\n' "${base_env_file}")"
