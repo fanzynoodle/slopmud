@@ -254,7 +254,7 @@ resolve_binary_source() {
   if [[ -n "${BOOTSTRAP_ARTIFACT_DIR}" ]]; then
     artifact_bin="${BOOTSTRAP_ARTIFACT_DIR}/bin/${binary_name}"
     if [[ -x "${artifact_bin}" ]]; then
-      echo "Using release artifact binary: ${binary_name}"
+      echo "Using release artifact binary: ${binary_name}" >&2
       printf '%s\n' "${artifact_bin}"
       return 0
     fi
