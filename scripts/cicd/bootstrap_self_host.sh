@@ -443,6 +443,10 @@ PY
     bash -lc '
       set -euo pipefail
       cd "${GHA_RUNNER_DIR}"
+      if [[ -f ".runner" ]]; then
+        echo "Runner already configured at ${GHA_RUNNER_DIR}; skipping re-registration"
+        exit 0
+      fi
       cmd=(./config.sh --unattended --replace --url "${GHA_URL}" --token "${GHA_TOKEN}" --name "${GHA_NAME}" --work _work)
       if [[ -n "${GHA_LABELS}" ]]; then
         cmd+=(--labels "${GHA_LABELS}")
