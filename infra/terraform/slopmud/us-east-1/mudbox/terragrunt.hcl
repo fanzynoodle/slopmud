@@ -55,7 +55,7 @@ inputs = {
   bootstrap_env_name              = "prd"
   bootstrap_env_file_ssm_name     = "/slopmud/prd/bootstrap_env_file"
   bootstrap_github_runner_repo    = "fanzynoodle/slopmud"
-  bootstrap_github_token_ssm_name = "/slopmud/prd/github_runner_bootstrap_token"
+  bootstrap_github_token_ssm_name = "/slopmud/prd/github_runner_registration_pat"
   bootstrap_github_runner_labels  = "mud"
 
   # SBC enforcement enable switch.
