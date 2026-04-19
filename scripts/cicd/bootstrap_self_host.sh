@@ -87,16 +87,16 @@ ensure_build_swap() {
     return 0
   fi
 
-  if [[ "${avail_kib}" -lt 1048576 ]]; then
-    echo "WARN: less than 1 GiB free on /; skipping swapfile creation" >&2
+  if [[ "${avail_kib}" -lt 2097152 ]]; then
+    echo "WARN: less than 2 GiB free on /; skipping swapfile creation" >&2
     return 0
   fi
 
   swap_kib=$(( avail_kib / 3 ))
-  if [[ "${swap_kib}" -lt 1048576 ]]; then
-    swap_kib=1048576
-  elif [[ "${swap_kib}" -gt 2097152 ]]; then
+  if [[ "${swap_kib}" -lt 2097152 ]]; then
     swap_kib=2097152
+  elif [[ "${swap_kib}" -gt 8388608 ]]; then
+    swap_kib=8388608
   fi
 
   if [[ ! -f "${swapfile}" ]]; then
