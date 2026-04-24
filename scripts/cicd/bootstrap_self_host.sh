@@ -325,6 +325,106 @@ ensure_dir_owned_by_slopmud() {
   sudo chown -R slopmud:slopmud "${path}"
 }
 
+cert_valid_for_days() {
+  local cert_path="$1"
+  local key_path="$2"
+  local min_valid_days="$3"
+  local min_valid_seconds
+
+  [[ -s "${cert_path}" && -s "${key_path}" ]] || return 1
+  if ! command -v openssl >/dev/null 2>&1; then
+    return 1
+  fi
+
+  min_valid_seconds=$(( min_valid_days * 86400 ))
+  sudo openssl x509 -checkend "${min_valid_seconds}" -noout -in "${cert_path}" >/dev/null 2>&1
+}
+
+ensure_tls_cache_files() {
+  local tls_cert="${1:-}"
+  local tls_key="${2:-}"
+  local fullchain_ssm="${3:-}"
+  local privkey_ssm="${4:-}"
+  local min_valid_days="${5:-5}"
+  local cert_tmp key_tmp cert_value key_value
+
+  if [[ -z "${tls_cert}" || -z "${tls_key}" || -z "${fullchain_ssm}" || -z "${privkey_ssm}" ]]; then
+    return 0
+  fi
+
+  if cert_valid_for_days "${tls_cert}" "${tls_key}" "${min_valid_days}"; then
+    return 0
+  fi
+
+  if ! command -v aws >/dev/null 2>&1; then
+    echo "WARN: aws cli unavailable; cannot restore TLS cache for ${tls_cert}" >&2
+    return 0
+  fi
+
+  if ! id -u slopmud >/dev/null 2>&1; then
+    sudo useradd --system --home /opt/slopmud --create-home --shell /usr/sbin/nologin slopmud || true
+  fi
+
+  if ! cert_value="$(
+    aws ssm get-parameter \
+      --region "${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}" \
+      --name "${fullchain_ssm}" \
+      --with-decryption \
+      --query Parameter.Value \
+      --output text
+  )"; then
+    echo "WARN: failed to restore TLS fullchain from SSM (${fullchain_ssm})" >&2
+    return 0
+  fi
+
+  if ! key_value="$(
+    aws ssm get-parameter \
+      --region "${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}" \
+      --name "${privkey_ssm}" \
+      --with-decryption \
+      --query Parameter.Value \
+      --output text
+  )"; then
+    echo "WARN: failed to restore TLS key from SSM (${privkey_ssm})" >&2
+    return 0
+  fi
+
+  cert_tmp="$(mktemp)"
+  key_tmp="$(mktemp)"
+  printf '%s\n' "${cert_value}" >"${cert_tmp}"
+  printf '%s\n' "${key_value}" >"${key_tmp}"
+
+  sudo install -d -o slopmud -g slopmud -m 0750 "$(dirname "${tls_cert}")"
+  sudo install -o slopmud -g slopmud -m 0640 "${cert_tmp}" "${tls_cert}"
+  sudo install -o slopmud -g slopmud -m 0640 "${key_tmp}" "${tls_key}"
+  rm -f "${cert_tmp}" "${key_tmp}"
+
+  if cert_valid_for_days "${tls_cert}" "${tls_key}" "${min_valid_days}"; then
+    echo "Restored TLS files from SSM cache: ${tls_cert}"
+  else
+    echo "WARN: restored TLS cache for ${tls_cert} but certificate validity check failed" >&2
+  fi
+}
+
+hydrate_tls_cache_from_env_file() {
+  local env_file="$1"
+
+  [[ -f "${env_file}" ]] || return 0
+
+  (
+    set -a
+    # shellcheck disable=SC1090
+    source "${env_file}"
+    set +a
+    ensure_tls_cache_files \
+      "${TLS_CERT:-}" \
+      "${TLS_KEY:-}" \
+      "${TLS_CACHE_FULLCHAIN_SSM:-}" \
+      "${TLS_CACHE_PRIVKEY_SSM:-}" \
+      "${TLS_CACHE_MIN_VALID_DAYS:-5}"
+  )
+}
+
 resolve_tls() {
   local https_bind="${1:-}"
   local tls_cert="${2:-}"
@@ -987,6 +1087,9 @@ TLS_CERT=/etc/slopmud/tls/mud/fullchain.pem
 TLS_KEY=/etc/slopmud/tls/mud/privkey.pem
 CERTBOT_CERT_NAME=\${HOST}
 CERTBOT_DOMAINS="\${HOST}"
+TLS_CACHE_FULLCHAIN_SSM=/slopmud/${env_name}/tls/mud/fullchain_pem
+TLS_CACHE_PRIVKEY_SSM=/slopmud/${env_name}/tls/mud/privkey_pem
+TLS_CACHE_MIN_VALID_DAYS=5
 
 SLOPMUD_GOOGLE_AUTH_BASE_URL=https://\${HOST}:4242
 GOOGLE_OAUTH_REDIRECT_URI=https://\${HOST}:4242/auth/google/callback
@@ -1025,6 +1128,14 @@ main() {
   synthesize_oauth_env_file
   landing_env_file="$(resolve_env_file "${env_name}_landing" || resolve_env_file "${env_name}-landing" || printf '%s\n' "${base_env_file}")"
   web_env_file="$(resolve_env_file "${env_name}-oauth" || printf '%s\n' "${base_env_file}")"
+
+  hydrate_tls_cache_from_env_file "${base_env_file}"
+  if [[ "${landing_env_file}" != "${base_env_file}" ]]; then
+    hydrate_tls_cache_from_env_file "${landing_env_file}"
+  fi
+  if [[ "${web_env_file}" != "${base_env_file}" && "${web_env_file}" != "${landing_env_file}" ]]; then
+    hydrate_tls_cache_from_env_file "${web_env_file}"
+  fi
 
   deploy_shard_local "${base_env_file}"
   deploy_internal_oidc_local "${base_env_file}"

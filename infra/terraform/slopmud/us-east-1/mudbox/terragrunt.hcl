@@ -30,6 +30,10 @@ inputs = {
     "/slopmud/dev/openai_api_key",
     "/slopmud/stg/openai_api_key",
     "/slopmud/prd/openai_api_key",
+    "/slopmud/prd/tls/landing/fullchain_pem",
+    "/slopmud/prd/tls/landing/privkey_pem",
+    "/slopmud/prd/tls/mud/fullchain_pem",
+    "/slopmud/prd/tls/mud/privkey_pem",
 
     # "/slopmud/prd/google_oauth_client_id",
     # "/slopmud/prd/google_oauth_client_secret",

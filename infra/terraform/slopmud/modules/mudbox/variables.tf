@@ -146,6 +146,13 @@ variable "bootstrap_env_file_ssm_name" {
   default     = ""
 }
 
+variable "bootstrap_env_file_ssm_value" {
+  type        = string
+  description = "Value for bootstrap_env_file_ssm_name. Keep this out of git; pass via TF_VAR_bootstrap_env_file_ssm_value at apply time."
+  default     = ""
+  sensitive   = true
+}
+
 variable "bootstrap_github_runner_repo" {
   type        = string
   description = "GitHub repo in owner/name form for self-hosted runner registration. Empty skips runner registration."

@@ -245,6 +245,18 @@ resource "aws_ssm_parameter" "compliance_portal_config_json" {
   tags = local.tags
 }
 
+resource "aws_ssm_parameter" "bootstrap_env_file" {
+  count = var.enable_compute && var.bootstrap_env_file_ssm_name != "" && var.bootstrap_env_file_ssm_value != "" ? 1 : 0
+
+  name        = var.bootstrap_env_file_ssm_name
+  description = "slopmud bootstrap env file"
+  type        = "SecureString"
+  value       = var.bootstrap_env_file_ssm_value
+  overwrite   = true
+
+  tags = local.tags
+}
+
 resource "aws_ssm_parameter" "bootstrap_github_runner_token" {
   count = var.enable_compute && var.bootstrap_github_token_ssm_name != "" && var.bootstrap_github_token_ssm_value != "" ? 1 : 0
 
