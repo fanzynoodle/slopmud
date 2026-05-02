@@ -175,9 +175,15 @@ locals {
   ]
 
   managed_ssm_secure_parameter_names = nonsensitive(toset([
+    for name, _ in var.ssm_secure_parameters :
+    name
+    if trimspace(name) != ""
+  ]))
+
+  existing_ssm_secure_parameter_names = nonsensitive(toset([
     for name, value in var.ssm_secure_parameters :
     name
-    if trimspace(name) != "" && trimspace(value) != ""
+    if trimspace(name) != "" && trimspace(value) == ""
   ]))
 
   ssm_read_param_names = distinct(concat(
@@ -268,12 +274,19 @@ resource "aws_iam_role_policy_attachment" "ssm_read_params" {
   policy_arn = aws_iam_policy.ssm_read_params[0].arn
 }
 
+data "aws_ssm_parameter" "existing_managed_secure_parameters" {
+  for_each = var.enable_compute ? local.existing_ssm_secure_parameter_names : toset([])
+
+  name            = each.value
+  with_decryption = true
+}
+
 resource "aws_ssm_parameter" "managed_secure_parameters" {
   for_each = var.enable_compute ? local.managed_ssm_secure_parameter_names : toset([])
 
   name      = each.value
   type      = "SecureString"
-  value     = var.ssm_secure_parameters[each.value]
+  value     = trimspace(var.ssm_secure_parameters[each.value]) != "" ? var.ssm_secure_parameters[each.value] : data.aws_ssm_parameter.existing_managed_secure_parameters[each.value].value
   overwrite = true
 
   tags = local.tags
