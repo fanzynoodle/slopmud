@@ -168,21 +168,44 @@ data "aws_iam_policy_document" "dns_admin" {
 }
 
 locals {
+  configured_ssm_secure_parameter_names = [
+    for name, _ in var.ssm_secure_parameters :
+    trimspace(name)
+    if trimspace(name) != ""
+  ]
+
+  managed_ssm_secure_parameter_names = nonsensitive(toset([
+    for name, value in var.ssm_secure_parameters :
+    name
+    if trimspace(name) != "" && trimspace(value) != ""
+  ]))
+
   ssm_read_param_names = distinct(concat(
     var.ssm_read_parameter_names,
+    local.configured_ssm_secure_parameter_names,
     (var.bootstrap_env_file_ssm_name != "" ? [var.bootstrap_env_file_ssm_name] : []),
     (var.bootstrap_github_token_ssm_name != "" ? [var.bootstrap_github_token_ssm_name] : []),
     (var.compliance_portal_config_json_ssm_name != "" ? [var.compliance_portal_config_json_ssm_name] : []),
+  ))
+
+  ssm_write_param_names = distinct(concat(
+    var.ssm_write_parameter_names,
+    local.configured_ssm_secure_parameter_names,
   ))
 
   ssm_read_param_arns = [
     for n in local.ssm_read_param_names :
     "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(n, "/")}"
   ]
+
+  ssm_write_param_arns = [
+    for n in local.ssm_write_param_names :
+    "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/${trim(n, "/")}"
+  ]
 }
 
 data "aws_iam_policy_document" "ssm_read_params" {
-  count = var.enable_compute && length(local.ssm_read_param_arns) > 0 ? 1 : 0
+  count = var.enable_compute && (length(local.ssm_read_param_arns) > 0 || length(local.ssm_write_param_arns) > 0) ? 1 : 0
 
   statement {
     sid    = "SsmReadParameters"
@@ -193,6 +216,18 @@ data "aws_iam_policy_document" "ssm_read_params" {
       "ssm:GetParameterHistory",
     ]
     resources = local.ssm_read_param_arns
+  }
+
+  dynamic "statement" {
+    for_each = length(local.ssm_write_param_arns) > 0 ? [1] : []
+    content {
+      sid    = "SsmWriteParameters"
+      effect = "Allow"
+      actions = [
+        "ssm:PutParameter",
+      ]
+      resources = local.ssm_write_param_arns
+    }
   }
 
   # Needed for SecureString (including aws/ssm managed key); scope via ViaService.
@@ -217,7 +252,7 @@ data "aws_iam_policy_document" "ssm_read_params" {
 }
 
 resource "aws_iam_policy" "ssm_read_params" {
-  count = var.enable_compute && length(local.ssm_read_param_arns) > 0 ? 1 : 0
+  count = var.enable_compute && (length(local.ssm_read_param_arns) > 0 || length(local.ssm_write_param_arns) > 0) ? 1 : 0
 
   name_prefix = "${var.name_prefix}-ssmread-"
   description = "Allow the instance to read specific SSM parameters (for app secrets)."
@@ -227,10 +262,21 @@ resource "aws_iam_policy" "ssm_read_params" {
 }
 
 resource "aws_iam_role_policy_attachment" "ssm_read_params" {
-  count = var.enable_compute && length(local.ssm_read_param_arns) > 0 ? 1 : 0
+  count = var.enable_compute && (length(local.ssm_read_param_arns) > 0 || length(local.ssm_write_param_arns) > 0) ? 1 : 0
 
   role       = aws_iam_role.ssm[0].name
   policy_arn = aws_iam_policy.ssm_read_params[0].arn
+}
+
+resource "aws_ssm_parameter" "managed_secure_parameters" {
+  for_each = var.enable_compute ? local.managed_ssm_secure_parameter_names : toset([])
+
+  name      = each.value
+  type      = "SecureString"
+  value     = var.ssm_secure_parameters[each.value]
+  overwrite = true
+
+  tags = local.tags
 }
 
 resource "aws_ssm_parameter" "compliance_portal_config_json" {

@@ -39,6 +39,23 @@ inputs = {
     # "/slopmud/prd/google_oauth_client_secret",
   ]
 
+  # Optional one-time TLS cache population. Pass these through the environment
+  # when intentionally seeding/replacing cert material; empty values are ignored.
+  ssm_secure_parameters = {
+    "/slopmud/prd/tls/landing/fullchain_pem" = get_env("SLOPMUD_PRD_TLS_LANDING_FULLCHAIN_PEM", "")
+    "/slopmud/prd/tls/landing/privkey_pem"   = get_env("SLOPMUD_PRD_TLS_LANDING_PRIVKEY_PEM", "")
+    "/slopmud/prd/tls/mud/fullchain_pem"     = get_env("SLOPMUD_PRD_TLS_MUD_FULLCHAIN_PEM", "")
+    "/slopmud/prd/tls/mud/privkey_pem"       = get_env("SLOPMUD_PRD_TLS_MUD_PRIVKEY_PEM", "")
+  }
+
+  # Allow runtime cert refresh hooks to update the TLS cache after renewal.
+  ssm_write_parameter_names = [
+    "/slopmud/prd/tls/landing/fullchain_pem",
+    "/slopmud/prd/tls/landing/privkey_pem",
+    "/slopmud/prd/tls/mud/fullchain_pem",
+    "/slopmud/prd/tls/mud/privkey_pem",
+  ]
+
   # Env-specific vanity CNAMES -> this instance (helpful when running multiple envs on one host with different ports).
   extra_cname_record_names = [
     "prd-gaia",

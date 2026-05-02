@@ -184,6 +184,19 @@ variable "ssm_read_parameter_names" {
   default     = []
 }
 
+variable "ssm_write_parameter_names" {
+  type        = list(string)
+  description = "Optional list of SSM Parameter Store names that the instance role may update via ssm:PutParameter (useful for certbot hooks refreshing cached TLS material)."
+  default     = []
+}
+
+variable "ssm_secure_parameters" {
+  type        = map(string)
+  description = "Optional SecureString parameters to create/update. Empty values are ignored."
+  default     = {}
+  sensitive   = true
+}
+
 variable "extra_cname_record_names" {
   type        = list(string)
   description = "Optional additional CNAME record names (relative to zone_name) pointing at cname_target (or the instance public DNS if enable_compute=true). Example: [\"prd-gaia\", \"stg-gaia\", \"dev-gaia\"]."

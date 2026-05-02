@@ -329,7 +329,7 @@ cert_valid_for_days() {
   local cert_path="$1"
   local key_path="$2"
   local min_valid_days="$3"
-  local min_valid_seconds
+  local min_valid_seconds cert_hash key_hash
 
   [[ -s "${cert_path}" && -s "${key_path}" ]] || return 1
   if ! command -v openssl >/dev/null 2>&1; then
@@ -337,7 +337,24 @@ cert_valid_for_days() {
   fi
 
   min_valid_seconds=$(( min_valid_days * 86400 ))
-  sudo openssl x509 -checkend "${min_valid_seconds}" -noout -in "${cert_path}" >/dev/null 2>&1
+  sudo openssl x509 -checkend "${min_valid_seconds}" -noout -in "${cert_path}" >/dev/null 2>&1 || return 1
+  sudo openssl pkey -in "${key_path}" -noout >/dev/null 2>&1 || return 1
+  cert_hash="$(
+    sudo openssl x509 -in "${cert_path}" -pubkey -noout |
+      sudo openssl pkey -pubin -outform DER |
+      sha256sum |
+      awk '{print $1}'
+  )"
+  key_hash="$(
+    sudo openssl pkey -in "${key_path}" -pubout -outform DER |
+      sha256sum |
+      awk '{print $1}'
+  )"
+  [[ "${cert_hash}" == "${key_hash}" ]]
+}
+
+aws_region() {
+  printf '%s\n' "${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
 }
 
 ensure_tls_cache_files() {
@@ -422,6 +439,162 @@ hydrate_tls_cache_from_env_file() {
       "${TLS_CACHE_FULLCHAIN_SSM:-}" \
       "${TLS_CACHE_PRIVKEY_SSM:-}" \
       "${TLS_CACHE_MIN_VALID_DAYS:-5}"
+  )
+}
+
+ensure_certbot_dns_route53() {
+  if command -v certbot >/dev/null 2>&1; then
+    if python3 - <<'PY' >/dev/null 2>&1
+import certbot_dns_route53
+PY
+    then
+      sudo systemctl enable --now certbot.timer 2>/dev/null || true
+      return 0
+    fi
+  fi
+
+  echo "Installing certbot + Route53 plugin"
+  if command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get update -y
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y certbot python3-certbot-dns-route53
+  elif command -v dnf >/dev/null 2>&1; then
+    sudo dnf -y install certbot python3-certbot-dns-route53 || {
+      sudo dnf -y install certbot python3-pip
+      sudo python3 -m pip install certbot-dns-route53
+    }
+  else
+    echo "WARN: unsupported OS for certbot install; skipping Let's Encrypt acquisition" >&2
+    return 1
+  fi
+
+  sudo systemctl enable --now certbot.timer 2>/dev/null || true
+}
+
+cache_tls_to_ssm() {
+  local cert_path="$1"
+  local key_path="$2"
+  local fullchain_ssm="${3:-}"
+  local privkey_ssm="${4:-}"
+  local region
+
+  [[ -n "${fullchain_ssm}" && -n "${privkey_ssm}" ]] || return 0
+  if ! command -v aws >/dev/null 2>&1; then
+    echo "WARN: aws cli unavailable; cannot update TLS cache" >&2
+    return 0
+  fi
+
+  region="$(aws_region)"
+  if ! aws ssm put-parameter \
+    --region "${region}" \
+    --name "${fullchain_ssm}" \
+    --type SecureString \
+    --value "$(<"${cert_path}")" \
+    --overwrite >/dev/null; then
+    echo "WARN: failed to update TLS fullchain cache (${fullchain_ssm})" >&2
+  fi
+
+  if ! aws ssm put-parameter \
+    --region "${region}" \
+    --name "${privkey_ssm}" \
+    --type SecureString \
+    --value "$(<"${key_path}")" \
+    --overwrite >/dev/null; then
+    echo "WARN: failed to update TLS private-key cache (${privkey_ssm})" >&2
+  fi
+}
+
+acquire_tls_from_letsencrypt_env_file() {
+  local env_file="$1"
+
+  [[ -f "${env_file}" ]] || return 0
+
+  (
+    set -a
+    # shellcheck disable=SC1090
+    source "${env_file}"
+    set +a
+
+    if [[ "${ENABLED:-1}" != "1" ]]; then
+      echo "Skipping Let's Encrypt check for disabled env: ${env_file}"
+      exit 0
+    fi
+
+    local https_bind="${HTTPS_BIND:-}"
+    local domain="${DOMAIN:-}"
+    local cert_name="${CERTBOT_CERT_NAME:-${domain}}"
+    local cert_domains="${CERTBOT_DOMAINS:-${domain}}"
+    local min_valid_days="${TLS_ACQUIRE_MIN_VALID_DAYS:-${CERTBOT_MIN_VALID_DAYS:-30}}"
+    local dst_dir="${TLS_DST_DIR:-}"
+    local tls_cert="${TLS_CERT:-}"
+    local tls_key="${TLS_KEY:-}"
+    local fullchain_ssm="${TLS_CACHE_FULLCHAIN_SSM:-}"
+    local privkey_ssm="${TLS_CACHE_PRIVKEY_SSM:-}"
+
+    if [[ -z "${https_bind}" ]]; then
+      echo "No HTTPS bind configured for ${env_file}; skipping Let's Encrypt"
+      exit 0
+    fi
+    if [[ -z "${cert_name}" || -z "${cert_domains}" || -z "${dst_dir}" || -z "${tls_cert}" || -z "${tls_key}" ]]; then
+      echo "WARN: incomplete HTTPS/Certbot configuration in ${env_file}; skipping Let's Encrypt" >&2
+      exit 0
+    fi
+    if cert_valid_for_days "${tls_cert}" "${tls_key}" "${min_valid_days}"; then
+      echo "TLS cert for ${env_file} is valid for at least ${min_valid_days} day(s); skipping Let's Encrypt"
+      exit 0
+    fi
+
+    if ! ensure_certbot_dns_route53; then
+      echo "WARN: certbot unavailable; cannot acquire cert for ${env_file}" >&2
+      exit 0
+    fi
+
+    local email="${CERTBOT_EMAIL:-}"
+    local email_args=()
+    if [[ -n "${email}" ]]; then
+      email_args=(--email "${email}")
+    else
+      email_args=(--register-unsafely-without-email)
+    fi
+
+    local domain_args=()
+    local d
+    for d in ${cert_domains}; do
+      [[ -n "${d}" ]] || continue
+      domain_args+=(-d "${d}")
+    done
+    if [[ "${#domain_args[@]}" -eq 0 ]]; then
+      domain_args=(-d "${domain}")
+    fi
+
+    echo "Issuing/refreshing Let's Encrypt cert: ${cert_name}"
+    if ! sudo certbot certonly --dns-route53 \
+      "${domain_args[@]}" \
+      --non-interactive \
+      --agree-tos \
+      "${email_args[@]}" \
+      --cert-name "${cert_name}" \
+      --keep-until-expiring; then
+      echo "WARN: certbot issuance failed for ${env_file}; continuing with cached/best-effort TLS" >&2
+      exit 0
+    fi
+
+    local live_dir="/etc/letsencrypt/live/${cert_name}"
+    local live_cert="${live_dir}/fullchain.pem"
+    local live_key="${live_dir}/privkey.pem"
+    if ! cert_valid_for_days "${live_cert}" "${live_key}" 0; then
+      echo "WARN: Let's Encrypt returned unusable cert material for ${env_file}" >&2
+      exit 0
+    fi
+
+    if ! id -u slopmud >/dev/null 2>&1; then
+      sudo useradd --system --home /opt/slopmud --create-home --shell /usr/sbin/nologin slopmud || true
+    fi
+
+    sudo install -d -o slopmud -g slopmud -m 0750 "${dst_dir}"
+    sudo install -o slopmud -g slopmud -m 0640 "${live_cert}" "${tls_cert}"
+    sudo install -o slopmud -g slopmud -m 0640 "${live_key}" "${tls_key}"
+    cache_tls_to_ssm "${live_cert}" "${live_key}" "${fullchain_ssm}" "${privkey_ssm}"
+    echo "Prepared TLS files for ${env_file} from Let's Encrypt cert ${cert_name}"
   )
 }
 
@@ -1135,6 +1308,13 @@ main() {
   fi
   if [[ "${web_env_file}" != "${base_env_file}" && "${web_env_file}" != "${landing_env_file}" ]]; then
     hydrate_tls_cache_from_env_file "${web_env_file}"
+  fi
+  acquire_tls_from_letsencrypt_env_file "${base_env_file}"
+  if [[ "${landing_env_file}" != "${base_env_file}" ]]; then
+    acquire_tls_from_letsencrypt_env_file "${landing_env_file}"
+  fi
+  if [[ "${web_env_file}" != "${base_env_file}" && "${web_env_file}" != "${landing_env_file}" ]]; then
+    acquire_tls_from_letsencrypt_env_file "${web_env_file}"
   fi
 
   deploy_shard_local "${base_env_file}"
