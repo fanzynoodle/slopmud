@@ -807,7 +807,7 @@ where
             if let Err(err) = inner.set_term_vote(term, None) {
                 tracing::warn!(err = %err, "raft term persist failed");
             }
-            self.step_down_runtime(None);
+            self.step_down_runtime_preserving_timeout(None);
         }
 
         let up_to_date = last_log_term > inner.last_term()
@@ -1142,6 +1142,13 @@ where
         rt.last_quorum_at = None;
     }
 
+    fn step_down_runtime_preserving_timeout(&self, leader_id: Option<String>) {
+        let mut rt = self.runtime.lock().expect("raft runtime mutex poisoned");
+        rt.role = Role::Follower;
+        rt.leader_id = leader_id;
+        rt.last_quorum_at = None;
+    }
+
     fn node_jitter_ms(&self) -> u64 {
         let mut h = std::collections::hash_map::DefaultHasher::new();
         self.cfg.node_id.hash(&mut h);
@@ -1299,6 +1306,73 @@ mod tests {
         let (_log, replay) = RaftLog::<String>::open_with_consensus(path.clone(), cfg).unwrap();
         assert_eq!(replay.len(), 1);
         assert_eq!(replay[0].entry, "legacy");
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn denied_stale_vote_does_not_reset_election_timeout() {
+        let path = std::env::temp_dir().join(format!(
+            "slopmud_raftlog_vote_timeout_test_{}.jsonl",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let state_path = PathBuf::from(format!("{}.state.json", path.display()));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&state_path);
+
+        let mut inner = RaftLogInner::<String>::new(path.clone());
+        inner
+            .append_replicated(RaftEnvelope {
+                index: 1,
+                term: 3,
+                ms: 0,
+                entry: "newer".to_string(),
+            })
+            .unwrap();
+        inner.set_term_vote(4, None).unwrap();
+
+        let last_leader_seen = Instant::now() - Duration::from_secs(60);
+        let consensus = Consensus {
+            cfg: ConsensusConfig {
+                node_id: "n0".to_string(),
+                bind: None,
+                peers: Vec::new(),
+                election_timeout_ms: 5_000,
+                heartbeat_ms: 500,
+            },
+            inner: Arc::new(Mutex::new(inner)),
+            runtime: Mutex::new(RuntimeState {
+                role: Role::Candidate,
+                leader_id: Some("old".to_string()),
+                last_leader_seen,
+                last_quorum_at: Some(last_leader_seen),
+                replication_latency: ReplicationLatencyStats::default(),
+            }),
+        };
+
+        let resp = consensus.handle_request_vote(5, "stale".to_string(), 1, 1);
+        match resp {
+            RaftRpc::VoteResp { term, vote_granted } => {
+                assert_eq!(term, 5);
+                assert!(!vote_granted);
+            }
+            _ => panic!("unexpected raft rpc response"),
+        }
+
+        let inner = consensus.inner.lock().unwrap();
+        assert_eq!(inner.current_term, 5);
+        assert_eq!(inner.voted_for, None);
+        drop(inner);
+
+        let rt = consensus.runtime.lock().unwrap();
+        assert_eq!(rt.role, Role::Follower);
+        assert_eq!(rt.leader_id, None);
+        assert_eq!(rt.last_leader_seen, last_leader_seen);
+        assert_eq!(rt.last_quorum_at, None);
 
         let _ = std::fs::remove_file(path);
         let _ = std::fs::remove_file(state_path);

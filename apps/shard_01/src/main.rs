@@ -4890,6 +4890,70 @@ fn render_stats(p: &Character) -> String {
     s
 }
 
+fn health_read(c: &Character) -> &'static str {
+    if c.max_hp <= 0 {
+        return "unknown";
+    }
+    let pct = (c.hp.max(0) as i64 * 100) / c.max_hp as i64;
+    match pct {
+        90.. => "fresh",
+        60..=89 => "wounded",
+        30..=59 => "hurt",
+        1..=29 => "near death",
+        _ => "down",
+    }
+}
+
+fn threat_read(viewer: &Character, target: &Character) -> &'static str {
+    let delta = target.level as i32 - viewer.level as i32;
+    match delta {
+        i32::MIN..=-4 => "trivial",
+        -3..=-2 => "easy",
+        -1 => "manageable",
+        0 => "even match",
+        1..=2 => "dangerous",
+        3..=4 => "very dangerous",
+        _ => "deadly",
+    }
+}
+
+fn render_consider(viewer: &Character, target: &Character) -> String {
+    let mut s = String::new();
+    let kind = if target.controller.is_none() {
+        "mob"
+    } else if target.is_bot {
+        "bot"
+    } else {
+        "player"
+    };
+    s.push_str(&format!("consider {}:\r\n", target.name));
+    s.push_str(&format!(" - kind: {kind}\r\n"));
+    s.push_str(&format!(" - level: {}\r\n", target.level));
+    if let Some(class) = target.class {
+        s.push_str(&format!(" - class: {}\r\n", class.as_str()));
+    }
+    s.push_str(&format!(
+        " - health: {} ({}/{})\r\n",
+        health_read(target),
+        target.hp,
+        target.max_hp
+    ));
+    s.push_str(&format!(" - ac: {}\r\n", compute_ac(target)));
+    if let Some((a, b)) = equipped_weapon_damage_range(target) {
+        s.push_str(&format!(" - weapon dmg: {a}..{b}\r\n"));
+    } else {
+        s.push_str(" - weapon dmg: (unarmed)\r\n");
+    }
+    if target.controller.is_some() {
+        s.push_str(&format!(
+            " - pvp: {}\r\n",
+            if target.pvp_enabled { "on" } else { "off" }
+        ));
+    }
+    s.push_str(&format!(" - read: {}\r\n", threat_read(viewer, target)));
+    s
+}
+
 async fn write_resp_async(
     fw: &mut FrameWriter<tokio::net::tcp::OwnedWriteHalf>,
     t: u8,
@@ -6136,6 +6200,55 @@ async fn handle_broker(
                         .chars
                         .get(&p.id)
                         .map(render_stats)
+                        .unwrap_or_else(|| "huh?\r\n".to_string());
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+                if lc == "consider" || lc == "con" {
+                    write_resp_async(
+                        &mut fw,
+                        RESP_OUTPUT,
+                        session,
+                        b"huh? (try: consider <mob|player>)\r\n",
+                    )
+                    .await?;
+                    continue;
+                }
+                let consider_target = if lc.starts_with("consider ") {
+                    Some(line["consider ".len()..].trim())
+                } else if lc.starts_with("con ") {
+                    Some(line["con ".len()..].trim())
+                } else {
+                    None
+                };
+                if let Some(target) = consider_target {
+                    if target.is_empty() {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: consider <mob|player>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    let Some(target_id) = world
+                        .find_mob_in_room(&p.room_id, target)
+                        .or_else(|| world.find_player_in_room(&p.room_id, target))
+                    else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (you don't see that here)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let s = world
+                        .chars
+                        .get(&target_id)
+                        .map(|target| render_consider(&p, target))
                         .unwrap_or_else(|| "huh?\r\n".to_string());
                     write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
                     continue;
@@ -10656,6 +10769,7 @@ version\r\n\
 aiping\r\n\
 uptime\r\n\
 stats\r\n\
+consider <mob|player>\r\n\
 look\r\n\
 look <thing>\r\n\
 look board\r\n\
