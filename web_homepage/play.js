@@ -904,7 +904,8 @@
       saveSettings();
     });
 
-  // Always ask the user how they want to auth before opening a WebSocket.
+  // A saved resume token means this is a normal browser refresh/reconnect.
+  // First-time visits still need an auth method before the terminal connects.
   {
     const h = String(location.hash || "");
     if (h.startsWith("#oauth=")) {
@@ -926,6 +927,11 @@
       } else {
         openInitialAuthGate();
       }
+    } else if (pageLoadedWithResumeToken) {
+      authGateChosen = true;
+      shouldReconnect = true;
+      connect();
+      lineEl && lineEl.focus();
     } else {
       openInitialAuthGate();
     }
