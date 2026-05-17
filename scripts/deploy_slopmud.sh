@@ -125,6 +125,12 @@ fi
 if [[ -n "${SLOPMUD_SBC_ENABLED:-}" ]]; then
   echo "Environment=SLOPMUD_SBC_ENABLED=${SLOPMUD_SBC_ENABLED}" >>"$tmp_unit"
 fi
+if [[ -n "${SLOPMUD_NEARLINE_DIR:-}" ]]; then
+  echo "Environment=SLOPMUD_NEARLINE_DIR=${SLOPMUD_NEARLINE_DIR}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_BLOB_SPOOL_DIR:-}" ]]; then
+  echo "Environment=SLOPMUD_BLOB_SPOOL_DIR=${SLOPMUD_BLOB_SPOOL_DIR}" >>"$tmp_unit"
+fi
 
 # Optional: eventlog archival (spool-to-disk + S3 upload).
 if [[ -n "${SLOPMUD_EVENTLOG_ENABLED:-}" ]]; then

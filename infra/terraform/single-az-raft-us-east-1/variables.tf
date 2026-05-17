@@ -74,6 +74,30 @@ variable "raft_root_volume_gib" {
   default     = 8
 }
 
+variable "data_volume_enabled" {
+  type        = bool
+  description = "Attach one persistent data EBS volume to the gateway and one to each Raft node."
+  default     = true
+}
+
+variable "data_volume_type" {
+  type        = string
+  description = "EBS volume type for persistent gateway/Raft state."
+  default     = "gp3"
+}
+
+variable "gateway_data_volume_gib" {
+  type        = number
+  description = "Gateway persistent data EBS size."
+  default     = 1
+}
+
+variable "raft_data_volume_gib" {
+  type        = number
+  description = "Per-Raft-node persistent data EBS size."
+  default     = 1
+}
+
 variable "raft_spot_max_price" {
   type        = string
   description = "Optional max Spot price per Raft node-hour. Empty means no cap."

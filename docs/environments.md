@@ -71,12 +71,15 @@ After applying Terraform, combine `terraform output recommended_env` with the us
 
 ```bash
 just render-single-az-raft-env /tmp/slopmud-prd-split-az1.env /home/rob/slopmud/env/prd.env
+just ensure-data-volumes /tmp/slopmud-prd-split-az1.env all
 just deploy-split-raft-trio prd-split
 just deploy-slopmud prd-split
 just deploy-web-sso prd-split-oauth
 ```
 
 The current one-box host can remain the build/deploy runner. The split deploy script reaches private Raft nodes through SSH ProxyJump via the gateway, so the Raft nodes do not need public IPs or a NAT gateway.
+
+The Terraform stack attaches tiny encrypted data EBS volumes and the render helper points gateway accounts, nearline state, OAuth handoff state, and Raft logs at `/opt/slopmud/state`. Re-run `just ensure-data-volumes /tmp/slopmud-prd-split-az1.env all` after a rebuild or Spot replacement before deploying services.
 
 For the smallest gateway shape, set `SLOPMUD_SBC_ENABLED=0` unless the SBC sidecar services are also deployed. The render helper sets that by default, which keeps the broker from repeatedly trying to subscribe to a local SBC event socket that intentionally does not exist on the tiny gateway.
 

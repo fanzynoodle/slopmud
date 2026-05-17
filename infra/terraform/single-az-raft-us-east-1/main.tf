@@ -473,3 +473,50 @@ resource "aws_instance" "raft" {
     Node = local.node_ids[count.index]
   })
 }
+
+resource "aws_ebs_volume" "gateway_data" {
+  count = var.data_volume_enabled ? 1 : 0
+
+  availability_zone = var.availability_zone
+  size              = var.gateway_data_volume_gib
+  type              = var.data_volume_type
+  encrypted         = true
+
+  tags = merge(local.tags, {
+    Name = "${var.name_prefix}-gateway-data"
+    Role = "gateway-data"
+  })
+}
+
+resource "aws_volume_attachment" "gateway_data" {
+  count = var.data_volume_enabled ? 1 : 0
+
+  device_name  = "/dev/sdf"
+  volume_id    = aws_ebs_volume.gateway_data[0].id
+  instance_id  = aws_instance.gateway.id
+  force_detach = true
+}
+
+resource "aws_ebs_volume" "raft_data" {
+  count = var.data_volume_enabled ? 3 : 0
+
+  availability_zone = var.availability_zone
+  size              = var.raft_data_volume_gib
+  type              = var.data_volume_type
+  encrypted         = true
+
+  tags = merge(local.tags, {
+    Name = "${var.name_prefix}-raft-${local.node_ids[count.index]}-data"
+    Role = "raft-data"
+    Node = local.node_ids[count.index]
+  })
+}
+
+resource "aws_volume_attachment" "raft_data" {
+  count = var.data_volume_enabled ? 3 : 0
+
+  device_name  = "/dev/sdf"
+  volume_id    = aws_ebs_volume.raft_data[count.index].id
+  instance_id  = aws_instance.raft[count.index].id
+  force_detach = true
+}

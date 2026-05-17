@@ -43,6 +43,7 @@ def main() -> int:
     ap.add_argument("--base-env", required=True, help="existing env file to source")
     ap.add_argument("--out", required=True, help="generated env path")
     ap.add_argument("--env-name", default="prd-split-az1")
+    ap.add_argument("--state-dir", default="/opt/slopmud/state")
     ap.add_argument(
         "--sbc-enabled",
         choices=("0", "1"),
@@ -83,7 +84,13 @@ def main() -> int:
     lines.extend(
         [
             f"SHARD_BIND=0.0.0.0:{shlex.quote(env['SHARD_PORT'])}",
+            f"SHARD_RAFT_LOG={shlex.quote(args.state_dir + '/shard_01_groups_raft.jsonl')}",
             "SLOPMUD_ADMIN_BIND=127.0.0.1:4011",
+            f"SLOPMUD_ACCOUNTS_PATH={shlex.quote(args.state_dir + '/accounts.json')}",
+            f"SLOPMUD_BANS_PATH={shlex.quote(args.state_dir + '/bans.json')}",
+            f"SLOPMUD_NEARLINE_DIR={shlex.quote(args.state_dir + '/nearline_scrollback')}",
+            f"SLOPMUD_GOOGLE_OAUTH_DIR={shlex.quote(args.state_dir + '/google_oauth')}",
+            f"SLOPMUD_BLOB_SPOOL_DIR={shlex.quote(args.state_dir + '/blob_spool')}",
             f"SLOPMUD_SBC_ENABLED={args.sbc_enabled}",
         ]
     )

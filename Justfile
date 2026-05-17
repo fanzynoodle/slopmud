@@ -689,6 +689,9 @@ deploy-split-raft-trio env="prd-split":
 render-single-az-raft-env out="/tmp/slopmud-prd-split-az1.env" base="/home/rob/slopmud/env/prd.env" tfdir="infra/terraform/single-az-raft-us-east-1" env_name="prd-split-az1":
   python3 scripts/render_single_az_raft_env.py --terraform-dir "{{tfdir}}" --base-env "{{base}}" --out "{{out}}" --env-name "{{env_name}}"
 
+ensure-data-volumes env_file="/tmp/slopmud-prd-split-az1.env" mode="all":
+  ./scripts/ensure_data_volume_mounts.sh "{{env_file}}" "{{mode}}"
+
 deploy-slopmud-all:
   just deploy-slopmud dev
   just deploy-slopmud prd

@@ -26,6 +26,7 @@ The current one-box mud host can remain the build/deploy runner. Deploy to the p
 - AZ: `us-east-1a`
 - Gateway: `t3a.nano`, on-demand, public IPv4
 - Raft nodes: 3x `t3a.nano`, Spot, private IPv4 only
+- Persistent state: 1 GiB encrypted EBS data volume on the gateway and each Raft node
 - OS: Debian 12 x86_64
 
 `t4g.nano` is usually cheaper, but the current release build path emits x86_64 Debian binaries. Switch to Arm only after the build/deploy path produces arm64 artifacts.
@@ -60,10 +61,13 @@ Keep `dns_upsert_enabled = false` until the new stack is deployed and smoke-test
 ## Deploy Flow
 
 1. Build/publish the normal artifact from the current build machine.
-2. Deploy the Raft trio through the gateway using private IPs from `terraform output recommended_env`.
-3. Deploy the gateway broker with `SHARD_ADDRS` set to the three private shard addresses.
-4. Deploy the web/websocket services to the gateway.
-5. Smoke test telnet, websocket resume, `version`, and `raft status`.
+2. Render the split env from Terraform outputs and mount data volumes:
+   `just render-single-az-raft-env /tmp/slopmud-prd-split-az1.env /home/rob/slopmud/env/prd.env`
+   then `just ensure-data-volumes /tmp/slopmud-prd-split-az1.env all`.
+3. Deploy the Raft trio through the gateway using private IPs from `terraform output recommended_env`.
+4. Deploy the gateway broker with `SHARD_ADDRS` set to the three private shard addresses.
+5. Restore cached TLS if needed and deploy the web/websocket services to the gateway.
+6. Smoke test telnet, websocket resume, `version`, and `raft status`.
 
 The important runtime values are:
 
@@ -75,3 +79,5 @@ The important runtime values are:
 ## Replacement Behavior
 
 Raft peer config currently uses literal `SocketAddr` values, not DNS names. If Spot nodes are replaced and private IPs change, regenerate deploy env from Terraform outputs and redeploy the shard units plus gateway broker env. To avoid that operational step, set `raft_private_ips` to three known-free private IPs in the selected subnet.
+
+The data EBS volumes survive instance replacement and are reattached by Terraform. After a gateway rebuild or Spot replacement, run the data-volume mount helper before service deploy; the generated env stores gateway accounts, OAuth handoffs, nearline state, and Raft logs under `/opt/slopmud/state`.

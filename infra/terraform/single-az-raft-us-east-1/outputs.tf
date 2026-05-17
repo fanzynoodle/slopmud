@@ -26,6 +26,14 @@ output "raft_instance_ids" {
   value = [for i in aws_instance.raft : i.id]
 }
 
+output "gateway_data_volume_id" {
+  value = var.data_volume_enabled ? aws_ebs_volume.gateway_data[0].id : ""
+}
+
+output "raft_data_volume_ids" {
+  value = [for v in aws_ebs_volume.raft_data : v.id]
+}
+
 output "shard_addrs" {
   value = join(",", [for i in aws_instance.raft : "${i.private_ip}:${var.shard_port}"])
 }
