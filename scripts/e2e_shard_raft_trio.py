@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import json
 import os
 import signal
 import socket
@@ -90,6 +91,22 @@ def current_leader_index(client: Client) -> int:
         if line.startswith("- node_id: n"):
             return int(line.rsplit("n", 1)[1])
     raise RuntimeError(f"could not parse leader node from raft status:\n{text}")
+
+
+def raft_rpc(addr: str, payload: dict, timeout_s: float = 4.0) -> dict:
+    host, port_s = addr.rsplit(":", 1)
+    with socket.create_connection((host, int(port_s)), timeout=timeout_s) as sock:
+        sock.settimeout(timeout_s)
+        sock.sendall(json.dumps(payload, separators=(",", ":")).encode() + b"\n")
+        buf = bytearray()
+        while not buf.endswith(b"\n"):
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            buf.extend(chunk)
+    if not buf:
+        raise RuntimeError(f"empty raft rpc response from {addr}")
+    return json.loads(bytes(buf).decode("utf-8"))
 
 
 def main() -> int:
@@ -192,6 +209,26 @@ def main() -> int:
         wait_for_file_nonempty(raft_paths[0], timeout_s=15.0)
         send_line(alice.sock, "quest set trio.probe alive")
         out = alice.read_until("quest: set trio.probe=alive", timeout_s=8.0)
+        assert_no_failover_notice(out)
+
+        leader = current_leader_index(alice)
+        target = (leader + 1) % 3
+        resp = raft_rpc(
+            raft_addrs[leader],
+            {"t": "TransferLeaderReq", "target_id": f"n{target}"},
+        )
+        if resp.get("t") != "TransferLeaderResp" or not resp.get("accepted"):
+            raise RuntimeError(f"leadership transfer failed: {resp}")
+        deadline = time.time() + 8.0
+        while time.time() < deadline:
+            if current_leader_index(alice) == target:
+                break
+            time.sleep(0.1)
+        else:
+            raise RuntimeError(f"leadership did not move to n{target}")
+
+        send_line(alice.sock, "quest get trio.probe")
+        out = alice.read_until("quest: trio.probe=alive", timeout_s=8.0)
         assert_no_failover_notice(out)
 
         killed_leaders: list[int] = []

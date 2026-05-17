@@ -246,6 +246,37 @@ enum RaftRpc<E> {
         success: bool,
         match_index: u64,
     },
+    StatusReq,
+    StatusResp {
+        term: u64,
+        node_id: String,
+        role: String,
+        leader_id: Option<String>,
+        commit_index: u64,
+        last_index: u64,
+        last_log_term: u64,
+        quorum_recent: bool,
+    },
+    TransferLeaderReq {
+        target_id: Option<String>,
+    },
+    TransferLeaderResp {
+        term: u64,
+        accepted: bool,
+        leader_id: Option<String>,
+        target_id: Option<String>,
+        reason: String,
+    },
+    TimeoutNow {
+        term: u64,
+        leader_id: String,
+    },
+    TimeoutNowResp {
+        term: u64,
+        started: bool,
+        leader_id: Option<String>,
+        reason: String,
+    },
 }
 
 impl<E> RaftLog<E>
@@ -776,7 +807,14 @@ where
                 entries,
                 leader_commit,
             ),
-            RaftRpc::VoteResp { .. } | RaftRpc::AppendResp { .. } => {
+            RaftRpc::StatusReq => self.handle_status(),
+            RaftRpc::TransferLeaderReq { target_id } => self.handle_transfer_leader(target_id),
+            RaftRpc::TimeoutNow { term, leader_id } => self.handle_timeout_now(term, leader_id),
+            RaftRpc::VoteResp { .. }
+            | RaftRpc::AppendResp { .. }
+            | RaftRpc::StatusResp { .. }
+            | RaftRpc::TransferLeaderResp { .. }
+            | RaftRpc::TimeoutNowResp { .. } => {
                 return Err(anyhow::anyhow!("unexpected raft rpc response"));
             }
         };
@@ -885,6 +923,206 @@ where
             term: inner.current_term,
             success: true,
             match_index,
+        }
+    }
+
+    fn handle_status(&self) -> RaftRpc<E> {
+        let (term, commit_index, last_index, last_log_term) = {
+            let inner = self.inner.lock().expect("raft log mutex poisoned");
+            (
+                inner.current_term,
+                inner.commit_index,
+                inner.last_index(),
+                inner.last_term(),
+            )
+        };
+        let rt = self.runtime.lock().expect("raft runtime mutex poisoned");
+        let quorum_recent = rt.last_quorum_at.is_some_and(|t| {
+            t.elapsed()
+                <= Duration::from_millis(self.cfg.election_timeout_ms.saturating_mul(3).max(1))
+        });
+        RaftRpc::StatusResp {
+            term,
+            node_id: self.cfg.node_id.clone(),
+            role: format!("{:?}", rt.role),
+            leader_id: rt.leader_id.clone(),
+            commit_index,
+            last_index,
+            last_log_term,
+            quorum_recent,
+        }
+    }
+
+    fn handle_transfer_leader(&self, target_id: Option<String>) -> RaftRpc<E> {
+        let term = {
+            let inner = self.inner.lock().expect("raft log mutex poisoned");
+            inner.current_term
+        };
+        let current_leader = {
+            let rt = self.runtime.lock().expect("raft runtime mutex poisoned");
+            if rt.role != Role::Leader {
+                return RaftRpc::TransferLeaderResp {
+                    term,
+                    accepted: false,
+                    leader_id: rt.leader_id.clone(),
+                    target_id,
+                    reason: "node is not leader".to_string(),
+                };
+            }
+            rt.leader_id.clone()
+        };
+
+        let peer = match target_id.as_deref() {
+            Some(id) => match self.cfg.peers.iter().find(|p| p.node_id == id).cloned() {
+                Some(peer) => peer,
+                None => {
+                    return RaftRpc::TransferLeaderResp {
+                        term,
+                        accepted: false,
+                        leader_id: current_leader,
+                        target_id,
+                        reason: "transfer target is not a configured peer".to_string(),
+                    };
+                }
+            },
+            None => match self.cfg.peers.first().cloned() {
+                Some(peer) => peer,
+                None => {
+                    return RaftRpc::TransferLeaderResp {
+                        term,
+                        accepted: false,
+                        leader_id: current_leader,
+                        target_id,
+                        reason: "no transfer target peer configured".to_string(),
+                    };
+                }
+            },
+        };
+
+        let req = RaftRpc::<E>::TimeoutNow {
+            term,
+            leader_id: self.cfg.node_id.clone(),
+        };
+        let timeout = Duration::from_millis(self.cfg.election_timeout_ms.max(1_000));
+        match send_rpc(peer.addr, &req, timeout) {
+            Ok(RaftRpc::TimeoutNowResp {
+                term: peer_term,
+                started,
+                leader_id,
+                reason,
+            }) => {
+                if peer_term > term {
+                    self.step_down(peer_term, leader_id.clone());
+                }
+                if started {
+                    let new_leader = leader_id.or_else(|| Some(peer.node_id.clone()));
+                    self.step_down_runtime(new_leader.clone());
+                    let current_term = self
+                        .inner
+                        .lock()
+                        .expect("raft log mutex poisoned")
+                        .current_term;
+                    RaftRpc::TransferLeaderResp {
+                        term: current_term,
+                        accepted: true,
+                        leader_id: new_leader,
+                        target_id: Some(peer.node_id),
+                        reason: "target became leader".to_string(),
+                    }
+                } else {
+                    RaftRpc::TransferLeaderResp {
+                        term: peer_term,
+                        accepted: false,
+                        leader_id,
+                        target_id: Some(peer.node_id),
+                        reason,
+                    }
+                }
+            }
+            Ok(other) => RaftRpc::TransferLeaderResp {
+                term,
+                accepted: false,
+                leader_id: current_leader,
+                target_id: Some(peer.node_id),
+                reason: match other {
+                    RaftRpc::VoteResp { .. } => "unexpected transfer response: VoteResp",
+                    RaftRpc::AppendResp { .. } => "unexpected transfer response: AppendResp",
+                    RaftRpc::StatusResp { .. } => "unexpected transfer response: StatusResp",
+                    RaftRpc::TransferLeaderResp { .. } => {
+                        "unexpected transfer response: TransferLeaderResp"
+                    }
+                    RaftRpc::RequestVote { .. } => "unexpected transfer response: RequestVote",
+                    RaftRpc::AppendEntries { .. } => "unexpected transfer response: AppendEntries",
+                    RaftRpc::StatusReq => "unexpected transfer response: StatusReq",
+                    RaftRpc::TransferLeaderReq { .. } => {
+                        "unexpected transfer response: TransferLeaderReq"
+                    }
+                    RaftRpc::TimeoutNow { .. } => "unexpected transfer response: TimeoutNow",
+                    RaftRpc::TimeoutNowResp { .. } => {
+                        "unexpected transfer response: TimeoutNowResp"
+                    }
+                }
+                .to_string(),
+            },
+            Err(err) => RaftRpc::TransferLeaderResp {
+                term,
+                accepted: false,
+                leader_id: current_leader,
+                target_id: Some(peer.node_id),
+                reason: format!("transfer RPC failed: {err}"),
+            },
+        }
+    }
+
+    fn handle_timeout_now(&self, term: u64, leader_id: String) -> RaftRpc<E> {
+        let current_term = {
+            let mut inner = self.inner.lock().expect("raft log mutex poisoned");
+            if term < inner.current_term {
+                return RaftRpc::TimeoutNowResp {
+                    term: inner.current_term,
+                    started: false,
+                    leader_id: None,
+                    reason: "stale transfer term".to_string(),
+                };
+            }
+            if term > inner.current_term {
+                if let Err(err) = inner.set_term_vote(term, None) {
+                    tracing::warn!(err = %err, "raft timeout-now term persist failed");
+                }
+            }
+            inner.current_term
+        };
+
+        {
+            let rt = self.runtime.lock().expect("raft runtime mutex poisoned");
+            if rt.role == Role::Leader {
+                return RaftRpc::TimeoutNowResp {
+                    term: current_term,
+                    started: true,
+                    leader_id: Some(self.cfg.node_id.clone()),
+                    reason: "node is already leader".to_string(),
+                };
+            }
+        }
+
+        self.step_down_runtime_preserving_timeout(Some(leader_id));
+        self.start_election();
+
+        let final_term = {
+            let inner = self.inner.lock().expect("raft log mutex poisoned");
+            inner.current_term
+        };
+        let rt = self.runtime.lock().expect("raft runtime mutex poisoned");
+        let started = rt.role == Role::Leader;
+        RaftRpc::TimeoutNowResp {
+            term: final_term,
+            started,
+            leader_id: rt.leader_id.clone(),
+            reason: if started {
+                "elected leader".to_string()
+            } else {
+                "election did not reach quorum".to_string()
+            },
         }
     }
 
@@ -1391,5 +1629,194 @@ mod tests {
         assert!(lines.contains("replication_latency_buckets:"));
         assert!(lines.contains("<=10ms:1"));
         assert!(lines.contains("<=250ms:1"));
+    }
+
+    #[test]
+    fn raft_control_status_reports_runtime_state() {
+        let path = std::env::temp_dir().join(format!(
+            "slopmud_raftlog_status_test_{}.jsonl",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let state_path = PathBuf::from(format!("{}.state.json", path.display()));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&state_path);
+
+        let mut inner = RaftLogInner::<String>::new(path.clone());
+        inner
+            .append_replicated(RaftEnvelope {
+                index: 1,
+                term: 7,
+                ms: 0,
+                entry: "status".to_string(),
+            })
+            .unwrap();
+        inner.set_commit_index(1).unwrap();
+        inner.set_term_vote(7, Some("n0".to_string())).unwrap();
+
+        let consensus = Consensus {
+            cfg: ConsensusConfig {
+                node_id: "n0".to_string(),
+                bind: None,
+                peers: vec![ConsensusPeer {
+                    node_id: "n1".to_string(),
+                    addr: "127.0.0.1:9".parse().unwrap(),
+                }],
+                election_timeout_ms: 5_000,
+                heartbeat_ms: 500,
+            },
+            inner: Arc::new(Mutex::new(inner)),
+            runtime: Mutex::new(RuntimeState {
+                role: Role::Leader,
+                leader_id: Some("n0".to_string()),
+                last_leader_seen: Instant::now(),
+                last_quorum_at: Some(Instant::now()),
+                replication_latency: ReplicationLatencyStats::default(),
+            }),
+        };
+
+        match consensus.handle_status() {
+            RaftRpc::StatusResp {
+                term,
+                node_id,
+                role,
+                leader_id,
+                commit_index,
+                last_index,
+                last_log_term,
+                quorum_recent,
+            } => {
+                assert_eq!(term, 7);
+                assert_eq!(node_id, "n0");
+                assert_eq!(role, "Leader");
+                assert_eq!(leader_id.as_deref(), Some("n0"));
+                assert_eq!(commit_index, 1);
+                assert_eq!(last_index, 1);
+                assert_eq!(last_log_term, 7);
+                assert!(quorum_recent);
+            }
+            _ => panic!("unexpected raft rpc response"),
+        }
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn timeout_now_starts_immediate_election() {
+        let path = std::env::temp_dir().join(format!(
+            "slopmud_raftlog_timeout_now_test_{}.jsonl",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let state_path = PathBuf::from(format!("{}.state.json", path.display()));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&state_path);
+
+        let mut inner = RaftLogInner::<String>::new(path.clone());
+        inner.set_term_vote(4, None).unwrap();
+
+        let consensus = Consensus {
+            cfg: ConsensusConfig {
+                node_id: "n1".to_string(),
+                bind: None,
+                peers: Vec::new(),
+                election_timeout_ms: 5_000,
+                heartbeat_ms: 500,
+            },
+            inner: Arc::new(Mutex::new(inner)),
+            runtime: Mutex::new(RuntimeState {
+                role: Role::Follower,
+                leader_id: Some("n0".to_string()),
+                last_leader_seen: Instant::now(),
+                last_quorum_at: None,
+                replication_latency: ReplicationLatencyStats::default(),
+            }),
+        };
+
+        match consensus.handle_timeout_now(4, "n0".to_string()) {
+            RaftRpc::TimeoutNowResp {
+                term,
+                started,
+                leader_id,
+                ..
+            } => {
+                assert_eq!(term, 5);
+                assert!(started);
+                assert_eq!(leader_id.as_deref(), Some("n1"));
+            }
+            _ => panic!("unexpected raft rpc response"),
+        }
+
+        let rt = consensus.runtime.lock().unwrap();
+        assert_eq!(rt.role, Role::Leader);
+        assert_eq!(rt.leader_id.as_deref(), Some("n1"));
+        drop(rt);
+
+        let inner = consensus.inner.lock().unwrap();
+        assert_eq!(inner.current_term, 5);
+        assert_eq!(inner.voted_for.as_deref(), Some("n1"));
+        drop(inner);
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn transfer_leader_rejects_non_leaders() {
+        let path = std::env::temp_dir().join(format!(
+            "slopmud_raftlog_transfer_follower_test_{}.jsonl",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let state_path = PathBuf::from(format!("{}.state.json", path.display()));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&state_path);
+
+        let mut inner = RaftLogInner::<String>::new(path.clone());
+        inner.set_term_vote(4, None).unwrap();
+        let consensus = Consensus {
+            cfg: ConsensusConfig {
+                node_id: "n1".to_string(),
+                bind: None,
+                peers: vec![ConsensusPeer {
+                    node_id: "n0".to_string(),
+                    addr: "127.0.0.1:9".parse().unwrap(),
+                }],
+                election_timeout_ms: 5_000,
+                heartbeat_ms: 500,
+            },
+            inner: Arc::new(Mutex::new(inner)),
+            runtime: Mutex::new(RuntimeState {
+                role: Role::Follower,
+                leader_id: Some("n0".to_string()),
+                last_leader_seen: Instant::now(),
+                last_quorum_at: None,
+                replication_latency: ReplicationLatencyStats::default(),
+            }),
+        };
+
+        match consensus.handle_transfer_leader(Some("n0".to_string())) {
+            RaftRpc::TransferLeaderResp {
+                accepted,
+                leader_id,
+                reason,
+                ..
+            } => {
+                assert!(!accepted);
+                assert_eq!(leader_id.as_deref(), Some("n0"));
+                assert_eq!(reason, "node is not leader");
+            }
+            _ => panic!("unexpected raft rpc response"),
+        }
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
     }
 }

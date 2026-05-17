@@ -24,6 +24,8 @@ Optional env:
   SHARD_PORT            default 5000
   SHARD_RAFT_PORT       default 5100
   SHARD_RAFT_LOG        default REMOTE_ROOT/var/shard_01_groups_raft.jsonl
+  SLOPMUD_ROLLING_TRANSFER_LEADER default 1
+  SLOPMUD_ALLOW_UNGRACEFUL_LEADER_RESTART default 1
 EOF
 }
 
@@ -100,6 +102,195 @@ default_logs="${base_log},$(suffix_log_path "$base_log" n1),$(suffix_log_path "$
 split_csv "${SHARD_TRIO_RAFT_LOGS:-$default_logs}" raft_logs
 require_three "SHARD_TRIO_RAFT_LOGS" raft_logs
 
+unit_name_for() {
+  local i="$1"
+  printf '%s-%s' "${SHARD_APP_NAME:-shard-01-prd}" "${node_ids[$i]}"
+}
+
+ssh_node() {
+  local i="$1"
+  shift
+  local target="${raft_ssh_user}@${node_hosts[$i]}"
+  ssh "${ssh_opts[@]}" "$target" "$@"
+}
+
+json_field() {
+  local json="$1"
+  local field="$2"
+  python3 - "$json" "$field" <<'PY'
+import json
+import sys
+
+try:
+    data = json.loads(sys.argv[1])
+except Exception:
+    sys.exit(1)
+value = data.get(sys.argv[2])
+if value is None:
+    print("")
+elif isinstance(value, bool):
+    print("true" if value else "false")
+else:
+    print(value)
+PY
+}
+
+normalize_host() {
+  local raw="$1"
+  raw="${raw#[}"
+  raw="${raw%]}"
+  raw="${raw%:${shard_port}}"
+  raw="${raw%:${raft_port}}"
+  printf '%s' "$raw"
+}
+
+node_index_for_host() {
+  local host
+  host="$(normalize_host "$1")"
+  local i
+  for i in 0 1 2; do
+    if [[ "${node_hosts[$i]}" == "$host" ]]; then
+      printf '%s\n' "$i"
+      return 0
+    fi
+  done
+  return 1
+}
+
+raft_rpc_node() {
+  local i="$1"
+  local payload="$2"
+  local payload_b64
+  payload_b64="$(printf '%s' "$payload" | base64 | tr -d '\n')"
+  ssh_node "$i" "PAYLOAD_B64='${payload_b64}' RAFT_PORT='${raft_port}' bash -lc 'set -euo pipefail; payload=\$(printf %s \"\$PAYLOAD_B64\" | base64 -d); exec 3<>/dev/tcp/127.0.0.1/\$RAFT_PORT; printf \"%s\n\" \"\$payload\" >&3; IFS= read -r line <&3; printf \"%s\n\" \"\$line\"'"
+}
+
+raft_status_node() {
+  local i="$1"
+  raft_rpc_node "$i" '{"t":"StatusReq"}'
+}
+
+current_leader_index() {
+  local i resp kind role
+  for i in 0 1 2; do
+    resp="$(raft_status_node "$i" 2>/dev/null || true)"
+    kind="$(json_field "$resp" t 2>/dev/null || true)"
+    role="$(json_field "$resp" role 2>/dev/null || true)"
+    if [[ "$kind" == "StatusResp" && "$role" == "Leader" ]]; then
+      printf '%s\n' "$i"
+      return 0
+    fi
+  done
+  return 1
+}
+
+gateway_active_shard_host() {
+  local peer
+  peer="$(ssh "${gateway_ssh_opts[@]}" "${SSH_USER}@${gateway_host}" "sudo ss -Htnp 2>/dev/null | awk '\$5 ~ /:${shard_port}\$/ {print \$5; exit}'" || true)"
+  if [[ -z "$peer" ]]; then
+    return 1
+  fi
+  normalize_host "$peer"
+}
+
+wait_node_ports() {
+  local i="$1"
+  local port
+  for port in "$shard_port" "$raft_port"; do
+    ssh_node "$i" "\
+      set -euo pipefail; \
+      for _ in {1..80}; do \
+        if sudo ss -lntp | grep -q ':${port}\\b'; then exit 0; fi; \
+        sleep 0.25; \
+      done; \
+      sudo ss -lntp | grep -n ':${port}\\b' || true; \
+      echo 'not listening on ${node_hosts[$i]}:${port}'; \
+      exit 1 \
+    "
+  done
+}
+
+wait_for_leader() {
+  local expected="${1:-}"
+  local deadline=$((SECONDS + 40))
+  local leader
+  while (( SECONDS < deadline )); do
+    leader="$(current_leader_index || true)"
+    if [[ -n "$leader" && ( -z "$expected" || "$leader" == "$expected" ) ]]; then
+      echo "Raft leader is ${node_ids[$leader]} (${node_hosts[$leader]})"
+      return 0
+    fi
+    sleep 0.5
+  done
+  echo "ERROR: timed out waiting for Raft leader ${expected:-any}" >&2
+  for i in 0 1 2; do
+    echo "status ${node_ids[$i]}: $(raft_status_node "$i" 2>/dev/null || true)" >&2
+  done
+  return 1
+}
+
+wait_cluster_ready() {
+  local deadline=$((SECONDS + 40))
+  local leader active_host active_i
+  while (( SECONDS < deadline )); do
+    leader="$(current_leader_index || true)"
+    active_host="$(gateway_active_shard_host || true)"
+    active_i=""
+    if [[ -n "$active_host" ]]; then
+      active_i="$(node_index_for_host "$active_host" 2>/dev/null || true)"
+    fi
+    if [[ -n "$active_i" && -z "$leader" ]]; then
+      echo "Gateway is connected to ${node_ids[$active_i]} (${node_hosts[$active_i]}); leader status unavailable"
+      return 0
+    fi
+    if [[ -n "$leader" && ( -z "$active_i" || "$active_i" == "$leader" ) ]]; then
+      if [[ -n "$active_i" ]]; then
+        echo "Gateway is connected to Raft leader ${node_ids[$leader]} (${node_hosts[$leader]})"
+      else
+        echo "Raft leader is ${node_ids[$leader]} (${node_hosts[$leader]}); no gateway shard socket observed"
+      fi
+      return 0
+    fi
+    sleep 0.5
+  done
+  echo "ERROR: timed out waiting for gateway to connect to current Raft leader" >&2
+  echo "leader index: $(current_leader_index 2>/dev/null || true)" >&2
+  echo "gateway active host: $(gateway_active_shard_host 2>/dev/null || true)" >&2
+  return 1
+}
+
+restart_node() {
+  local i="$1"
+  local unit_name
+  unit_name="$(unit_name_for "$i")"
+  echo "Restarting ${node_ids[$i]} (${node_hosts[$i]})"
+  ssh_node "$i" "\
+    set -euo pipefail; \
+    sudo systemctl restart '${unit_name}'; \
+    sudo systemctl --no-pager --full status '${unit_name}' || true \
+  "
+  wait_node_ports "$i"
+}
+
+try_transfer_leader() {
+  local from_i="$1"
+  local target_i="$2"
+  local target_id="${node_ids[$target_i]}"
+  local resp kind accepted reason leader_id
+  echo "Requesting Raft leadership transfer ${node_ids[$from_i]} -> ${target_id}"
+  resp="$(raft_rpc_node "$from_i" "{\"t\":\"TransferLeaderReq\",\"target_id\":\"${target_id}\"}" 2>/dev/null || true)"
+  kind="$(json_field "$resp" t 2>/dev/null || true)"
+  accepted="$(json_field "$resp" accepted 2>/dev/null || true)"
+  reason="$(json_field "$resp" reason 2>/dev/null || true)"
+  leader_id="$(json_field "$resp" leader_id 2>/dev/null || true)"
+  if [[ "$kind" == "TransferLeaderResp" && "$accepted" == "true" ]]; then
+    echo "Leadership transfer accepted; leader=${leader_id:-unknown}"
+    return 0
+  fi
+  echo "Leadership transfer unavailable: ${reason:-${resp:-no response}}" >&2
+  return 1
+}
+
 proxy_jump="${SSH_USER}@${gateway_host}"
 if [[ "$SSH_PORT" != "22" ]]; then
   proxy_jump="${proxy_jump}:${SSH_PORT}"
@@ -107,6 +298,7 @@ fi
 
 ssh_opts=(-o StrictHostKeyChecking=accept-new -o "ProxyJump=${proxy_jump}" -p "$raft_ssh_port")
 scp_opts=(-o StrictHostKeyChecking=accept-new -o "ProxyJump=${proxy_jump}" -P "$raft_ssh_port")
+gateway_ssh_opts=(-o StrictHostKeyChecking=accept-new -p "$SSH_PORT")
 
 remote_bin_dir="$(dirname "$SHARD_REMOTE_BIN")"
 
@@ -125,7 +317,7 @@ trap 'rm -rf "$tmp_dir"' EXIT
 for i in 0 1 2; do
   host="${node_hosts[$i]}"
   node_id="${node_ids[$i]}"
-  unit_name="${SHARD_APP_NAME:-shard-01-prd}-${node_id}"
+  unit_name="$(unit_name_for "$i")"
   target="${raft_ssh_user}@${host}"
 
   peers=()
@@ -224,27 +416,57 @@ EOF
     set -euo pipefail; \
     sudo mv '/tmp/${unit_name}.service' '/etc/systemd/system/${unit_name}.service'; \
     sudo systemctl daemon-reload; \
-    sudo systemctl enable --now '${unit_name}'; \
-    sudo systemctl restart '${unit_name}'; \
+    sudo systemctl enable '${unit_name}'; \
+    if ! sudo systemctl is-active --quiet '${unit_name}'; then sudo systemctl start '${unit_name}'; fi; \
     sudo systemctl --no-pager --full status '${unit_name}' || true \
   "
 done
 
 echo "Waiting for private shard and Raft ports"
 for i in 0 1 2; do
-  target="${raft_ssh_user}@${node_hosts[$i]}"
-  for port in "$shard_port" "$raft_port"; do
-    ssh "${ssh_opts[@]}" "$target" "\
-      set -euo pipefail; \
-      for _ in {1..80}; do \
-        if sudo ss -lntp | grep -q ':${port}\\b'; then exit 0; fi; \
-        sleep 0.25; \
-      done; \
-      sudo ss -lntp | grep -n ':${port}\\b' || true; \
-      echo 'not listening on ${node_hosts[$i]}:${port}'; \
-      exit 1 \
-    "
-  done
+  wait_node_ports "$i"
+done
+
+echo "Planning rolling restart order"
+active_host="$(gateway_active_shard_host || true)"
+active_i=""
+if [[ -n "$active_host" ]]; then
+  active_i="$(node_index_for_host "$active_host" 2>/dev/null || true)"
+fi
+leader_i="$(current_leader_index || true)"
+if [[ -z "$active_i" && -n "$leader_i" ]]; then
+  active_i="$leader_i"
+fi
+if [[ -z "$active_i" ]]; then
+  active_i=0
+fi
+echo "Impact-sensitive node: ${node_ids[$active_i]} (${node_hosts[$active_i]})"
+
+restart_order=()
+for i in 0 1 2; do
+  if [[ "$i" != "$active_i" ]]; then
+    restart_order+=("$i")
+  fi
+done
+restart_order+=("$active_i")
+
+for i in "${restart_order[@]}"; do
+  if [[ "$i" == "$active_i" ]]; then
+    target_i=$(((active_i + 1) % 3))
+    if [[ "${SLOPMUD_ROLLING_TRANSFER_LEADER:-1}" != "0" ]]; then
+      if try_transfer_leader "$active_i" "$target_i"; then
+        wait_for_leader "$target_i"
+      else
+        if [[ "${SLOPMUD_ALLOW_UNGRACEFUL_LEADER_RESTART:-1}" == "0" ]]; then
+          echo "ERROR: refusing to restart active leader without transfer" >&2
+          exit 1
+        fi
+        echo "WARN: restarting active node without graceful transfer; this should only happen during the first rollout from older binaries" >&2
+      fi
+    fi
+  fi
+  restart_node "$i"
+  wait_cluster_ready
 done
 
 shard_addrs_list=()
