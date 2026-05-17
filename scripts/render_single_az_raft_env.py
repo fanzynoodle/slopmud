@@ -85,8 +85,8 @@ def main() -> int:
         [
             f"SHARD_BIND=0.0.0.0:{shlex.quote(env['SHARD_PORT'])}",
             f"SHARD_RAFT_LOG={shlex.quote(args.state_dir + '/shard_01_groups_raft.jsonl')}",
-            "SHARD_RAFT_ELECTION_MS=2000",
-            "SHARD_RAFT_HEARTBEAT_MS=250",
+            "SHARD_RAFT_ELECTION_MS=5000",
+            "SHARD_RAFT_HEARTBEAT_MS=500",
             "SLOPMUD_ADMIN_BIND=127.0.0.1:4011",
             f"SLOPMUD_ACCOUNTS_PATH={shlex.quote(args.state_dir + '/accounts.json')}",
             f"SLOPMUD_BANS_PATH={shlex.quote(args.state_dir + '/bans.json')}",

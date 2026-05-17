@@ -184,6 +184,19 @@ current_leader_index() {
   return 1
 }
 
+status_supported_count() {
+  local i resp kind count
+  count=0
+  for i in 0 1 2; do
+    resp="$(raft_status_node "$i" 2>/dev/null || true)"
+    kind="$(json_field "$resp" t 2>/dev/null || true)"
+    if [[ "$kind" == "StatusResp" ]]; then
+      count=$((count + 1))
+    fi
+  done
+  printf '%s\n' "$count"
+}
+
 gateway_active_shard_host() {
   local peer
   peer="$(ssh "${gateway_ssh_opts[@]}" "${SSH_USER}@${gateway_host}" "sudo ss -Htnp 2>/dev/null | awk '\$5 ~ /:${shard_port}\$/ {print \$5; exit}'" || true)"
@@ -231,15 +244,27 @@ wait_for_leader() {
 
 wait_cluster_ready() {
   local deadline=$((SECONDS + 40))
-  local leader active_host active_i
+  local leader active_host active_i status_seen i resp kind role
   while (( SECONDS < deadline )); do
-    leader="$(current_leader_index || true)"
+    leader=""
+    status_seen=0
+    for i in 0 1 2; do
+      resp="$(raft_status_node "$i" 2>/dev/null || true)"
+      kind="$(json_field "$resp" t 2>/dev/null || true)"
+      role="$(json_field "$resp" role 2>/dev/null || true)"
+      if [[ "$kind" == "StatusResp" ]]; then
+        status_seen=$((status_seen + 1))
+        if [[ "$role" == "Leader" ]]; then
+          leader="$i"
+        fi
+      fi
+    done
     active_host="$(gateway_active_shard_host || true)"
     active_i=""
     if [[ -n "$active_host" ]]; then
       active_i="$(node_index_for_host "$active_host" 2>/dev/null || true)"
     fi
-    if [[ -n "$active_i" && -z "$leader" ]]; then
+    if [[ -n "$active_i" && -z "$leader" && "$status_seen" -lt 3 ]]; then
       echo "Gateway is connected to ${node_ids[$active_i]} (${node_hosts[$active_i]}); leader status unavailable"
       return 0
     fi
@@ -452,17 +477,30 @@ restart_order+=("$active_i")
 
 for i in "${restart_order[@]}"; do
   if [[ "$i" == "$active_i" ]]; then
-    target_i=$(((active_i + 1) % 3))
-    if [[ "${SLOPMUD_ROLLING_TRANSFER_LEADER:-1}" != "0" ]]; then
-      if try_transfer_leader "$active_i" "$target_i"; then
-        wait_for_leader "$target_i"
-      else
-        if [[ "${SLOPMUD_ALLOW_UNGRACEFUL_LEADER_RESTART:-1}" == "0" ]]; then
-          echo "ERROR: refusing to restart active leader without transfer" >&2
-          exit 1
-        fi
-        echo "WARN: restarting active node without graceful transfer; this should only happen during the first rollout from older binaries" >&2
+    leader_i="$(current_leader_index || true)"
+    if [[ -z "$leader_i" ]]; then
+      if [[ "$(status_supported_count)" == "3" ]]; then
+        wait_for_leader ""
+        leader_i="$(current_leader_index || true)"
       fi
+    fi
+    if [[ "$leader_i" == "$active_i" ]]; then
+      target_i=$(((active_i + 1) % 3))
+      if [[ "${SLOPMUD_ROLLING_TRANSFER_LEADER:-1}" != "0" ]]; then
+        if try_transfer_leader "$active_i" "$target_i"; then
+          wait_for_leader "$target_i"
+        else
+          if [[ "${SLOPMUD_ALLOW_UNGRACEFUL_LEADER_RESTART:-1}" == "0" ]]; then
+            echo "ERROR: refusing to restart active leader without transfer" >&2
+            exit 1
+          fi
+          echo "WARN: restarting active node without graceful transfer; this should only happen during the first rollout from older binaries" >&2
+        fi
+      fi
+    elif [[ -n "$leader_i" ]]; then
+      echo "Leadership is already on ${node_ids[$leader_i]} (${node_hosts[$leader_i]}); restarting old gateway-connected node ${node_ids[$active_i]}"
+    else
+      echo "WARN: no Raft leader visible before active-node restart" >&2
     fi
   fi
   restart_node "$i"
