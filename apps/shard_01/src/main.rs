@@ -5088,8 +5088,8 @@ async fn handle_broker(
         };
 
         tokio::select! {
-            _ = tokio::time::sleep(Duration::from_millis(sleep_ms.min(86_400_000))) => {
-                // Wake up to process due events.
+            _ = tokio::time::sleep(Duration::from_millis(sleep_ms.min(250))) => {
+                // Wake up to process due events and notice Raft leadership changes.
             }
             res = fr.read_frame() => {
                 let frame = match res? {

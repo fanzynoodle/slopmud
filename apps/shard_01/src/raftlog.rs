@@ -380,8 +380,11 @@ where
             ));
             out.push(format!(
                 " - quorum_recent: {}",
-                rt.last_quorum_at.is_some_and(|t| t.elapsed()
-                    <= Duration::from_millis(c.cfg.election_timeout_ms.saturating_mul(3).max(1)))
+                rt.role == Role::Leader
+                    && rt.last_quorum_at.is_some_and(|t| t.elapsed()
+                        <= Duration::from_millis(
+                            c.cfg.election_timeout_ms.saturating_mul(3).max(1)
+                        ))
             ));
             out.extend(rt.replication_latency.status_lines());
         } else {
@@ -988,10 +991,11 @@ where
             )
         };
         let rt = self.runtime.lock().expect("raft runtime mutex poisoned");
-        let quorum_recent = rt.last_quorum_at.is_some_and(|t| {
-            t.elapsed()
-                <= Duration::from_millis(self.cfg.election_timeout_ms.saturating_mul(3).max(1))
-        });
+        let quorum_recent = rt.role == Role::Leader
+            && rt.last_quorum_at.is_some_and(|t| {
+                t.elapsed()
+                    <= Duration::from_millis(self.cfg.election_timeout_ms.saturating_mul(3).max(1))
+            });
         RaftRpc::StatusResp {
             term,
             node_id: self.cfg.node_id.clone(),
