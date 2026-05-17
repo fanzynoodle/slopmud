@@ -84,6 +84,9 @@
   const LS_AUTOSCROLL = "slopmud_autoscroll";
   const LS_RESUME_TOKEN = "slopmud_resume_token";
 
+  let hasConnectedThisPage = false;
+  let pageLoadedWithResumeToken = isValidResumeToken(localStorage.getItem(LS_RESUME_TOKEN));
+
   function updateSsoUrl(url) {
     const u = String(url || "").trim();
     lastSsoUrl = u;
@@ -327,12 +330,14 @@
     return setWebAuth("auto", method, "");
   }
 
-  function withResumeToken(url, token) {
+  function withResumeToken(url, token, opts = {}) {
     try {
       const u = new URL(url, defaultWsUrl());
       if (u.protocol === "http:") u.protocol = "ws:";
       if (u.protocol === "https:") u.protocol = "wss:";
       u.searchParams.set("resume", token);
+      if (opts.replayHistory) u.searchParams.set("replay", "1");
+      else u.searchParams.delete("replay");
       return u.toString();
     } catch {
       return url;
@@ -422,7 +427,7 @@
     else lineEl.placeholder = "type here, press Enter";
   }
 
-  function connect() {
+  function connect(opts = {}) {
     const baseUrl = (wsUrlEl && wsUrlEl.value.trim()) || defaultWsUrl();
     if (wsUrlEl) wsUrlEl.value = baseUrl;
     saveSettings();
@@ -431,7 +436,9 @@
       return;
     }
     const resumeToken = getOrCreateResumeToken();
-    const url = withResumeToken(baseUrl, resumeToken);
+    const replayHistory =
+      !!opts.replayHistory || (!hasConnectedThisPage && pageLoadedWithResumeToken);
+    const url = withResumeToken(baseUrl, resumeToken, { replayHistory });
     const displayUrl = redactResumeToken(url);
     setStatus("connecting", displayUrl);
     setInputEnabled(false);
@@ -444,6 +451,7 @@
     btnDisconnect && (btnDisconnect.disabled = false);
 
     ws.addEventListener("open", () => {
+      hasConnectedThisPage = true;
       setStatus("connected", displayUrl);
       appendLine(`# connected: ${displayUrl}`);
       setInputEnabled(true);
@@ -525,6 +533,7 @@
   async function connectFreshSession(preConnectAuth) {
     // Use a fresh backend session for auth-gate entry to avoid stale/silent resume state.
     await logoutResumeSession();
+    pageLoadedWithResumeToken = false;
     if (typeof preConnectAuth === "function") {
       try {
         await preConnectAuth();
@@ -533,7 +542,7 @@
       }
     }
     shouldReconnect = true;
-    connect();
+    connect({ replayHistory: false });
   }
 
   function scheduleReconnect() {
@@ -680,8 +689,9 @@
       } catch {
         // ignore
       }
-      // Password mode is terminal-first: connect immediately and let the MUD prompt.
-      await connectFreshSession();
+      // Password mode is terminal-first: resume if possible, otherwise let the MUD prompt.
+      shouldReconnect = true;
+      connect();
       lineEl && lineEl.focus();
     });
 
