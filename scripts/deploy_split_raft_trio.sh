@@ -466,42 +466,48 @@ if [[ -z "$active_i" ]]; then
   active_i=0
 fi
 echo "Impact-sensitive node: ${node_ids[$active_i]} (${node_hosts[$active_i]})"
+if [[ -n "$leader_i" && "$leader_i" != "$active_i" ]]; then
+  echo "Current Raft leader: ${node_ids[$leader_i]} (${node_hosts[$leader_i]})"
+fi
 
 restart_order=()
 for i in 0 1 2; do
-  if [[ "$i" != "$active_i" ]]; then
+  if [[ "$i" != "$active_i" && ( -z "$leader_i" || "$i" != "$leader_i" ) ]]; then
     restart_order+=("$i")
   fi
 done
-restart_order+=("$active_i")
+if [[ -n "$leader_i" && "$leader_i" != "$active_i" ]]; then
+  restart_order+=("$active_i")
+  restart_order+=("$leader_i")
+else
+  restart_order+=("$active_i")
+fi
 
 for i in "${restart_order[@]}"; do
-  if [[ "$i" == "$active_i" ]]; then
-    leader_i="$(current_leader_index || true)"
-    if [[ -z "$leader_i" ]]; then
+  current_i="$(current_leader_index || true)"
+  if [[ -z "$current_i" ]]; then
       if [[ "$(status_supported_count)" == "3" ]]; then
         wait_for_leader ""
-        leader_i="$(current_leader_index || true)"
+        current_i="$(current_leader_index || true)"
       fi
-    fi
-    if [[ "$leader_i" == "$active_i" ]]; then
-      target_i=$(((active_i + 1) % 3))
+  fi
+  if [[ "$current_i" == "$i" ]]; then
+      target_i=$(((i + 1) % 3))
       if [[ "${SLOPMUD_ROLLING_TRANSFER_LEADER:-1}" != "0" ]]; then
-        if try_transfer_leader "$active_i" "$target_i"; then
+        if try_transfer_leader "$i" "$target_i"; then
           wait_for_leader "$target_i"
         else
           if [[ "${SLOPMUD_ALLOW_UNGRACEFUL_LEADER_RESTART:-1}" == "0" ]]; then
             echo "ERROR: refusing to restart active leader without transfer" >&2
             exit 1
           fi
-          echo "WARN: restarting active node without graceful transfer; this should only happen during the first rollout from older binaries" >&2
+          echo "WARN: restarting leader without graceful transfer; this should only happen during the first rollout from older binaries" >&2
         fi
       fi
-    elif [[ -n "$leader_i" ]]; then
-      echo "Leadership is already on ${node_ids[$leader_i]} (${node_hosts[$leader_i]}); restarting old gateway-connected node ${node_ids[$active_i]}"
-    else
-      echo "WARN: no Raft leader visible before active-node restart" >&2
-    fi
+  elif [[ "$i" == "$active_i" && -n "$current_i" ]]; then
+      echo "Leadership is on ${node_ids[$current_i]} (${node_hosts[$current_i]}); restarting old gateway-connected node ${node_ids[$active_i]}"
+  elif [[ "$i" == "$active_i" ]]; then
+      echo "WARN: no Raft leader visible before gateway-connected node restart" >&2
   fi
   restart_node "$i"
   wait_cluster_ready
