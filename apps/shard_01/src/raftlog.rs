@@ -533,7 +533,9 @@ where
             return Err(anyhow::anyhow!("raft entry index 0 is invalid"));
         }
         if let Some(pos) = self.entries.iter().position(|e| e.index == env.index) {
-            if self.entries[pos].term == env.term {
+            if self.entries[pos].term == env.term
+                && serde_json::to_vec(&self.entries[pos])? == serde_json::to_vec(&env)?
+            {
                 return Ok(());
             }
             self.entries.truncate(pos);
@@ -568,22 +570,17 @@ where
         self.rewrite_log_file()
     }
 
-    fn truncate_uncommitted_after(&mut self, index: u64) -> anyhow::Result<()> {
-        if index < self.commit_index {
-            return Err(anyhow::anyhow!(
-                "raft cannot truncate committed suffix: index={} commit={}",
-                index,
-                self.commit_index
-            ));
-        }
+    fn truncate_suffix_after(&mut self, index: u64) -> anyhow::Result<()> {
         let keep = self.entries.iter().take_while(|e| e.index <= index).count();
         if keep == self.entries.len() {
             return Ok(());
         }
         self.entries.truncate(keep);
         self.next_log_index = self.last_index().saturating_add(1).max(1);
+        self.commit_index = self.commit_index.min(self.last_index());
         self.next_apply_index = self.next_apply_index.min(self.next_log_index);
-        self.rewrite_log_file()
+        self.rewrite_log_file()?;
+        self.save_state()
     }
 
     fn append_env_to_disk(&mut self, env: &RaftEnvelope<E>) -> anyhow::Result<()> {
@@ -941,7 +938,6 @@ where
             };
         }
 
-        let full_log_replace = prev_log_index == 0 && !entries.is_empty();
         let mut match_index = prev_log_index;
         for env in entries {
             match_index = env.index;
@@ -954,15 +950,13 @@ where
                 };
             }
         }
-        if full_log_replace {
-            if let Err(err) = inner.truncate_uncommitted_after(match_index) {
-                tracing::warn!(err = %err, "raft replicated suffix truncate failed");
-                return RaftRpc::AppendResp {
-                    term: inner.current_term,
-                    success: false,
-                    match_index: inner.last_index(),
-                };
-            }
+        if let Err(err) = inner.truncate_suffix_after(match_index) {
+            tracing::warn!(err = %err, "raft replicated suffix truncate failed");
+            return RaftRpc::AppendResp {
+                term: inner.current_term,
+                success: false,
+                match_index: inner.last_index(),
+            };
         }
         if let Err(err) = inner.set_commit_index(leader_commit) {
             tracing::warn!(err = %err, "raft commit index persist failed");
@@ -1632,6 +1626,64 @@ mod tests {
         let inner = consensus.inner.lock().unwrap();
         assert_eq!(inner.last_index(), 1);
         assert_eq!(inner.next_log_index, 2);
+        assert_eq!(inner.commit_index, 1);
+        drop(inner);
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn heartbeat_truncates_follower_suffix_past_leader_last_index() {
+        let path = std::env::temp_dir().join(format!(
+            "slopmud_raftlog_heartbeat_truncate_test_{}.jsonl",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let state_path = PathBuf::from(format!("{}.state.json", path.display()));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&state_path);
+
+        let mut inner = RaftLogInner::<String>::new(path.clone());
+        for (index, entry) in [(1, "leader"), (2, "suffix")] {
+            inner
+                .append_replicated(RaftEnvelope {
+                    index,
+                    term: 3,
+                    ms: 0,
+                    entry: entry.to_string(),
+                })
+                .unwrap();
+        }
+        inner.set_commit_index(2).unwrap();
+
+        let consensus = Consensus {
+            cfg: ConsensusConfig {
+                node_id: "n1".to_string(),
+                bind: None,
+                peers: Vec::new(),
+                election_timeout_ms: 5_000,
+                heartbeat_ms: 500,
+            },
+            inner: Arc::new(Mutex::new(inner)),
+            runtime: Mutex::new(RuntimeState {
+                role: Role::Follower,
+                leader_id: Some("n0".to_string()),
+                last_leader_seen: Instant::now(),
+                last_quorum_at: None,
+                replication_latency: ReplicationLatencyStats::default(),
+            }),
+        };
+
+        let resp = consensus.handle_append_entries(4, "n0".to_string(), 1, 3, Vec::new(), 1);
+        match resp {
+            RaftRpc::AppendResp { success, .. } => assert!(success),
+            _ => panic!("unexpected raft rpc response"),
+        }
+        let inner = consensus.inner.lock().unwrap();
+        assert_eq!(inner.last_index(), 1);
         assert_eq!(inner.commit_index, 1);
         drop(inner);
 
