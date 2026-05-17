@@ -3330,8 +3330,8 @@ impl World {
         is_bot: bool,
         race: Race,
         class: Class,
-        sex: Sex,
-        pronouns: PronounKey,
+        _sex: Sex,
+        _pronouns: PronounKey,
     ) -> Option<CharacterId> {
         let name_lc = name.trim().to_ascii_lowercase();
         let principal_lc = principal.trim().to_ascii_lowercase();
@@ -3384,14 +3384,6 @@ impl World {
                 c.stamina = c.max_stamina;
                 c.last_mana_regen_ms = now_ms;
                 c.last_stamina_regen_ms = now_ms;
-                changed = true;
-            }
-            if c.sex != sex {
-                c.sex = sex;
-                changed = true;
-            }
-            if c.pronouns != pronouns {
-                c.pronouns = pronouns;
                 changed = true;
             }
         }
@@ -5140,12 +5132,14 @@ async fn handle_broker(
                     let mut hi = format!(
                         "hi {name}\r\n(type: help, rules, look, stats, kill <mob>, go <exit>, exit)\r\n"
                     );
+                    let shown_race = c.race.unwrap_or(race);
+                    let shown_class = c.class.unwrap_or(class);
                     hi.push_str(&format!(
                         "race: {} | class: {} | sex: {} | pronouns: {}\r\n",
-                        race.as_str(),
-                        class.as_str(),
-                        sex.as_str(),
-                        pronouns.as_str(),
+                        shown_race.as_str(),
+                        shown_class.as_str(),
+                        c.sex.as_str(),
+                        c.pronouns.as_str(),
                     ));
                     hi.push_str(&world.render_room_for(&room_id, session));
                     hi.push_str(&render_build_prompt(c));

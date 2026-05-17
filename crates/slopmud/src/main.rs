@@ -204,6 +204,19 @@ const COC_LINE_ITEMS: [&str; 8] = [
     "8. zero privacy (except passwords): we will share logs with various folks and train our models on them",
 ];
 
+const PUBLIC_ACK_VERSION: u32 = 1;
+const COC_ACK_VERSION: u32 = 1;
+const LEGACY_PUBLIC_ACK_VERSION: u32 = 1;
+const LEGACY_COC_ACK_VERSION: u32 = 1;
+
+fn default_legacy_public_ack_version() -> u32 {
+    LEGACY_PUBLIC_ACK_VERSION
+}
+
+fn default_legacy_coc_ack_version() -> u32 {
+    LEGACY_COC_ACK_VERSION
+}
+
 const RACE_TOKENS: [&str; 9] = [
     "dragonborn",
     "dwarf",
@@ -1777,6 +1790,20 @@ struct AccountRec {
     oidc_email: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     caps: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    is_bot: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    race: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    class: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sex: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pronouns: Option<String>,
+    #[serde(default = "default_legacy_public_ack_version")]
+    public_ack_version: u32,
+    #[serde(default = "default_legacy_coc_ack_version")]
+    coc_ack_version: u32,
     // User-configured email address for notifications. Not used for auth.
     #[serde(default)]
     email: Option<String>,
@@ -1852,6 +1879,144 @@ impl AccountRec {
             email,
         });
         true
+    }
+}
+
+fn normalize_stored_race(s: &str) -> Option<String> {
+    let token = s.trim().to_ascii_lowercase();
+    is_allowed_token(&token, &RACE_TOKENS).then_some(token)
+}
+
+fn normalize_stored_class(s: &str) -> Option<String> {
+    let token = s.trim().to_ascii_lowercase();
+    is_allowed_token(&token, &CLASS_TOKENS).then_some(token)
+}
+
+fn normalize_stored_sex(s: &str) -> Option<String> {
+    let token = s.trim().to_ascii_lowercase();
+    matches!(token.as_str(), "male" | "female" | "none" | "other").then_some(token)
+}
+
+fn stored_account_onboarding(rec: &AccountRec) -> Option<(bool, String, String, String, String)> {
+    let bot = rec.is_bot?;
+    let race = normalize_stored_race(rec.race.as_deref()?)?;
+    let class = normalize_stored_class(rec.class.as_deref()?)?;
+    let sex = normalize_stored_sex(rec.sex.as_deref()?)?;
+    let pronouns = normalize_pronouns("en", rec.pronouns.as_deref()?)?.to_string();
+    Some((bot, race, class, sex, pronouns))
+}
+
+fn seed_legacy_onboarding_defaults(
+    is_bot: &mut Option<bool>,
+    race: &mut Option<String>,
+    class: &mut Option<String>,
+    sex: &mut Option<String>,
+    pronouns: &mut Option<String>,
+) {
+    *is_bot = Some(false);
+    *race = Some("human".to_string());
+    *class = Some("fighter".to_string());
+    *sex = Some("none".to_string());
+    *pronouns = Some("they".to_string());
+}
+
+fn seed_account_onboarding(
+    rec: &AccountRec,
+    is_bot: &mut Option<bool>,
+    race: &mut Option<String>,
+    class: &mut Option<String>,
+    sex: &mut Option<String>,
+    pronouns: &mut Option<String>,
+) -> bool {
+    if let Some((bot, race_s, class_s, sex_s, pronouns_s)) = stored_account_onboarding(rec) {
+        *is_bot = Some(bot);
+        *race = Some(race_s);
+        *class = Some(class_s);
+        *sex = Some(sex_s);
+        *pronouns = Some(pronouns_s);
+        true
+    } else {
+        seed_legacy_onboarding_defaults(is_bot, race, class, sex, pronouns);
+        false
+    }
+}
+
+fn store_account_onboarding(
+    rec: &mut AccountRec,
+    is_bot: bool,
+    race: &str,
+    class: &str,
+    sex: &str,
+    pronouns: &str,
+) {
+    rec.is_bot = Some(is_bot);
+    rec.race = Some(race.to_string());
+    rec.class = Some(class.to_string());
+    rec.sex = Some(sex.to_string());
+    rec.pronouns = Some(pronouns.to_string());
+}
+
+fn prepare_existing_account_onboarding(
+    rec: &AccountRec,
+    is_bot: &mut Option<bool>,
+    race: &mut Option<String>,
+    class: &mut Option<String>,
+    sex: &mut Option<String>,
+    pronouns: &mut Option<String>,
+    public_ack_version: &mut u32,
+    coc_ack_version: &mut u32,
+    persist_account_profile: &mut bool,
+) -> ConnState {
+    *public_ack_version = rec.public_ack_version;
+    *coc_ack_version = rec.coc_ack_version;
+    if !seed_account_onboarding(rec, is_bot, race, class, sex, pronouns) {
+        *persist_account_profile = false;
+    }
+    if *public_ack_version < PUBLIC_ACK_VERSION {
+        ConnState::NeedPublicAck
+    } else if *coc_ack_version < COC_ACK_VERSION {
+        ConnState::NeedCocAck
+    } else {
+        ConnState::NeedSex
+    }
+}
+
+fn prompt_bot_disclosure() -> Bytes {
+    Bytes::from_static(
+        b"character creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
+    )
+}
+
+fn prompt_public_ack() -> Bytes {
+    Bytes::from_static(
+        b"character creation (step 3/4)\r\ncontent + licensing:\r\n- anything you submit - consider it publicly licensed and publicly published\r\n- zero privacy: logs may be shared and used for training\r\n- exception: passwords are never logged/echoed; only password hashes are stored\r\ntype: agree\r\n> ",
+    )
+}
+
+fn prompt_coc_ack() -> Bytes {
+    let mut b = Vec::new();
+    b.extend_from_slice(b"character creation (step 4/4)\r\ncode of conduct:\r\n");
+    for li in COC_LINE_ITEMS {
+        b.extend_from_slice(li.as_bytes());
+        b.extend_from_slice(b"\r\n");
+    }
+    b.extend_from_slice(b"type: agree\r\n> ");
+    Bytes::from(b)
+}
+
+fn prompt_race() -> Bytes {
+    Bytes::from_static(
+        b"character creation (step 5/7)\r\nchoose race:\r\ntype: race list | race <name>\r\n> ",
+    )
+}
+
+fn prompt_for_onboarding_state(state: ConnState) -> Option<Bytes> {
+    match state {
+        ConnState::NeedBotDisclosure => Some(prompt_bot_disclosure()),
+        ConnState::NeedPublicAck => Some(prompt_public_ack()),
+        ConnState::NeedCocAck => Some(prompt_coc_ack()),
+        ConnState::NeedRace => Some(prompt_race()),
+        _ => None,
     }
 }
 
@@ -2740,6 +2905,13 @@ async fn handle_admin_conn(
                                 oidc_sub: None,
                                 oidc_email: None,
                                 caps,
+                                is_bot: None,
+                                race: None,
+                                class: None,
+                                sex: None,
+                                pronouns: None,
+                                public_ack_version: 0,
+                                coc_ack_version: 0,
                                 email: None,
                                 created_unix: now_unix,
                             },
@@ -3316,6 +3488,9 @@ async fn handle_conn(
     let mut class: Option<String> = None;
     let mut sex: Option<String> = None;
     let mut pronouns: Option<String> = None;
+    let mut public_ack_version = 0u32;
+    let mut coc_ack_version = 0u32;
+    let mut persist_account_profile = true;
     let mut password_echo_disabled = false;
     let mut state = ConnState::NeedName;
     let mut proxy_checked = false;
@@ -3545,6 +3720,7 @@ async fn handle_conn(
                                 break 'read;
                             }
 
+                            let mut account_created = false;
                             let ok = match (action.as_str(), method.as_str()) {
                                 ("create", "password") => {
                                     let pw = req.password.as_deref().unwrap_or("").as_bytes();
@@ -3593,6 +3769,13 @@ async fn handle_conn(
                                                     oidc_sub: None,
                                                     oidc_email: None,
                                                     caps: None,
+                                                    is_bot: None,
+                                                    race: None,
+                                                    class: None,
+                                                    sex: None,
+                                                    pronouns: None,
+                                                    public_ack_version: 0,
+                                                    coc_ack_version: 0,
                                                     email: None,
                                                     created_unix: now_unix,
                                                 },
@@ -3600,6 +3783,7 @@ async fn handle_conn(
                                             a.save()?;
                                         }
 
+                                        account_created = true;
                                         auth_method = Some("password".to_string());
                                         auth_blob = Some(make_shard_auth_blob(
                                             &uname,
@@ -3859,6 +4043,13 @@ async fn handle_conn(
                                                             oidc_sub: None,
                                                             oidc_email: None,
                                                             caps: None,
+                                                            is_bot: None,
+                                                            race: None,
+                                                            class: None,
+                                                            sex: None,
+                                                            pronouns: None,
+                                                            public_ack_version: 0,
+                                                            coc_ack_version: 0,
                                                             email: None,
                                                             created_unix: now_unix,
                                                         },
@@ -3875,6 +4066,7 @@ async fn handle_conn(
                                                     .await;
                                                 false
                                             } else {
+                                                account_created = true;
                                                 google_sub = Some(sub.to_string());
                                                 google_email = email.clone();
                                                 auth_method = Some("google".to_string());
@@ -4081,6 +4273,13 @@ async fn handle_conn(
                                                             oidc_sub: None,
                                                             oidc_email: None,
                                                             caps: None,
+                                                            is_bot: None,
+                                                            race: None,
+                                                            class: None,
+                                                            sex: None,
+                                                            pronouns: None,
+                                                            public_ack_version: 0,
+                                                            coc_ack_version: 0,
                                                             email: None,
                                                             created_unix: now_unix,
                                                         },
@@ -4097,6 +4296,7 @@ async fn handle_conn(
                                                     .await;
                                                 false
                                             } else {
+                                                account_created = true;
                                                 oidc_sub = Some(sub.to_string());
                                                 oidc_email = email.clone();
                                                 auth_method = Some("oidc".to_string());
@@ -4125,15 +4325,41 @@ async fn handle_conn(
                                 }
                             };
 
-                            if ok {
-                                state = ConnState::NeedBotDisclosure;
-                                let _ = write_tx
-                                    .send(Bytes::from_static(
-                                        b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                    ))
-                                    .await;
+                            if !ok {
+                                continue;
                             }
-                            continue;
+                            if account_created {
+                                persist_account_profile = true;
+                                public_ack_version = 0;
+                                coc_ack_version = 0;
+                                state = ConnState::NeedBotDisclosure;
+                            } else if let Some(nm) = name.as_deref() {
+                                let rec = {
+                                    let a = accounts.lock().await;
+                                    a.by_name.get(nm).cloned()
+                                };
+                                if let Some(rec) = rec.as_ref() {
+                                    state = prepare_existing_account_onboarding(
+                                        rec,
+                                        &mut is_bot,
+                                        &mut race,
+                                        &mut class,
+                                        &mut sex,
+                                        &mut pronouns,
+                                        &mut public_ack_version,
+                                        &mut coc_ack_version,
+                                        &mut persist_account_profile,
+                                    );
+                                } else {
+                                    state = ConnState::NeedBotDisclosure;
+                                }
+                            } else {
+                                state = ConnState::NeedBotDisclosure;
+                            }
+                            if let Some(prompt) = prompt_for_onboarding_state(state) {
+                                let _ = write_tx.send(prompt).await;
+                                continue;
+                            }
                         }
                     }
 
@@ -4200,13 +4426,21 @@ async fn handle_conn(
                                         ));
                                         name = Some(n.clone());
                                         pending_auto_webauth = None;
-                                        state = ConnState::NeedBotDisclosure;
-                                        let _ = write_tx
-                                            .send(Bytes::from_static(
-                                                b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                            ))
-                                            .await;
-                                        continue;
+                                        state = prepare_existing_account_onboarding(
+                                            &r,
+                                            &mut is_bot,
+                                            &mut race,
+                                            &mut class,
+                                            &mut sex,
+                                            &mut pronouns,
+                                            &mut public_ack_version,
+                                            &mut coc_ack_version,
+                                            &mut persist_account_profile,
+                                        );
+                                        if let Some(prompt) = prompt_for_onboarding_state(state) {
+                                            let _ = write_tx.send(prompt).await;
+                                            continue;
+                                        }
                                     }
                                     None => {
                                         let now_unix = std::time::SystemTime::now()
@@ -4230,6 +4464,13 @@ async fn handle_conn(
                                                     oidc_sub: None,
                                                     oidc_email: None,
                                                     caps: None,
+                                                    is_bot: None,
+                                                    race: None,
+                                                    class: None,
+                                                    sex: None,
+                                                    pronouns: None,
+                                                    public_ack_version: 0,
+                                                    coc_ack_version: 0,
                                                     email: None,
                                                     created_unix: now_unix,
                                                 },
@@ -4251,11 +4492,7 @@ async fn handle_conn(
                                         name = Some(n.clone());
                                         pending_auto_webauth = None;
                                         state = ConnState::NeedBotDisclosure;
-                                        let _ = write_tx
-                                            .send(Bytes::from_static(
-                                                b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                            ))
-                                            .await;
+                                        let _ = write_tx.send(prompt_bot_disclosure()).await;
                                         continue;
                                     }
                                 }
@@ -4291,13 +4528,21 @@ async fn handle_conn(
                                         ));
                                         name = Some(n.clone());
                                         pending_auto_webauth = None;
-                                        state = ConnState::NeedBotDisclosure;
-                                        let _ = write_tx
-                                            .send(Bytes::from_static(
-                                                b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                            ))
-                                            .await;
-                                        continue;
+                                        state = prepare_existing_account_onboarding(
+                                            &r,
+                                            &mut is_bot,
+                                            &mut race,
+                                            &mut class,
+                                            &mut sex,
+                                            &mut pronouns,
+                                            &mut public_ack_version,
+                                            &mut coc_ack_version,
+                                            &mut persist_account_profile,
+                                        );
+                                        if let Some(prompt) = prompt_for_onboarding_state(state) {
+                                            let _ = write_tx.send(prompt).await;
+                                            continue;
+                                        }
                                     }
                                     None => {
                                         let now_unix = std::time::SystemTime::now()
@@ -4321,6 +4566,13 @@ async fn handle_conn(
                                                     oidc_sub: None,
                                                     oidc_email: None,
                                                     caps: None,
+                                                    is_bot: None,
+                                                    race: None,
+                                                    class: None,
+                                                    sex: None,
+                                                    pronouns: None,
+                                                    public_ack_version: 0,
+                                                    coc_ack_version: 0,
                                                     email: None,
                                                     created_unix: now_unix,
                                                 },
@@ -4342,11 +4594,7 @@ async fn handle_conn(
                                         name = Some(n.clone());
                                         pending_auto_webauth = None;
                                         state = ConnState::NeedBotDisclosure;
-                                        let _ = write_tx
-                                            .send(Bytes::from_static(
-                                                b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                            ))
-                                            .await;
+                                        let _ = write_tx.send(prompt_bot_disclosure()).await;
                                         continue;
                                     }
                                 }
@@ -4452,6 +4700,7 @@ async fn handle_conn(
                                     .duration_since(std::time::UNIX_EPOCH)
                                     .unwrap_or_default()
                                     .as_secs();
+                                let mut account_created = false;
                                 {
                                     let mut a = accounts.lock().await;
                                     if let Some(r) = a.by_name.get(&uname) {
@@ -4479,11 +4728,19 @@ async fn handle_conn(
                                                 oidc_sub: None,
                                                 oidc_email: None,
                                                 caps: None,
+                                                is_bot: None,
+                                                race: None,
+                                                class: None,
+                                                sex: None,
+                                                pronouns: None,
+                                                public_ack_version: 0,
+                                                coc_ack_version: 0,
                                                 email: None,
                                                 created_unix: now_unix,
                                             },
                                         );
                                         a.save()?;
+                                        account_created = true;
                                     }
                                 }
 
@@ -4515,15 +4772,38 @@ async fn handle_conn(
                                     ));
                                 }
 
-                                name = Some(uname);
+                                name = Some(uname.clone());
                                 pending_auto_webauth = None;
-                                state = ConnState::NeedBotDisclosure;
-                                let _ = write_tx
-                                    .send(Bytes::from_static(
-                                        b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                    ))
-                                    .await;
-                                continue;
+                                if account_created {
+                                    persist_account_profile = true;
+                                    public_ack_version = 0;
+                                    coc_ack_version = 0;
+                                    state = ConnState::NeedBotDisclosure;
+                                } else {
+                                    let rec = {
+                                        let a = accounts.lock().await;
+                                        a.by_name.get(&uname).cloned()
+                                    };
+                                    if let Some(rec) = rec.as_ref() {
+                                        state = prepare_existing_account_onboarding(
+                                            rec,
+                                            &mut is_bot,
+                                            &mut race,
+                                            &mut class,
+                                            &mut sex,
+                                            &mut pronouns,
+                                            &mut public_ack_version,
+                                            &mut coc_ack_version,
+                                            &mut persist_account_profile,
+                                        );
+                                    } else {
+                                        state = ConnState::NeedBotDisclosure;
+                                    }
+                                }
+                                if let Some(prompt) = prompt_for_onboarding_state(state) {
+                                    let _ = write_tx.send(prompt).await;
+                                    continue;
+                                }
                             }
                         }
                     }
@@ -4719,6 +4999,7 @@ async fn handle_conn(
                                 req.oidc_email.clone()
                             };
 
+                            let mut account_created = false;
                             {
                                 let mut a = accounts.lock().await;
                                 if let Some(r) = a.by_name.get(&uname) {
@@ -4746,11 +5027,19 @@ async fn handle_conn(
                                             oidc_sub: None,
                                             oidc_email: None,
                                             caps: None,
+                                            is_bot: None,
+                                            race: None,
+                                            class: None,
+                                            sex: None,
+                                            pronouns: None,
+                                            public_ack_version: 0,
+                                            coc_ack_version: 0,
                                             email: None,
                                             created_unix: now_unix,
                                         },
                                     );
                                     a.save()?;
+                                    account_created = true;
                                 }
                             }
 
@@ -4781,7 +5070,7 @@ async fn handle_conn(
                                     req.caps.as_deref(),
                                 ));
                             }
-                            name = Some(uname);
+                            name = Some(uname.clone());
 
                             if let Some(code) = google_oauth_code.take() {
                                 let mut path = PathBuf::from(&cfg.google_oauth_dir);
@@ -4822,13 +5111,36 @@ async fn handle_conn(
                                 }
                             }
                             if !resumed_live {
-                                state = ConnState::NeedBotDisclosure;
-                                let _ = write_tx
-                                    .send(Bytes::from_static(
-                                        b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                    ))
-                                    .await;
-                                continue;
+                                if account_created {
+                                    persist_account_profile = true;
+                                    public_ack_version = 0;
+                                    coc_ack_version = 0;
+                                    state = ConnState::NeedBotDisclosure;
+                                } else {
+                                    let rec = {
+                                        let a = accounts.lock().await;
+                                        a.by_name.get(&uname).cloned()
+                                    };
+                                    if let Some(rec) = rec.as_ref() {
+                                        state = prepare_existing_account_onboarding(
+                                            rec,
+                                            &mut is_bot,
+                                            &mut race,
+                                            &mut class,
+                                            &mut sex,
+                                            &mut pronouns,
+                                            &mut public_ack_version,
+                                            &mut coc_ack_version,
+                                            &mut persist_account_profile,
+                                        );
+                                    } else {
+                                        state = ConnState::NeedBotDisclosure;
+                                    }
+                                }
+                                if let Some(prompt) = prompt_for_onboarding_state(state) {
+                                    let _ = write_tx.send(prompt).await;
+                                    continue;
+                                }
                             }
                         }
                     }
@@ -4933,6 +5245,7 @@ async fn handle_conn(
 
                             // Bind to account name.
                             let uname = name.as_deref().expect("name set").to_string();
+                            let mut account_created = false;
                             {
                                 let mut a = accounts.lock().await;
                                 if let Some(r) = a.by_name.get(&uname) {
@@ -4960,11 +5273,19 @@ async fn handle_conn(
                                             oidc_sub: None,
                                             oidc_email: None,
                                             caps: None,
+                                            is_bot: None,
+                                            race: None,
+                                            class: None,
+                                            sex: None,
+                                            pronouns: None,
+                                            public_ack_version: 0,
+                                            coc_ack_version: 0,
                                             email: None,
                                             created_unix: now_unix,
                                         },
                                     );
                                     a.save()?;
+                                    account_created = true;
                                 }
                             }
 
@@ -4981,13 +5302,36 @@ async fn handle_conn(
                             let _ = std::fs::remove_file(&path);
                             google_oauth_code = None;
 
-                            state = ConnState::NeedBotDisclosure;
-                            let _ = write_tx
-                                .send(Bytes::from_static(
-                                    b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                ))
-                                .await;
-                            continue;
+                            if account_created {
+                                persist_account_profile = true;
+                                public_ack_version = 0;
+                                coc_ack_version = 0;
+                                state = ConnState::NeedBotDisclosure;
+                            } else {
+                                let rec = {
+                                    let a = accounts.lock().await;
+                                    a.by_name.get(&uname).cloned()
+                                };
+                                if let Some(rec) = rec.as_ref() {
+                                    state = prepare_existing_account_onboarding(
+                                        rec,
+                                        &mut is_bot,
+                                        &mut race,
+                                        &mut class,
+                                        &mut sex,
+                                        &mut pronouns,
+                                        &mut public_ack_version,
+                                        &mut coc_ack_version,
+                                        &mut persist_account_profile,
+                                    );
+                                } else {
+                                    state = ConnState::NeedBotDisclosure;
+                                }
+                            }
+                            if let Some(prompt) = prompt_for_onboarding_state(state) {
+                                let _ = write_tx.send(prompt).await;
+                                continue;
+                            }
                         }
                         _ => {
                             let _ = write_tx
@@ -5084,6 +5428,13 @@ async fn handle_conn(
                                 oidc_sub: None,
                                 oidc_email: None,
                                 caps: None,
+                                is_bot: None,
+                                race: None,
+                                class: None,
+                                sex: None,
+                                pronouns: None,
+                                public_ack_version: 0,
+                                coc_ack_version: 0,
                                 email: None,
                                 created_unix: now_unix,
                             },
@@ -5141,12 +5492,11 @@ async fn handle_conn(
                         }
                     }
                     if !resumed_live {
+                        persist_account_profile = true;
+                        public_ack_version = 0;
+                        coc_ack_version = 0;
                         state = ConnState::NeedBotDisclosure;
-                        let _ = write_tx
-                            .send(Bytes::from_static(
-                                b"character creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                            ))
-                            .await;
+                        let _ = write_tx.send(prompt_bot_disclosure()).await;
                         continue;
                     }
                 }
@@ -5178,8 +5528,8 @@ async fn handle_conn(
                         let a = accounts.lock().await;
                         a.by_name.get(uname).cloned()
                     };
-                    let (hash, caps) = match rec {
-                        Some(r) => (r.pw_hash, r.caps),
+                    let (hash, caps) = match rec.as_ref() {
+                        Some(r) => (r.pw_hash.clone(), r.caps.clone()),
                         None => (None, None),
                     };
 
@@ -5289,13 +5639,25 @@ async fn handle_conn(
                         }
                     }
                     if !resumed_live {
-                        state = ConnState::NeedBotDisclosure;
-                        let _ = write_tx
-                            .send(Bytes::from_static(
-                                b"character creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                            ))
-                            .await;
-                        continue;
+                        if let Some(rec) = rec.as_ref() {
+                            state = prepare_existing_account_onboarding(
+                                rec,
+                                &mut is_bot,
+                                &mut race,
+                                &mut class,
+                                &mut sex,
+                                &mut pronouns,
+                                &mut public_ack_version,
+                                &mut coc_ack_version,
+                                &mut persist_account_profile,
+                            );
+                        } else {
+                            state = ConnState::NeedBotDisclosure;
+                        }
+                        if let Some(prompt) = prompt_for_onboarding_state(state) {
+                            let _ = write_tx.send(prompt).await;
+                            continue;
+                        }
                     }
                 }
                 ConnState::NeedBotDisclosure => {
@@ -5335,16 +5697,19 @@ async fn handle_conn(
                             .await;
                         continue;
                     }
-                    state = ConnState::NeedCocAck;
-                    let mut b = Vec::new();
-                    b.extend_from_slice(b"character creation (step 4/4)\r\ncode of conduct:\r\n");
-                    for li in COC_LINE_ITEMS {
-                        b.extend_from_slice(li.as_bytes());
-                        b.extend_from_slice(b"\r\n");
+                    public_ack_version = PUBLIC_ACK_VERSION;
+                    if coc_ack_version < COC_ACK_VERSION {
+                        state = ConnState::NeedCocAck;
+                        let _ = write_tx.send(prompt_coc_ack()).await;
+                        continue;
                     }
-                    b.extend_from_slice(b"type: agree\r\n> ");
-                    let _ = write_tx.send(Bytes::from(b)).await;
-                    continue;
+                    if race.is_some() && class.is_some() && sex.is_some() && pronouns.is_some() {
+                        state = ConnState::NeedSex;
+                    } else {
+                        state = ConnState::NeedRace;
+                        let _ = write_tx.send(prompt_race()).await;
+                        continue;
+                    }
                 }
                 ConnState::NeedCocAck => {
                     let line = String::from_utf8_lossy(&line_bytes).trim().to_string();
@@ -5358,12 +5723,14 @@ async fn handle_conn(
                             .await;
                         continue;
                     }
-                    state = ConnState::NeedRace;
-                    let mut s = String::new();
-                    s.push_str("character creation (step 5/7)\r\nchoose race:\r\n");
-                    s.push_str("type: race list | race <name>\r\n> ");
-                    let _ = write_tx.send(Bytes::from(s)).await;
-                    continue;
+                    coc_ack_version = COC_ACK_VERSION;
+                    if race.is_some() && class.is_some() && sex.is_some() && pronouns.is_some() {
+                        state = ConnState::NeedSex;
+                    } else {
+                        state = ConnState::NeedRace;
+                        let _ = write_tx.send(prompt_race()).await;
+                        continue;
+                    }
                 }
                 ConnState::NeedRace => {
                     let line = String::from_utf8_lossy(&line_bytes)
@@ -5524,6 +5891,35 @@ async fn handle_conn(
                 });
 
                 let held = { holds.lock().await.is_held(&n).is_some() };
+
+                {
+                    let mut a = accounts.lock().await;
+                    if let Some(r) = a.by_name.get_mut(&n) {
+                        let mut changed = false;
+                        if persist_account_profile {
+                            if r.is_bot != Some(bot)
+                                || r.race.as_deref() != Some(race_s.as_str())
+                                || r.class.as_deref() != Some(class_s.as_str())
+                                || r.sex.as_deref() != Some(sex_s.as_str())
+                                || r.pronouns.as_deref() != Some(pro_s.as_str())
+                            {
+                                store_account_onboarding(r, bot, &race_s, &class_s, &sex_s, &pro_s);
+                                changed = true;
+                            }
+                        }
+                        if r.public_ack_version != PUBLIC_ACK_VERSION {
+                            r.public_ack_version = PUBLIC_ACK_VERSION;
+                            changed = true;
+                        }
+                        if r.coc_ack_version != COC_ACK_VERSION {
+                            r.coc_ack_version = COC_ACK_VERSION;
+                            changed = true;
+                        }
+                        if changed {
+                            a.save()?;
+                        }
+                    }
+                }
 
                 {
                     let mut m = sessions.lock().await;
@@ -6123,10 +6519,12 @@ mod tests {
     use std::collections::{BTreeSet, VecDeque};
 
     use super::{
-        LineId, REQ_DETACH, REQ_INPUT, REQ_INPUT_IDEMPOTENT, Scrollback, ShardMsg,
-        ack_inflight_for_response, build_input_idempotent_body, extract_scrollback_lines,
-        normalize_email, parse_sayblob_len, redact_pii, requeue_inflight,
-        shard_msg_expects_response, trim_ascii_ws,
+        AccountRec, COC_ACK_VERSION, ConnState, LineId, PUBLIC_ACK_VERSION, REQ_DETACH, REQ_INPUT,
+        REQ_INPUT_IDEMPOTENT, Scrollback, ShardMsg, ack_inflight_for_response,
+        build_input_idempotent_body, extract_scrollback_lines, normalize_email, parse_sayblob_len,
+        prepare_existing_account_onboarding, redact_pii, requeue_inflight, seed_account_onboarding,
+        shard_msg_expects_response, store_account_onboarding, stored_account_onboarding,
+        trim_ascii_ws,
     };
     use bytes::Bytes;
     use mudproto::session::SessionId;
@@ -6315,6 +6713,109 @@ mod tests {
                 field.field
             );
         }
+    }
+
+    fn bare_test_account(name: &str) -> AccountRec {
+        AccountRec {
+            name: name.to_string(),
+            pw_hash: None,
+            auth_identities: Vec::new(),
+            google_sub: None,
+            google_email: None,
+            oidc_sub: None,
+            oidc_email: None,
+            caps: None,
+            is_bot: None,
+            race: None,
+            class: None,
+            sex: None,
+            pronouns: None,
+            public_ack_version: 0,
+            coc_ack_version: 0,
+            email: None,
+            created_unix: 1,
+        }
+    }
+
+    #[test]
+    fn legacy_account_defaults_skip_current_rules_but_not_profile_persistence() {
+        let rec: AccountRec = serde_json::from_str(r#"{"name":"rob","created_unix":1}"#).unwrap();
+        assert_eq!(rec.public_ack_version, PUBLIC_ACK_VERSION);
+        assert_eq!(rec.coc_ack_version, COC_ACK_VERSION);
+
+        let mut is_bot = None;
+        let mut race = None;
+        let mut class = None;
+        let mut sex = None;
+        let mut pronouns = None;
+        assert!(!seed_account_onboarding(
+            &rec,
+            &mut is_bot,
+            &mut race,
+            &mut class,
+            &mut sex,
+            &mut pronouns
+        ));
+        assert_eq!(is_bot, Some(false));
+        assert_eq!(race.as_deref(), Some("human"));
+        assert_eq!(class.as_deref(), Some("fighter"));
+        assert_eq!(sex.as_deref(), Some("none"));
+        assert_eq!(pronouns.as_deref(), Some("they"));
+    }
+
+    #[test]
+    fn existing_account_onboarding_routes_by_ack_version() {
+        let mut rec = bare_test_account("alice");
+        store_account_onboarding(&mut rec, false, "elf", "wizard", "female", "she");
+        rec.public_ack_version = PUBLIC_ACK_VERSION;
+        rec.coc_ack_version = COC_ACK_VERSION;
+
+        let mut is_bot = None;
+        let mut race = None;
+        let mut class = None;
+        let mut sex = None;
+        let mut pronouns = None;
+        let mut public_ack = 0;
+        let mut coc_ack = 0;
+        let mut persist_profile = true;
+
+        let route = prepare_existing_account_onboarding(
+            &rec,
+            &mut is_bot,
+            &mut race,
+            &mut class,
+            &mut sex,
+            &mut pronouns,
+            &mut public_ack,
+            &mut coc_ack,
+            &mut persist_profile,
+        );
+        assert_eq!(route, ConnState::NeedSex);
+        assert!(persist_profile);
+        assert_eq!(
+            stored_account_onboarding(&rec),
+            Some((
+                false,
+                "elf".to_string(),
+                "wizard".to_string(),
+                "female".to_string(),
+                "she".to_string()
+            ))
+        );
+
+        rec.public_ack_version = PUBLIC_ACK_VERSION.saturating_sub(1);
+        let route = prepare_existing_account_onboarding(
+            &rec,
+            &mut is_bot,
+            &mut race,
+            &mut class,
+            &mut sex,
+            &mut pronouns,
+            &mut public_ack,
+            &mut coc_ack,
+            &mut persist_profile,
+        );
+        assert_eq!(route, ConnState::NeedPublicAck);
     }
 
     #[test]

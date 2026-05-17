@@ -107,6 +107,109 @@ struct RuntimeState {
     leader_id: Option<String>,
     last_leader_seen: Instant,
     last_quorum_at: Option<Instant>,
+    replication_latency: ReplicationLatencyStats,
+}
+
+const REPL_LATENCY_BUCKETS_MS: [u64; 11] = [1, 5, 10, 25, 50, 100, 250, 500, 1_000, 2_000, 5_000];
+
+#[derive(Clone, Debug)]
+struct ReplicationLatencyStats {
+    total: u64,
+    ok: u64,
+    err: u64,
+    sum_ms: u128,
+    min_ms: u64,
+    max_ms: u64,
+    buckets: [u64; REPL_LATENCY_BUCKETS_MS.len() + 1],
+}
+
+impl Default for ReplicationLatencyStats {
+    fn default() -> Self {
+        Self {
+            total: 0,
+            ok: 0,
+            err: 0,
+            sum_ms: 0,
+            min_ms: u64::MAX,
+            max_ms: 0,
+            buckets: [0; REPL_LATENCY_BUCKETS_MS.len() + 1],
+        }
+    }
+}
+
+impl ReplicationLatencyStats {
+    fn record(&mut self, latency: Duration, ok: bool) {
+        let ms = latency.as_millis().min(u128::from(u64::MAX)) as u64;
+        self.total = self.total.saturating_add(1);
+        if ok {
+            self.ok = self.ok.saturating_add(1);
+        } else {
+            self.err = self.err.saturating_add(1);
+        }
+        self.sum_ms = self.sum_ms.saturating_add(u128::from(ms));
+        self.min_ms = self.min_ms.min(ms);
+        self.max_ms = self.max_ms.max(ms);
+        let bucket = REPL_LATENCY_BUCKETS_MS
+            .iter()
+            .position(|upper| ms <= *upper)
+            .unwrap_or(REPL_LATENCY_BUCKETS_MS.len());
+        self.buckets[bucket] = self.buckets[bucket].saturating_add(1);
+    }
+
+    fn percentile_upper_ms(&self, percentile: u64) -> Option<String> {
+        if self.total == 0 {
+            return None;
+        }
+        let target = self.total.saturating_mul(percentile).div_ceil(100).max(1);
+        let mut seen = 0u64;
+        for (i, n) in self.buckets.iter().enumerate() {
+            seen = seen.saturating_add(*n);
+            if seen >= target {
+                if i < REPL_LATENCY_BUCKETS_MS.len() {
+                    return Some(REPL_LATENCY_BUCKETS_MS[i].to_string());
+                }
+                return Some(format!(
+                    ">{}",
+                    REPL_LATENCY_BUCKETS_MS.last().copied().unwrap_or(0)
+                ));
+            }
+        }
+        Some(self.max_ms.to_string())
+    }
+
+    fn status_lines(&self) -> Vec<String> {
+        if self.total == 0 {
+            return vec![" - replication_latency_ms: count=0".to_string()];
+        }
+
+        let avg = self.sum_ms / u128::from(self.total.max(1));
+        let mut lines = Vec::new();
+        lines.push(format!(
+            " - replication_latency_ms: count={} ok={} err={} min={} avg={} p50={} p95={} p99={} max={}",
+            self.total,
+            self.ok,
+            self.err,
+            self.min_ms,
+            avg,
+            self.percentile_upper_ms(50).unwrap_or_else(|| "-".to_string()),
+            self.percentile_upper_ms(95).unwrap_or_else(|| "-".to_string()),
+            self.percentile_upper_ms(99).unwrap_or_else(|| "-".to_string()),
+            self.max_ms,
+        ));
+        let mut parts = Vec::new();
+        for (i, n) in self.buckets.iter().enumerate() {
+            if i < REPL_LATENCY_BUCKETS_MS.len() {
+                parts.push(format!("<={}ms:{}", REPL_LATENCY_BUCKETS_MS[i], n));
+            } else {
+                parts.push(format!(">{}ms:{}", REPL_LATENCY_BUCKETS_MS[i - 1], n));
+            }
+        }
+        lines.push(format!(
+            " - replication_latency_buckets: {}",
+            parts.join(" ")
+        ));
+        lines
+    }
 }
 
 struct Consensus<E> {
@@ -247,6 +350,7 @@ where
                 rt.last_quorum_at.is_some_and(|t| t.elapsed()
                     <= Duration::from_millis(c.cfg.election_timeout_ms.saturating_mul(3).max(1)))
             ));
+            out.extend(rt.replication_latency.status_lines());
         } else {
             out.push(" - mode: single-node".to_string());
         }
@@ -561,6 +665,7 @@ where
                 leader_id: None,
                 last_leader_seen: now,
                 last_quorum_at: None,
+                replication_latency: ReplicationLatencyStats::default(),
             }),
         });
 
@@ -586,6 +691,11 @@ where
             .expect("raft runtime mutex poisoned")
             .role
             == Role::Leader
+    }
+
+    fn record_replication_latency(&self, started: Instant, ok: bool) {
+        let mut rt = self.runtime.lock().expect("raft runtime mutex poisoned");
+        rt.replication_latency.record(started.elapsed(), ok);
     }
 
     fn append(&self, ms: u64, entry: E) -> anyhow::Result<RaftEnvelope<E>> {
@@ -885,11 +995,15 @@ where
                 entries: Vec::new(),
                 leader_commit,
             };
-            match send_rpc(
+            let started = Instant::now();
+            let resp = send_rpc(
                 peer.addr,
                 &req,
                 Duration::from_millis(self.cfg.heartbeat_ms.max(100)),
-            ) {
+            );
+            let latency_ok = matches!(&resp, Ok(RaftRpc::AppendResp { success: true, .. }));
+            self.record_replication_latency(started, latency_ok);
+            match resp {
                 Ok(RaftRpc::AppendResp {
                     term: peer_term,
                     success,
@@ -938,7 +1052,11 @@ where
                 entries: vec![env.clone()],
                 leader_commit,
             };
-            match send_rpc(peer.addr, &req, Duration::from_secs(2)) {
+            let started = Instant::now();
+            let resp = send_rpc(peer.addr, &req, Duration::from_secs(2));
+            let latency_ok = matches!(&resp, Ok(RaftRpc::AppendResp { success: true, .. }));
+            self.record_replication_latency(started, latency_ok);
+            match resp {
                 Ok(RaftRpc::AppendResp {
                     term: peer_term,
                     success,
@@ -982,7 +1100,11 @@ where
             leader_commit,
             entries,
         };
-        match send_rpc(peer.addr, &req, Duration::from_secs(5)) {
+        let started = Instant::now();
+        let resp = send_rpc(peer.addr, &req, Duration::from_secs(5));
+        let latency_ok = matches!(&resp, Ok(RaftRpc::AppendResp { success: true, .. }));
+        self.record_replication_latency(started, latency_ok);
+        match resp {
             Ok(RaftRpc::AppendResp {
                 term: peer_term,
                 success,
@@ -1178,5 +1300,20 @@ mod tests {
 
         let _ = std::fs::remove_file(path);
         let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn replication_latency_status_reports_distribution() {
+        let mut stats = ReplicationLatencyStats::default();
+        stats.record(Duration::from_millis(0), true);
+        stats.record(Duration::from_millis(7), true);
+        stats.record(Duration::from_millis(120), false);
+
+        let lines = stats.status_lines().join("\n");
+        assert!(lines.contains("replication_latency_ms: count=3 ok=2 err=1"));
+        assert!(lines.contains("p50="));
+        assert!(lines.contains("replication_latency_buckets:"));
+        assert!(lines.contains("<=10ms:1"));
+        assert!(lines.contains("<=250ms:1"));
     }
 }
