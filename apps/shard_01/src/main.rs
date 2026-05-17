@@ -6145,6 +6145,11 @@ async fn handle_broker(
                     write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
                     continue;
                 }
+                if lc == "exits" || lc == "exit list" {
+                    let s = world.rooms.render_exits(&p.room_id);
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
                 if lc.starts_with("look ") {
                     let target = line[5..].trim();
                     if let Some(desc) = tavern_object(&p.room_id, target) {
@@ -10655,6 +10660,7 @@ look\r\n\
 look <thing>\r\n\
 look board\r\n\
 look chalk\r\n\
+exits\r\n\
 faction\r\n\
 faction <civic|industrial|green>\r\n\
 turn valve\r\n\

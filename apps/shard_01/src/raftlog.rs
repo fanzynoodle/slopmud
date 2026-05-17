@@ -10,6 +10,8 @@ use std::time::{Duration, Instant};
 
 use serde::de::DeserializeOwned;
 
+const RAFT_BULK_RPC_TIMEOUT: Duration = Duration::from_secs(60);
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RaftEnvelope<E> {
     pub index: u64,
@@ -746,8 +748,8 @@ where
     }
 
     fn handle_stream(&self, stream: TcpStream) -> anyhow::Result<()> {
-        stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-        stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+        stream.set_read_timeout(Some(RAFT_BULK_RPC_TIMEOUT))?;
+        stream.set_write_timeout(Some(RAFT_BULK_RPC_TIMEOUT))?;
         let mut rd = BufReader::new(stream.try_clone()?);
         let mut line = String::new();
         rd.read_line(&mut line)?;
@@ -1101,7 +1103,7 @@ where
             entries,
         };
         let started = Instant::now();
-        let resp = send_rpc(peer.addr, &req, Duration::from_secs(5));
+        let resp = send_rpc(peer.addr, &req, RAFT_BULK_RPC_TIMEOUT);
         let latency_ok = matches!(&resp, Ok(RaftRpc::AppendResp { success: true, .. }));
         self.record_replication_latency(started, latency_ok);
         match resp {
