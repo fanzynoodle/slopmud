@@ -122,6 +122,9 @@ fi
 if [[ -n "${SLOPMUD_BANS_PATH:-}" ]]; then
   echo "Environment=SLOPMUD_BANS_PATH=${SLOPMUD_BANS_PATH}" >>"$tmp_unit"
 fi
+if [[ -n "${SLOPMUD_SBC_ENABLED:-}" ]]; then
+  echo "Environment=SLOPMUD_SBC_ENABLED=${SLOPMUD_SBC_ENABLED}" >>"$tmp_unit"
+fi
 
 # Optional: eventlog archival (spool-to-disk + S3 upload).
 if [[ -n "${SLOPMUD_EVENTLOG_ENABLED:-}" ]]; then
