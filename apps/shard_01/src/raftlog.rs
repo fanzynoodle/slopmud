@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 use serde::de::DeserializeOwned;
 
 const RAFT_BULK_RPC_TIMEOUT: Duration = Duration::from_secs(60);
+const RAFT_CATCHUP_CHUNK_ENTRIES: usize = 256;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RaftEnvelope<E> {
@@ -1296,13 +1297,13 @@ where
                 Ok(RaftRpc::AppendResp {
                     term: peer_term,
                     success,
-                    ..
+                    match_index,
                 }) => {
                     if peer_term > term {
                         self.step_down(peer_term, None);
                         return;
                     }
-                    if success || self.replicate_full_log_to(peer, term) {
+                    if success || self.replicate_suffix_to(peer, term, match_index) {
                         acks += 1;
                     }
                 }
@@ -1349,13 +1350,13 @@ where
                 Ok(RaftRpc::AppendResp {
                     term: peer_term,
                     success,
-                    ..
+                    match_index,
                 }) => {
                     if peer_term > term {
                         self.step_down(peer_term, None);
                         return false;
                     }
-                    if success || self.replicate_full_log_to(peer, term) {
+                    if success || self.replicate_suffix_to(peer, term, match_index) {
                         acks += 1;
                     }
                 }
@@ -1373,19 +1374,43 @@ where
         ok
     }
 
-    fn replicate_full_log_to(&self, peer: &ConsensusPeer, term: u64) -> bool {
-        let (entries, leader_commit) = {
+    fn replicate_suffix_to(&self, peer: &ConsensusPeer, term: u64, match_index: u64) -> bool {
+        let (prev_log_index, prev_log_term, entries, leader_commit, leader_last_index) = {
             let inner = self.inner.lock().expect("raft log mutex poisoned");
-            (inner.all_entries(), inner.commit_index)
+            let leader_last_index = inner.last_index();
+            let prev_log_index = if match_index < leader_last_index {
+                match_index
+            } else {
+                0
+            };
+            let prev_log_term = inner.term_at(prev_log_index).unwrap_or(0);
+            let entries = inner
+                .entries
+                .iter()
+                .filter(|env| env.index > prev_log_index)
+                .take(RAFT_CATCHUP_CHUNK_ENTRIES)
+                .cloned()
+                .collect::<Vec<_>>();
+            (
+                prev_log_index,
+                prev_log_term,
+                entries,
+                inner.commit_index,
+                leader_last_index,
+            )
         };
         if entries.is_empty() {
             return true;
         }
+        let last_sent_index = entries
+            .last()
+            .map(|env| env.index)
+            .unwrap_or(prev_log_index);
         let req = RaftRpc::<E>::AppendEntries {
             term,
             leader_id: self.cfg.node_id.clone(),
-            prev_log_index: 0,
-            prev_log_term: 0,
+            prev_log_index,
+            prev_log_term,
             leader_commit,
             entries,
         };
@@ -1403,7 +1428,7 @@ where
                     self.step_down(peer_term, None);
                     return false;
                 }
-                success
+                success && last_sent_index >= leader_last_index
             }
             _ => false,
         }
