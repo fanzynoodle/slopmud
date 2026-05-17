@@ -58,6 +58,25 @@ just hot-deploy-slopmud prd
 This relies on `scripts/cicd/slopmud-shuttle-assets`, which installs the new broker binary and restarts the
 systemd unit without overwriting an existing unit file by default.
 
+## Low-Cost Single-AZ Raft Topology
+
+The economical split-prod shape lives in `infra/terraform/single-az-raft-us-east-1`:
+
+- one tiny on-demand public gateway for telnet, web, websocket, and the broker
+- three tiny private Spot shard/Raft nodes in the same subnet/AZ
+- no public IPv4 on Raft nodes
+- broker-to-shard and Raft replication traffic stays on private VPC addresses
+
+After applying Terraform, combine `terraform output recommended_env` with the usual secret/env values and deploy the private Raft nodes through the gateway:
+
+```bash
+just deploy-split-raft-trio prd-split
+just deploy-slopmud prd-split
+just deploy-web-sso prd-split-oauth
+```
+
+The current one-box host can remain the build/deploy runner. The split deploy script reaches private Raft nodes through SSH ProxyJump via the gateway, so the Raft nodes do not need public IPs or a NAT gateway.
+
 ## How to verify a `dev` push reaches mud.slopmud.com
 
 For this repo, a push to `dev` should trigger `.github/workflows/enterprise-cicd.yml` and run:
