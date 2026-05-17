@@ -82,6 +82,9 @@ EOF
 
 # Broker -> shard wiring.
 # Prefer explicit SHARD_ADDR, otherwise fall back to SHARD_BIND if present in the env file.
+if [[ -n "${SHARD_ADDRS:-}" ]]; then
+  echo "Environment=SHARD_ADDRS=${SHARD_ADDRS}" >>"$tmp_unit"
+fi
 if [[ -n "${SHARD_ADDR:-}" ]]; then
   echo "Environment=SHARD_ADDR=${SHARD_ADDR}" >>"$tmp_unit"
 elif [[ -n "${SHARD_BIND:-}" ]]; then

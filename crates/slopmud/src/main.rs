@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::{IpAddr, SocketAddr};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -12,23 +12,28 @@ use compliance::LogStream;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use memchr::memchr;
 use mudproto::session::SessionId;
-use mudproto::shard::{REQ_ATTACH, REQ_DETACH, REQ_INPUT, ShardResp};
+use mudproto::shard::{
+    REQ_ATTACH, REQ_DETACH, REQ_INPUT, REQ_INPUT_BLOB, REQ_INPUT_IDEMPOTENT, ShardResp,
+    build_input_idempotent_body,
+};
 use password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use serde::{Deserialize, Serialize};
 use slopio::frame::{FrameReader, FrameWriter};
 use slopio::telnet::IacParser;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use slopio::writev::write_all_bytes_vectored;
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream, UnixStream};
 use tracing::{Level, info, warn};
 use zeroize::Zeroize;
 
-use crate::commands::{handle_whoami_command, handle_who_command};
+use crate::commands::{handle_who_command, handle_whoami_command};
 
 mod ban;
 mod commands;
 mod email;
 mod eventlog;
 mod hold;
+mod kzc;
 mod nearline;
 
 const LOGIN_BACKOFF_BASE: Duration = Duration::from_secs(1);
@@ -51,6 +56,8 @@ const REPORT_LAST_MAX: usize = 200;
 const REPORT_SEARCH_LIMIT: usize = 20;
 const REPORT_CONTEXT_LINES: usize = 3;
 const REPORT_NOTE_MAX_CHARS: usize = 500;
+const BLOB_STREAM_CHUNK_BYTES: usize = 1024 * 1024;
+const MAX_DECLARED_BLOB_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 
 const REPORT_REASONS: &[(&str, &str)] = &[
     ("bullying", "Bullying / harassment"),
@@ -182,6 +189,7 @@ struct ServerInfo {
     started_instant: std::time::Instant,
     started_unix: u64,
     shard_addr: SocketAddr,
+    shard_addrs: Vec<SocketAddr>,
     bind: SocketAddr,
 }
 
@@ -254,15 +262,38 @@ fn usage_and_exit() -> ! {
     eprintln!(
         "slopmud (session broker)\n\n\
 USAGE:\n  slopmud [--bind HOST:PORT] [--shard-addr HOST:PORT]\n\n\
-ENV:\n  SLOPMUD_BIND               default 0.0.0.0:4000\n  SHARD_ADDR                 default 127.0.0.1:5000\n  NODE_ID                    optional (for logs only)\n  SLOPMUD_ACCOUNTS_PATH       optional; default accounts.json (in WorkingDirectory)\n  SLOPMUD_LOCALE              optional; default en\n  SLOPMUD_ADMIN_BIND          optional; default 127.0.0.1:4011 (local admin JSON)\n  SLOPMUD_BANS_PATH           optional; default locks/bans.json\n  SBC_ADMIN_SOCK              optional; default /run/slopmud/sbc-admin.sock\n  SBC_EVENTS_SOCK             optional; default /run/slopmud/sbc-events.sock\n  SLOPMUD_EMAIL_MODE          optional; default disabled (disabled | ses | smtp | file)\n  SLOPMUD_EMAIL_FROM          required for ses/smtp; optional for file\n  SLOPMUD_SMTP_HOST           required for smtp\n  SLOPMUD_SMTP_PORT           optional; default 587\n  SLOPMUD_SMTP_USERNAME       optional\n  SLOPMUD_SMTP_PASSWORD       optional\n  SLOPMUD_EMAIL_FILE_DIR      optional; default /tmp/slopmud_email_outbox\n  SLOPMUD_EVENTLOG_ENABLED    optional; default 0\n  SLOPMUD_EVENTLOG_SPOOL_DIR  optional; default locks/eventlog\n  SLOPMUD_EVENTLOG_FLUSH_INTERVAL_S optional; default 60\n  SLOPMUD_EVENTLOG_S3_BUCKET  optional; if set, uploads target this bucket\n  SLOPMUD_EVENTLOG_S3_PREFIX  optional; default slopmud/eventlog\n  SLOPMUD_EVENTLOG_UPLOAD_ENABLED optional; default 0\n  SLOPMUD_EVENTLOG_UPLOAD_DELETE_LOCAL optional; default 1\n  SLOPMUD_EVENTLOG_UPLOAD_SCAN_INTERVAL_S optional; default 600\n  SLOPMUD_NEARLINE_ENABLED    optional; default 1\n  SLOPMUD_NEARLINE_DIR        optional; default locks/nearline_scrollback\n  SLOPMUD_NEARLINE_MAX_SEGMENTS optional; default 12\n  SLOPMUD_NEARLINE_SEGMENT_MAX_BYTES optional; default 2000000\n  SLOPMUD_GOOGLE_OAUTH_DIR    optional; default locks/google_oauth (shared with static_web)\n  SLOPMUD_GOOGLE_AUTH_BASE_URL optional; default http://127.0.0.1:8080 (where to open OAuth in browser)\n  SLOPMUD_OIDC_TOKEN_URL      optional; if set, mint a session token at login\n  SLOPMUD_OIDC_CLIENT_ID      required if token url set\n  SLOPMUD_OIDC_CLIENT_SECRET  required if token url set\n  SLOPMUD_OIDC_SCOPE          optional; default slopmud:session\n  SLOPMUD_WEBAUTH_JWT_SECRET optional; if set, WEB_AUTH must include valid HS256 JWT proof from slopmud_web\n"
+ENV:\n  SLOPMUD_BIND               default 0.0.0.0:4000\n  SHARD_ADDR                 default 127.0.0.1:5000\n  SHARD_ADDRS                optional comma-separated shard failover list\n  NODE_ID                    optional (for logs only)\n  SLOPMUD_ACCOUNTS_PATH       optional; default accounts.json (in WorkingDirectory)\n  SLOPMUD_LOCALE              optional; default en\n  SLOPMUD_ADMIN_BIND          optional; default 127.0.0.1:4011 (local admin JSON)\n  SLOPMUD_BANS_PATH           optional; default locks/bans.json\n  SBC_ADMIN_SOCK              optional; default /run/slopmud/sbc-admin.sock\n  SBC_EVENTS_SOCK             optional; default /run/slopmud/sbc-events.sock\n  SLOPMUD_EMAIL_MODE          optional; default disabled (disabled | ses | smtp | file)\n  SLOPMUD_EMAIL_FROM          required for ses/smtp; optional for file\n  SLOPMUD_SMTP_HOST           required for smtp\n  SLOPMUD_SMTP_PORT           optional; default 587\n  SLOPMUD_SMTP_USERNAME       optional\n  SLOPMUD_SMTP_PASSWORD       optional\n  SLOPMUD_EMAIL_FILE_DIR      optional; default /tmp/slopmud_email_outbox\n  SLOPMUD_EVENTLOG_ENABLED    optional; default 0\n  SLOPMUD_EVENTLOG_SPOOL_DIR  optional; default locks/eventlog\n  SLOPMUD_EVENTLOG_FLUSH_INTERVAL_S optional; default 60\n  SLOPMUD_EVENTLOG_S3_BUCKET  optional; if set, uploads target this bucket\n  SLOPMUD_EVENTLOG_S3_PREFIX  optional; default slopmud/eventlog\n  SLOPMUD_EVENTLOG_UPLOAD_ENABLED optional; default 0\n  SLOPMUD_EVENTLOG_UPLOAD_DELETE_LOCAL optional; default 1\n  SLOPMUD_EVENTLOG_UPLOAD_SCAN_INTERVAL_S optional; default 600\n  SLOPMUD_NEARLINE_ENABLED    optional; default 1\n  SLOPMUD_NEARLINE_DIR        optional; default locks/nearline_scrollback\n  SLOPMUD_NEARLINE_MAX_SEGMENTS optional; default 12\n  SLOPMUD_NEARLINE_SEGMENT_MAX_BYTES optional; default 2000000\n  SLOPMUD_GOOGLE_OAUTH_DIR    optional; default locks/google_oauth (shared with static_web)\n  SLOPMUD_GOOGLE_AUTH_BASE_URL optional; default http://127.0.0.1:8080 (where to open OAuth in browser)\n  SLOPMUD_OIDC_TOKEN_URL      optional; if set, mint a session token at login\n  SLOPMUD_OIDC_CLIENT_ID      required if token url set\n  SLOPMUD_OIDC_CLIENT_SECRET  required if token url set\n  SLOPMUD_OIDC_SCOPE          optional; default slopmud:session\n  SLOPMUD_WEBAUTH_JWT_SECRET optional; if set, WEB_AUTH must include valid HS256 JWT proof from slopmud_web\n"
     );
     std::process::exit(2);
+}
+
+fn parse_shard_addrs_env(primary: SocketAddr) -> Vec<SocketAddr> {
+    let Some(raw) = std::env::var("SHARD_ADDRS")
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+    else {
+        return vec![primary];
+    };
+    let mut out = Vec::new();
+    for part in raw.split(',') {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        let addr: SocketAddr = part.parse().unwrap_or_else(|_| usage_and_exit());
+        if !out.contains(&addr) {
+            out.push(addr);
+        }
+    }
+    if out.is_empty() { vec![primary] } else { out }
 }
 
 #[derive(Clone, Debug)]
 struct Config {
     bind: SocketAddr,
     shard_addr: SocketAddr,
+    shard_addrs: Vec<SocketAddr>,
     node_id: Option<String>,
     // Accounts DB (stores only password hashes, never raw passwords).
     accounts_path: String,
@@ -291,6 +322,7 @@ struct Config {
     email: email::EmailConfig,
     eventlog: eventlog::EventLogConfig,
     nearline: nearline::NearlineConfig,
+    blob_spool_dir: PathBuf,
 }
 
 fn parse_args() -> Config {
@@ -303,6 +335,7 @@ fn parse_args() -> Config {
         .unwrap_or_else(|_| "127.0.0.1:5000".to_string())
         .parse()
         .unwrap_or_else(|_| usage_and_exit());
+    let mut shard_addrs = parse_shard_addrs_env(shard_addr);
 
     let node_id = std::env::var("NODE_ID").ok();
     let accounts_path =
@@ -402,6 +435,9 @@ fn parse_args() -> Config {
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(nearline.segment_max_bytes);
+    let blob_spool_dir: PathBuf = std::env::var("SLOPMUD_BLOB_SPOOL_DIR")
+        .unwrap_or_else(|_| "locks/blob_spool".to_string())
+        .into();
 
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
@@ -413,6 +449,7 @@ fn parse_args() -> Config {
             "--shard-addr" => {
                 let v = it.next().unwrap_or_else(|| usage_and_exit());
                 shard_addr = v.parse().unwrap_or_else(|_| usage_and_exit());
+                shard_addrs = vec![shard_addr];
             }
             "-h" | "--help" => usage_and_exit(),
             _ => usage_and_exit(),
@@ -422,6 +459,7 @@ fn parse_args() -> Config {
     Config {
         bind,
         shard_addr,
+        shard_addrs,
         node_id,
         accounts_path,
         google_oauth_dir,
@@ -439,6 +477,7 @@ fn parse_args() -> Config {
         email,
         eventlog,
         nearline,
+        blob_spool_dir,
     }
 }
 
@@ -1590,9 +1629,49 @@ struct SessionInfo {
     sex: String,
     pronouns: String,
     peer_ip: IpAddr,
-    write_tx: tokio::sync::mpsc::Sender<Bytes>,
+    write_tx: ClientWriteTx,
     disconnect_tx: tokio::sync::watch::Sender<bool>,
     scrollback: Arc<tokio::sync::Mutex<Scrollback>>,
+    next_cmd_id: u64,
+}
+
+#[derive(Debug)]
+enum ClientWrite {
+    Bytes(Bytes),
+    Blob {
+        prefix: Bytes,
+        path: PathBuf,
+        len: u64,
+        suffix: Bytes,
+    },
+}
+
+#[derive(Debug, Clone)]
+struct ClientWriteTx(tokio::sync::mpsc::Sender<ClientWrite>);
+
+impl ClientWriteTx {
+    async fn send(&self, bytes: Bytes) -> Result<(), ()> {
+        self.0.send(ClientWrite::Bytes(bytes)).await.map_err(|_| ())
+    }
+
+    async fn send_blob(
+        &self,
+        prefix: Bytes,
+        path: Bytes,
+        len: u64,
+        suffix: Bytes,
+    ) -> Result<(), ()> {
+        let path = PathBuf::from(String::from_utf8_lossy(path.as_ref()).into_owned());
+        self.0
+            .send(ClientWrite::Blob {
+                prefix,
+                path,
+                len,
+                suffix,
+            })
+            .await
+            .map_err(|_| ())
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1935,9 +2014,9 @@ impl Accounts {
 
     fn identity_linked_to_other_account(&self, method: &str, sub: &str, name: &str) -> bool {
         let name = name.trim().to_ascii_lowercase();
-        self.by_name.values().any(|r| {
-            r.name.trim().to_ascii_lowercase() != name && r.has_auth_identity(method, sub)
-        })
+        self.by_name
+            .values()
+            .any(|r| r.name.trim().to_ascii_lowercase() != name && r.has_auth_identity(method, sub))
     }
 }
 
@@ -1968,6 +2047,7 @@ async fn main() -> anyhow::Result<()> {
             .unwrap_or_default()
             .as_secs(),
         shard_addr: cfg.shard_addr,
+        shard_addrs: cfg.shard_addrs.clone(),
         bind: cfg.bind,
     });
 
@@ -1991,7 +2071,7 @@ async fn main() -> anyhow::Result<()> {
 
     let (shard_tx, shard_rx) = tokio::sync::mpsc::channel::<ShardMsg>(4096);
     tokio::spawn(shard_manager_task(
-        cfg.shard_addr,
+        cfg.shard_addrs.clone(),
         sessions.clone(),
         line_ids.clone(),
         nearline.clone(),
@@ -2015,6 +2095,7 @@ async fn main() -> anyhow::Result<()> {
     info!(
         bind = %cfg.bind,
         shard_addr = %cfg.shard_addr,
+        shard_addrs = ?cfg.shard_addrs,
         node_id = %cfg.node_id.as_deref().unwrap_or("-"),
         admin_bind = %cfg.admin_bind,
         bans_path = %cfg.bans_path.display(),
@@ -2059,19 +2140,26 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn shard_manager_task(
-    shard_addr: SocketAddr,
+    shard_addrs: Vec<SocketAddr>,
     sessions: Arc<tokio::sync::Mutex<HashMap<SessionId, SessionInfo>>>,
     line_ids: Arc<tokio::sync::Mutex<LineIdGen>>,
     nearline: Arc<nearline::NearlineRing>,
     eventlog: Arc<eventlog::EventLog>,
     mut rx: tokio::sync::mpsc::Receiver<ShardMsg>,
 ) {
-    let mut announced_down = false;
+    if shard_addrs.is_empty() {
+        warn!("no shard addresses configured");
+        return;
+    }
+
+    let mut addr_i = 0usize;
+    let mut pending: VecDeque<ShardMsg> = VecDeque::new();
+    let mut inflight: VecDeque<ShardMsg> = VecDeque::new();
 
     loop {
+        let shard_addr = shard_addrs[addr_i % shard_addrs.len()];
         match TcpStream::connect(shard_addr).await {
             Ok(stream) => {
-                announced_down = false;
                 info!(shard_addr = %shard_addr, "connected to shard");
 
                 let (rd, wr) = stream.into_split();
@@ -2096,9 +2184,11 @@ async fn shard_manager_task(
                         })
                         .collect::<Vec<_>>()
                 };
+                let mut reattach_failed = false;
                 for (sid, is_bot, auth, race, class, sex, pronouns, name) in snapshot {
                     let body = attach_body(
                         is_bot,
+                        true,
                         auth.as_deref(),
                         &race,
                         &class,
@@ -2106,18 +2196,51 @@ async fn shard_manager_task(
                         &pronouns,
                         name.as_bytes(),
                     );
-                    let _ = write_req(&mut fw, REQ_ATTACH, sid, &body).await;
+                    if let Err(err) = write_req(&mut fw, REQ_ATTACH, sid, &body).await {
+                        warn!(shard_addr = %shard_addr, err=%err, "reattach to shard failed");
+                        reattach_failed = true;
+                        break;
+                    }
                 }
-                let _ = fw.flush().await;
+                if !reattach_failed {
+                    if let Err(err) = fw.flush().await {
+                        warn!(shard_addr = %shard_addr, err=%err, "reattach flush to shard failed");
+                        reattach_failed = true;
+                    }
+                }
+                if reattach_failed {
+                    addr_i = addr_i.wrapping_add(1);
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    continue;
+                }
 
                 // Connection loop.
                 loop {
+                    if let Some(msg) = pending.pop_front() {
+                        if let Err(err) = write_req(&mut fw, msg.t, msg.session, &msg.body).await {
+                            warn!(shard_addr = %shard_addr, err=%err, "pending shard request write failed");
+                            pending.push_front(msg);
+                            break;
+                        }
+                        if shard_msg_expects_response(&msg) {
+                            inflight.push_back(msg);
+                        }
+                        continue;
+                    }
+
                     tokio::select! {
                         msg = rx.recv() => {
                             let Some(msg) = msg else {
                                 return;
                             };
-                            let _ = write_req(&mut fw, msg.t, msg.session, &msg.body).await;
+                            if let Err(err) = write_req(&mut fw, msg.t, msg.session, &msg.body).await {
+                                warn!(shard_addr = %shard_addr, err=%err, "shard request write failed");
+                                pending.push_front(msg);
+                                break;
+                            }
+                            if shard_msg_expects_response(&msg) {
+                                inflight.push_back(msg);
+                            }
                         }
                         res = fr.read_frame() => {
                             let frame = match res {
@@ -2127,6 +2250,7 @@ async fn shard_manager_task(
                             };
                             match mudproto::shard::parse_resp(frame) {
                                 Ok(resp) => {
+                                    ack_inflight_for_response(&mut inflight, &resp);
                                     route_resp(resp, &sessions, &line_ids, &nearline, &eventlog)
                                         .await
                                 }
@@ -2139,31 +2263,38 @@ async fn shard_manager_task(
                 }
 
                 // Shard connection dropped.
-                warn!(shard_addr = %shard_addr, "shard disconnected; reconnecting");
-                notify_all(&sessions, b"# shard disconnected; reconnecting...\r\n").await;
+                requeue_inflight(&mut pending, &mut inflight);
+                warn!(shard_addr = %shard_addr, "shard disconnected; failing over");
+                addr_i = addr_i.wrapping_add(1);
+                tokio::time::sleep(Duration::from_millis(100)).await;
             }
             Err(e) => {
-                if !announced_down {
-                    announced_down = true;
-                    warn!(shard_addr = %shard_addr, err=%e, "shard offline; retrying");
-                    notify_all(&sessions, b"# shard offline; retrying...\r\n").await;
-                }
-
-                // Don't let the outbound queue grow unbounded while offline.
-                while let Ok(msg) = rx.try_recv() {
-                    if msg.t == REQ_INPUT {
-                        notify_one(
-                            &sessions,
-                            msg.session,
-                            b"# shard offline; input dropped\r\n",
-                        )
-                        .await;
-                    }
-                }
-
-                tokio::time::sleep(Duration::from_millis(500)).await;
+                warn!(shard_addr = %shard_addr, err=%e, "shard offline; trying next shard");
+                addr_i = addr_i.wrapping_add(1);
+                tokio::time::sleep(Duration::from_millis(250)).await;
             }
         }
+    }
+}
+
+fn shard_msg_expects_response(msg: &ShardMsg) -> bool {
+    msg.t != REQ_DETACH
+}
+
+fn ack_inflight_for_response(inflight: &mut VecDeque<ShardMsg>, resp: &ShardResp) {
+    let session = match resp {
+        ShardResp::Output { session, .. }
+        | ShardResp::Err { session, .. }
+        | ShardResp::OutputBlob { session, .. } => *session,
+    };
+    if let Some(i) = inflight.iter().position(|msg| msg.session == session) {
+        inflight.remove(i);
+    }
+}
+
+fn requeue_inflight(pending: &mut VecDeque<ShardMsg>, inflight: &mut VecDeque<ShardMsg>) {
+    while let Some(msg) = inflight.pop_back() {
+        pending.push_front(msg);
     }
 }
 
@@ -2290,6 +2421,62 @@ async fn route_resp(
                 }
 
                 let _ = si.write_tx.send(msg).await;
+            }
+        }
+        ShardResp::OutputBlob {
+            session,
+            prefix,
+            path,
+            len,
+            suffix,
+        } => {
+            let si = { sessions.lock().await.get(&session).cloned() };
+            if let Some(si) = si {
+                let now = Utc::now();
+                let now_ms = u64::try_from(now.timestamp_millis()).unwrap_or(0);
+                let sid_hex = session_hex(session);
+                let name = si.name.clone();
+                let ip = si.peer_ip.to_string();
+                let path_text = String::from_utf8_lossy(path.as_ref()).to_string();
+                let text = format!("# blob output: {len} bytes from {path_text}");
+
+                {
+                    let mut id_gen = line_ids.lock().await;
+                    let mut sb = si.scrollback.lock().await;
+                    let id = id_gen.next_id(now_ms);
+                    sb.push_line(id, now_ms, clamp_chars(&text, SCROLLBACK_MAX_LINE_CHARS));
+
+                    nearline.try_append(nearline::NearlineRecord {
+                        v: 1,
+                        id: id.to_string(),
+                        ts_unix_ms: now_ms,
+                        kind: "output_blob".to_string(),
+                        session: sid_hex.clone(),
+                        name: name.clone(),
+                        ip: ip.clone(),
+                        text: if si.held {
+                            redact_pii(&text)
+                        } else {
+                            text.clone()
+                        },
+                    });
+
+                    let ts = now.to_rfc3339();
+                    let entry = format!(
+                        "ts={} kind=output_blob session={} ip={} name={} line_id={} bytes={} path={}",
+                        logfmt_str(&ts),
+                        logfmt_str(&sid_hex),
+                        logfmt_str(&ip),
+                        logfmt_str(&name),
+                        logfmt_str(&id.to_string()),
+                        logfmt_str(&len.to_string()),
+                        logfmt_str(if si.held { "[redacted]" } else { &path_text }),
+                    );
+                    eventlog.log_line(LogStream::All, &entry).await;
+                    eventlog.log_line(LogStream::Character(&name), &entry).await;
+                }
+
+                let _ = si.write_tx.send_blob(prefix, path, len, suffix).await;
             }
         }
     }
@@ -2745,31 +2932,129 @@ async fn kick_by_ip(
     targets.len() as u64
 }
 
-async fn notify_all(
-    sessions: &Arc<tokio::sync::Mutex<HashMap<SessionId, SessionInfo>>>,
-    msg: &'static [u8],
+async fn client_writer_loop(
+    mut wr: tokio::net::tcp::OwnedWriteHalf,
+    mut rx: tokio::sync::mpsc::Receiver<ClientWrite>,
 ) {
-    let txs = {
-        let m = sessions.lock().await;
-        m.values().map(|s| s.write_tx.clone()).collect::<Vec<_>>()
-    };
-    for tx in txs {
-        let _ = tx.send(Bytes::from_static(msg)).await;
+    while let Some(item) = rx.recv().await {
+        let res = match item {
+            ClientWrite::Bytes(bytes) => write_all_bytes_vectored(&mut wr, &[bytes]).await,
+            ClientWrite::Blob {
+                prefix,
+                path,
+                len,
+                suffix,
+            } => write_blob_to_client(&mut wr, prefix, &path, len, suffix).await,
+        };
+        if res.is_err() {
+            break;
+        }
     }
 }
 
-async fn notify_one(
-    sessions: &Arc<tokio::sync::Mutex<HashMap<SessionId, SessionInfo>>>,
-    session: SessionId,
-    msg: &'static [u8],
-) {
-    let tx = {
-        let m = sessions.lock().await;
-        m.get(&session).map(|s| s.write_tx.clone())
-    };
-    if let Some(tx) = tx {
-        let _ = tx.send(Bytes::from_static(msg)).await;
+async fn write_blob_to_client(
+    wr: &mut tokio::net::tcp::OwnedWriteHalf,
+    prefix: Bytes,
+    path: &Path,
+    len: u64,
+    suffix: Bytes,
+) -> std::io::Result<()> {
+    let mut parts = Vec::with_capacity(2);
+    if !prefix.is_empty() {
+        parts.push(prefix);
     }
+    if !parts.is_empty() {
+        write_all_bytes_vectored(wr, &parts).await?;
+    }
+
+    let sent = kzc::send_file_to_writer(wr, path, len).await?;
+    if sent < len {
+        warn!(
+            path = %path.display(),
+            expected = len,
+            sent,
+            "blob output ended before advertised byte length"
+        );
+    }
+
+    if !suffix.is_empty() {
+        write_all_bytes_vectored(wr, &[suffix]).await?;
+    }
+    Ok(())
+}
+
+fn parse_sayblob_len(line: &str) -> Option<Result<u64, &'static str>> {
+    let mut words = line.split_ascii_whitespace();
+    match words.next()? {
+        "sayblob" | "say-blob" => {}
+        _ => return None,
+    }
+    let Some(raw_len) = words.next() else {
+        return Some(Err("usage: sayblob <byte-count>"));
+    };
+    if words.next().is_some() {
+        return Some(Err("usage: sayblob <byte-count>"));
+    }
+    let Ok(len) = raw_len.parse::<u64>() else {
+        return Some(Err("sayblob: bad byte count"));
+    };
+    if len == 0 || len > MAX_DECLARED_BLOB_BYTES {
+        return Some(Err("sayblob: byte count out of range"));
+    }
+    Some(Ok(len))
+}
+
+async fn spool_blob_payload<R>(
+    rd: &mut R,
+    iac: &mut IacParser,
+    linebuf: &mut Vec<u8>,
+    spool_dir: &Path,
+    session: SessionId,
+    len: u64,
+) -> std::io::Result<PathBuf>
+where
+    R: AsyncRead + Unpin,
+{
+    tokio::fs::create_dir_all(spool_dir).await?;
+    let path = spool_dir.join(format!(
+        "{}-{}.blob",
+        session_hex(session),
+        Utc::now().timestamp_nanos_opt().unwrap_or_default()
+    ));
+    let mut file = tokio::fs::File::create(&path).await?;
+    let mut remaining = len;
+
+    if !linebuf.is_empty() {
+        let take = remaining.min(linebuf.len() as u64) as usize;
+        file.write_all(&linebuf[..take]).await?;
+        linebuf.drain(0..take);
+        remaining = remaining.saturating_sub(take as u64);
+    }
+
+    let mut buf = vec![0u8; BLOB_STREAM_CHUNK_BYTES];
+    while remaining > 0 {
+        let read_cap = remaining.min(buf.len() as u64) as usize;
+        let n = rd.read(&mut buf[..read_cap]).await?;
+        if n == 0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                "client disconnected during blob payload",
+            ));
+        }
+        let (data, _replies) = iac.parse_cow(&buf[..n]);
+        if data.is_empty() {
+            continue;
+        }
+        let bytes = data.as_ref();
+        let take = remaining.min(bytes.len() as u64) as usize;
+        file.write_all(&bytes[..take]).await?;
+        remaining = remaining.saturating_sub(take as u64);
+        if take < bytes.len() {
+            linebuf.extend_from_slice(&bytes[take..]);
+        }
+    }
+    file.flush().await?;
+    Ok(path)
 }
 
 async fn write_req(
@@ -2786,6 +3071,7 @@ async fn write_req(
 
 fn attach_body(
     is_bot: bool,
+    quiet: bool,
     auth: Option<&[u8]>,
     race: &str,
     class: &str,
@@ -2809,6 +3095,9 @@ fn attach_body(
     let mut flags = 0u8;
     if is_bot {
         flags |= 0x01;
+    }
+    if quiet {
+        flags |= 0x08;
     }
     if auth.is_some() {
         flags |= 0x02;
@@ -2975,18 +3264,13 @@ async fn handle_conn(
     let mut peer_ip = peer.ip();
     let mut peer_port = peer.port();
     let trusted_proxy_peer = peer_ip.is_loopback();
-    let (mut rd, mut wr) = stream.into_split();
+    let (mut rd, wr) = stream.into_split();
 
     let (disconnect_tx, mut disconnect_rx) = tokio::sync::watch::channel(false);
 
-    let (write_tx, mut write_rx) = tokio::sync::mpsc::channel::<Bytes>(128);
-    let writer = tokio::spawn(async move {
-        while let Some(b) = write_rx.recv().await {
-            if wr.write_all(&b[..]).await.is_err() {
-                break;
-            }
-        }
-    });
+    let (raw_write_tx, write_rx) = tokio::sync::mpsc::channel::<ClientWrite>(128);
+    let write_tx = ClientWriteTx(raw_write_tx);
+    let writer = tokio::spawn(client_writer_loop(wr, write_rx));
 
     // Log connect early (prior to optional proxy protocol rewriting).
     {
@@ -3411,7 +3695,8 @@ async fn handle_conn(
                                         };
 
                                         if action == "link" {
-                                            let pw = req.password.as_deref().unwrap_or("").as_bytes();
+                                            let pw =
+                                                req.password.as_deref().unwrap_or("").as_bytes();
                                             if pw.is_empty() {
                                                 let _ = write_tx
                                                     .send(Bytes::from_static(
@@ -3422,9 +3707,7 @@ async fn handle_conn(
                                             } else {
                                                 let mut a = accounts.lock().await;
                                                 if a.identity_linked_to_other_account(
-                                                    "google",
-                                                    sub,
-                                                    &uname,
+                                                    "google", sub, &uname,
                                                 ) {
                                                     let _ = write_tx
                                                         .send(Bytes::from_static(
@@ -3433,7 +3716,10 @@ async fn handle_conn(
                                                         .await;
                                                     false
                                                 } else {
-                                                    let linked_email = match a.by_name.get_mut(&uname) {
+                                                    let linked_email = match a
+                                                        .by_name
+                                                        .get_mut(&uname)
+                                                    {
                                                         None => {
                                                             let _ = write_tx
                                                                 .send(Bytes::from_static(
@@ -3475,8 +3761,7 @@ async fn handle_conn(
                                                                         email.clone(),
                                                                     );
                                                                     r.auth_email_for_identity(
-                                                                        "google",
-                                                                        sub,
+                                                                        "google", sub,
                                                                     )
                                                                     .or(email.clone())
                                                                 }
@@ -3524,9 +3809,9 @@ async fn handle_conn(
                                                         false
                                                     } else {
                                                         google_sub = Some(sub.to_string());
-                                                        google_email =
-                                                            r.auth_email_for_identity("google", sub)
-                                                                .or(email.clone());
+                                                        google_email = r
+                                                            .auth_email_for_identity("google", sub)
+                                                            .or(email.clone());
                                                         auth_method = Some("google".to_string());
                                                         auth_blob = Some(make_shard_auth_blob(
                                                             &uname,
@@ -3553,9 +3838,7 @@ async fn handle_conn(
                                             let created = {
                                                 let mut a = accounts.lock().await;
                                                 if a.identity_linked_to_other_account(
-                                                    "google",
-                                                    sub,
-                                                    &uname,
+                                                    "google", sub, &uname,
                                                 ) {
                                                     false
                                                 } else {
@@ -3634,7 +3917,8 @@ async fn handle_conn(
                                         };
 
                                         if action == "link" {
-                                            let pw = req.password.as_deref().unwrap_or("").as_bytes();
+                                            let pw =
+                                                req.password.as_deref().unwrap_or("").as_bytes();
                                             if pw.is_empty() {
                                                 let _ = write_tx
                                                     .send(Bytes::from_static(
@@ -3645,9 +3929,7 @@ async fn handle_conn(
                                             } else {
                                                 let mut a = accounts.lock().await;
                                                 if a.identity_linked_to_other_account(
-                                                    "oidc",
-                                                    sub,
-                                                    &uname,
+                                                    "oidc", sub, &uname,
                                                 ) {
                                                     let _ = write_tx
                                                         .send(Bytes::from_static(
@@ -3656,7 +3938,10 @@ async fn handle_conn(
                                                         .await;
                                                     false
                                                 } else {
-                                                    let linked_email = match a.by_name.get_mut(&uname) {
+                                                    let linked_email = match a
+                                                        .by_name
+                                                        .get_mut(&uname)
+                                                    {
                                                         None => {
                                                             let _ = write_tx
                                                                 .send(Bytes::from_static(
@@ -3698,8 +3983,7 @@ async fn handle_conn(
                                                                         email.clone(),
                                                                     );
                                                                     r.auth_email_for_identity(
-                                                                        "oidc",
-                                                                        sub,
+                                                                        "oidc", sub,
                                                                     )
                                                                     .or(email.clone())
                                                                 }
@@ -3747,9 +4031,9 @@ async fn handle_conn(
                                                         false
                                                     } else {
                                                         oidc_sub = Some(sub.to_string());
-                                                        oidc_email =
-                                                            r.auth_email_for_identity("oidc", sub)
-                                                                .or(email.clone());
+                                                        oidc_email = r
+                                                            .auth_email_for_identity("oidc", sub)
+                                                            .or(email.clone());
                                                         auth_method = Some("oidc".to_string());
                                                         auth_blob = Some(make_shard_auth_blob(
                                                             &uname,
@@ -3776,9 +4060,7 @@ async fn handle_conn(
                                             let created = {
                                                 let mut a = accounts.lock().await;
                                                 if a.identity_linked_to_other_account(
-                                                    "oidc",
-                                                    sub,
-                                                    &uname,
+                                                    "oidc", sub, &uname,
                                                 ) {
                                                     false
                                                 } else {
@@ -3903,9 +4185,9 @@ async fn handle_conn(
                                             continue;
                                         }
                                         google_sub = Some(sub.clone());
-                                        google_email =
-                                            r.auth_email_for_identity("google", sub.as_str())
-                                                .or(email.clone());
+                                        google_email = r
+                                            .auth_email_for_identity("google", sub.as_str())
+                                            .or(email.clone());
                                         auth_method = Some("google".to_string());
                                         auth_blob = Some(make_shard_auth_blob(
                                             &n,
@@ -3938,13 +4220,11 @@ async fn handle_conn(
                                                 AccountRec {
                                                     name: n.clone(),
                                                     pw_hash: None,
-                                                    auth_identities: vec![
-                                                        AccountAuthIdentity {
-                                                            method: "google".to_string(),
-                                                            sub: sub.clone(),
-                                                            email: email.clone(),
-                                                        },
-                                                    ],
+                                                    auth_identities: vec![AccountAuthIdentity {
+                                                        method: "google".to_string(),
+                                                        sub: sub.clone(),
+                                                        email: email.clone(),
+                                                    }],
                                                     google_sub: None,
                                                     google_email: None,
                                                     oidc_sub: None,
@@ -3996,9 +4276,9 @@ async fn handle_conn(
                                             continue;
                                         }
                                         oidc_sub = Some(sub.clone());
-                                        oidc_email =
-                                            r.auth_email_for_identity("oidc", sub.as_str())
-                                                .or(email.clone());
+                                        oidc_email = r
+                                            .auth_email_for_identity("oidc", sub.as_str())
+                                            .or(email.clone());
                                         auth_method = Some("oidc".to_string());
                                         auth_blob = Some(make_shard_auth_blob(
                                             &n,
@@ -4031,13 +4311,11 @@ async fn handle_conn(
                                                 AccountRec {
                                                     name: n.clone(),
                                                     pw_hash: None,
-                                                    auth_identities: vec![
-                                                        AccountAuthIdentity {
-                                                            method: "oidc".to_string(),
-                                                            sub: sub.clone(),
-                                                            email: email.clone(),
-                                                        },
-                                                    ],
+                                                    auth_identities: vec![AccountAuthIdentity {
+                                                        method: "oidc".to_string(),
+                                                        sub: sub.clone(),
+                                                        email: email.clone(),
+                                                    }],
                                                     google_sub: None,
                                                     google_email: None,
                                                     oidc_sub: None,
@@ -4109,8 +4387,9 @@ async fn handle_conn(
                                 }
                             };
                             if let Err(msg) = verify_webauth_jwt(&cfg, &req) {
-                                let out =
-                                    format!("web_auth: {msg}\r\nplease type: password | google\r\n> ");
+                                let out = format!(
+                                    "web_auth: {msg}\r\nplease type: password | google\r\n> "
+                                );
                                 let _ = write_tx.send(Bytes::from(out)).await;
                                 continue;
                             }
@@ -4386,9 +4665,7 @@ async fn handle_conn(
                             let method = req.method.trim().to_ascii_lowercase();
                             if action != "auto" || (method != "google" && method != "oidc") {
                                 let _ = write_tx
-                                    .send(Bytes::from_static(
-                                        b"type: check | cancel\r\n> ",
-                                    ))
+                                    .send(Bytes::from_static(b"type: check | cancel\r\n> "))
                                     .await;
                                 continue;
                             }
@@ -4518,8 +4795,7 @@ async fn handle_conn(
                                     let m = sessions.lock().await;
                                     m.iter()
                                         .find(|(sid, s)| {
-                                            **sid != session
-                                                && s.name.eq_ignore_ascii_case(nm)
+                                            **sid != session && s.name.eq_ignore_ascii_case(nm)
                                         })
                                         .map(|(sid, s)| (*sid, s.clone()))
                                 };
@@ -4674,13 +4950,11 @@ async fn handle_conn(
                                         AccountRec {
                                             name: uname.clone(),
                                             pw_hash: None,
-                                            auth_identities: vec![
-                                                AccountAuthIdentity {
-                                                    method: "google".to_string(),
-                                                    sub: sub.to_string(),
-                                                    email: email.clone(),
-                                                },
-                                            ],
+                                            auth_identities: vec![AccountAuthIdentity {
+                                                method: "google".to_string(),
+                                                sub: sub.to_string(),
+                                                email: email.clone(),
+                                            }],
                                             google_sub: None,
                                             google_email: None,
                                             oidc_sub: None,
@@ -5270,6 +5544,7 @@ async fn handle_conn(
                             scrollback: Arc::new(tokio::sync::Mutex::new(Scrollback::new(
                                 SCROLLBACK_MAX_LINES,
                             ))),
+                            next_cmd_id: 1,
                         },
                     );
                 }
@@ -5293,6 +5568,7 @@ async fn handle_conn(
 
                 let body = attach_body(
                     bot,
+                    false,
                     Some(shard_auth.as_ref()),
                     &race_s,
                     &class_s,
@@ -5336,6 +5612,61 @@ async fn handle_conn(
                 eventlog.log_line(LogStream::Character(nm), &entry).await;
             }
 
+            if let Some(blob_len) = parse_sayblob_len(&lc) {
+                let len = match blob_len {
+                    Ok(v) => v,
+                    Err(msg) => {
+                        let _ = write_tx.send(Bytes::from(format!("{msg}\r\n> "))).await;
+                        continue;
+                    }
+                };
+                let _ = write_tx
+                    .send(Bytes::from(format!(
+                        "# send {len} raw bytes for sayblob now\r\n"
+                    )))
+                    .await;
+                match spool_blob_payload(
+                    &mut rd,
+                    &mut iac,
+                    &mut linebuf,
+                    &cfg.blob_spool_dir,
+                    session,
+                    len,
+                )
+                .await
+                {
+                    Ok(path) => {
+                        let path_text = path.to_string_lossy().to_string();
+                        match mudproto::shard::build_input_blob_body(
+                            b"say",
+                            path_text.as_bytes(),
+                            len,
+                        ) {
+                            Ok(body) => {
+                                let _ = shard_tx
+                                    .send(ShardMsg {
+                                        t: REQ_INPUT_BLOB,
+                                        session,
+                                        body: Bytes::from(body),
+                                    })
+                                    .await;
+                            }
+                            Err(e) => {
+                                let _ = write_tx
+                                    .send(Bytes::from(format!("sayblob: {e}\r\n> ")))
+                                    .await;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let _ = write_tx
+                            .send(Bytes::from(format!("sayblob: {e}\r\n> ")))
+                            .await;
+                    }
+                }
+                continue;
+            }
+
             if lc == "exit" || lc == "quit" {
                 let _ = write_tx.send(Bytes::from_static(b"bye\r\n")).await;
                 break 'read;
@@ -5358,6 +5689,15 @@ async fn handle_conn(
                 s.push_str(&format!(" - broker_uptime_s: {up_s}\r\n"));
                 s.push_str(&format!(" - broker_bind: {}\r\n", server_info.bind));
                 s.push_str(&format!(" - shard_addr: {}\r\n", server_info.shard_addr));
+                if server_info.shard_addrs.len() > 1 {
+                    let addrs = server_info
+                        .shard_addrs
+                        .iter()
+                        .map(|a| a.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    s.push_str(&format!(" - shard_addrs: {addrs}\r\n"));
+                }
                 s.push_str(" - note: shard uptime/time via `uptime` (forwarded to shard)\r\n");
                 let _ = write_tx.send(Bytes::from(s)).await;
 
@@ -5413,13 +5753,25 @@ async fn handle_conn(
                 continue;
             }
 
-            let _ = shard_tx
-                .send(ShardMsg {
-                    t: REQ_INPUT,
-                    session,
-                    body: Bytes::from(line.into_bytes()),
-                })
-                .await;
+            let cmd_id = {
+                let mut m = sessions.lock().await;
+                if let Some(si) = m.get_mut(&session) {
+                    let id = si.next_cmd_id;
+                    si.next_cmd_id = si.next_cmd_id.saturating_add(1).max(1);
+                    id
+                } else {
+                    0
+                }
+            };
+            let (t, body) = if cmd_id == 0 {
+                (REQ_INPUT, Bytes::from(line.into_bytes()))
+            } else {
+                (
+                    REQ_INPUT_IDEMPOTENT,
+                    Bytes::from(build_input_idempotent_body(cmd_id, line.as_bytes())),
+                )
+            };
+            let _ = shard_tx.send(ShardMsg { t, session, body }).await;
         }
     }
 
@@ -5768,9 +6120,202 @@ fn try_pop_line(buf: &mut Vec<u8>) -> Option<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{BTreeSet, VecDeque};
+
     use super::{
-        LineId, Scrollback, extract_scrollback_lines, normalize_email, redact_pii, trim_ascii_ws,
+        LineId, REQ_DETACH, REQ_INPUT, REQ_INPUT_IDEMPOTENT, Scrollback, ShardMsg,
+        ack_inflight_for_response, build_input_idempotent_body, extract_scrollback_lines,
+        normalize_email, parse_sayblob_len, redact_pii, requeue_inflight,
+        shard_msg_expects_response, trim_ascii_ws,
     };
+    use bytes::Bytes;
+    use mudproto::session::SessionId;
+    use mudproto::shard::ShardResp;
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum BrokerStateClass {
+        TransportLocal,
+        DerivedLocal,
+        RaftRequiredDebt,
+    }
+
+    struct BrokerStateField {
+        owner: &'static str,
+        field: &'static str,
+        class: BrokerStateClass,
+        reason: &'static str,
+    }
+
+    static BROKER_STATE_MANIFEST: &[BrokerStateField] = &[
+        bf(
+            "SessionInfo",
+            "name",
+            BrokerStateClass::RaftRequiredDebt,
+            "character identity is resumable across broker reconnects",
+        ),
+        bf(
+            "SessionInfo",
+            "held",
+            BrokerStateClass::DerivedLocal,
+            "legal hold status is derived from the compliance cache",
+        ),
+        bf(
+            "SessionInfo",
+            "is_bot",
+            BrokerStateClass::RaftRequiredDebt,
+            "bot/player role affects resumable shard attach state",
+        ),
+        bf(
+            "SessionInfo",
+            "auth",
+            BrokerStateClass::RaftRequiredDebt,
+            "auth assertion is needed when the shard connection is rebuilt",
+        ),
+        bf(
+            "SessionInfo",
+            "race",
+            BrokerStateClass::RaftRequiredDebt,
+            "character build state must resume through raft state",
+        ),
+        bf(
+            "SessionInfo",
+            "class",
+            BrokerStateClass::RaftRequiredDebt,
+            "character build state must resume through raft state",
+        ),
+        bf(
+            "SessionInfo",
+            "sex",
+            BrokerStateClass::RaftRequiredDebt,
+            "character profile state must resume through raft state",
+        ),
+        bf(
+            "SessionInfo",
+            "pronouns",
+            BrokerStateClass::RaftRequiredDebt,
+            "character profile state must resume through raft state",
+        ),
+        bf(
+            "SessionInfo",
+            "peer_ip",
+            BrokerStateClass::TransportLocal,
+            "current TCP peer is connection-local",
+        ),
+        bf(
+            "SessionInfo",
+            "write_tx",
+            BrokerStateClass::TransportLocal,
+            "socket writer channel is connection-local",
+        ),
+        bf(
+            "SessionInfo",
+            "disconnect_tx",
+            BrokerStateClass::TransportLocal,
+            "disconnect signal is connection-local",
+        ),
+        bf(
+            "SessionInfo",
+            "scrollback",
+            BrokerStateClass::DerivedLocal,
+            "scrollback is mirrored into nearline/event logs, not raft consensus state",
+        ),
+        bf(
+            "SessionInfo",
+            "next_cmd_id",
+            BrokerStateClass::TransportLocal,
+            "per-session input id generator is only used while this transport session is live; ids are carried on in-flight shard messages",
+        ),
+    ];
+
+    const fn bf(
+        owner: &'static str,
+        field: &'static str,
+        class: BrokerStateClass,
+        reason: &'static str,
+    ) -> BrokerStateField {
+        BrokerStateField {
+            owner,
+            field,
+            class,
+            reason,
+        }
+    }
+
+    fn struct_field_names(source: &str, owner: &str) -> BTreeSet<String> {
+        let needle = format!("struct {owner} {{");
+        let Some(start) = source.find(&needle) else {
+            panic!("missing struct {owner}");
+        };
+        let body_start = start + needle.len();
+        let mut depth = 1i32;
+        let mut end = body_start;
+        for (off, ch) in source[body_start..].char_indices() {
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = body_start + off;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        assert!(end > body_start, "could not parse struct {owner}");
+        source[body_start..end]
+            .lines()
+            .filter_map(|line| {
+                let line = line.split("//").next().unwrap_or("").trim();
+                if line.is_empty() || line.starts_with('#') {
+                    return None;
+                }
+                let (name, _) = line.split_once(':')?;
+                let name = name.trim().trim_start_matches("pub ").trim();
+                if name.is_empty() {
+                    return None;
+                }
+                Some(name.to_string())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn broker_session_manifest_covers_all_session_info_fields() {
+        let source = include_str!("main.rs");
+        let parsed = struct_field_names(source, "SessionInfo");
+        let declared = BROKER_STATE_MANIFEST
+            .iter()
+            .filter(|f| f.owner == "SessionInfo")
+            .map(|f| f.field.to_string())
+            .collect::<BTreeSet<_>>();
+        let missing = parsed.difference(&declared).cloned().collect::<Vec<_>>();
+        let stale = declared.difference(&parsed).cloned().collect::<Vec<_>>();
+        assert!(
+            missing.is_empty() && stale.is_empty(),
+            "broker state manifest mismatch for SessionInfo: missing={missing:?} stale={stale:?}"
+        );
+    }
+
+    #[test]
+    fn broker_resumable_state_is_marked_for_raft() {
+        let raft_required = BROKER_STATE_MANIFEST
+            .iter()
+            .filter(|f| f.class == BrokerStateClass::RaftRequiredDebt)
+            .collect::<Vec<_>>();
+        assert!(
+            !raft_required.is_empty(),
+            "broker resumable state must be explicitly tracked as raft migration debt"
+        );
+        for field in BROKER_STATE_MANIFEST {
+            assert!(
+                !field.reason.trim().is_empty(),
+                "broker field {}.{} needs a state-boundary reason",
+                field.owner,
+                field.field
+            );
+        }
+    }
 
     #[test]
     fn trim_ascii_ws_basic() {
@@ -5844,5 +6389,70 @@ mod tests {
             "call [phone] now".to_string()
         );
         assert_eq!(redact_pii("no pii here"), "no pii here".to_string());
+    }
+
+    #[test]
+    fn sayblob_len_parser_is_strict() {
+        assert_eq!(parse_sayblob_len("look"), None);
+        assert_eq!(parse_sayblob_len("sayblob 1024"), Some(Ok(1024)));
+        assert!(matches!(parse_sayblob_len("sayblob"), Some(Err(_))));
+        assert!(matches!(parse_sayblob_len("sayblob 0"), Some(Err(_))));
+        assert!(matches!(parse_sayblob_len("sayblob nope"), Some(Err(_))));
+        assert!(matches!(
+            parse_sayblob_len("sayblob 10 extra"),
+            Some(Err(_))
+        ));
+    }
+
+    #[test]
+    fn shard_failover_requeues_only_unacked_requests() {
+        let alice = SessionId(1);
+        let bob = SessionId(2);
+        let req_a = ShardMsg {
+            t: REQ_INPUT_IDEMPOTENT,
+            session: alice,
+            body: Bytes::from(build_input_idempotent_body(10, b"quest get trio.probe")),
+        };
+        let req_b = ShardMsg {
+            t: REQ_INPUT,
+            session: bob,
+            body: Bytes::from_static(b"look"),
+        };
+        let req_c = ShardMsg {
+            t: REQ_INPUT,
+            session: alice,
+            body: Bytes::from_static(b"quest get trio.step"),
+        };
+        let detach = ShardMsg {
+            t: REQ_DETACH,
+            session: alice,
+            body: Bytes::new(),
+        };
+
+        assert!(shard_msg_expects_response(&req_a));
+        assert!(!shard_msg_expects_response(&detach));
+
+        let mut pending = VecDeque::new();
+        pending.push_back(req_c.clone());
+        let mut inflight = VecDeque::new();
+        inflight.push_back(req_a.clone());
+        inflight.push_back(req_b.clone());
+
+        ack_inflight_for_response(
+            &mut inflight,
+            &ShardResp::Output {
+                session: alice,
+                line: Bytes::from_static(b"quest: trio.probe=alive\r\n"),
+            },
+        );
+        assert_eq!(inflight.len(), 1);
+        assert_eq!(inflight[0].session, bob);
+
+        requeue_inflight(&mut pending, &mut inflight);
+        assert!(inflight.is_empty());
+        assert_eq!(pending.len(), 2);
+        assert_eq!(pending[0].session, bob);
+        assert_eq!(pending[1].body, req_c.body);
+        assert_eq!(pending[0].body, req_b.body);
     }
 }

@@ -667,6 +667,14 @@ deploy-shard env="prd":
     ./scripts/deploy_shard_01.sh "env/{{env}}.env"; \
   '
 
+deploy-shard-trio env="prd":
+  bash -ceu ' \
+    set -o pipefail; \
+    set -a; source "env/{{env}}.env"; set +a; \
+    if [ "${ENABLED:-1}" != "1" ]; then echo "{{env}} disabled (ENABLED=${ENABLED:-})"; exit 0; fi; \
+    ./scripts/deploy_shard_trio.sh "env/{{env}}.env"; \
+  '
+
 deploy-slopmud-all:
   just deploy-slopmud dev
   just deploy-slopmud prd

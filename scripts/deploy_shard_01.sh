@@ -78,6 +78,34 @@ Environment=RUST_LOG=shard_01=info
 Environment=SHARD_BIND=${SHARD_BIND}
 EOF
 
+if [[ -n "${NODE_ID:-}" ]]; then
+  echo "Environment=NODE_ID=${NODE_ID}" >>"$tmp_unit"
+fi
+if [[ -n "${SHARD_RAFT_LOG:-}" ]]; then
+  echo "Environment=SHARD_RAFT_LOG=${SHARD_RAFT_LOG}" >>"$tmp_unit"
+fi
+if [[ -n "${SHARD_RAFT_NODE_ID:-}" ]]; then
+  echo "Environment=SHARD_RAFT_NODE_ID=${SHARD_RAFT_NODE_ID}" >>"$tmp_unit"
+fi
+if [[ -n "${SHARD_RAFT_BIND:-}" ]]; then
+  echo "Environment=SHARD_RAFT_BIND=${SHARD_RAFT_BIND}" >>"$tmp_unit"
+fi
+if [[ -n "${SHARD_RAFT_PEERS:-}" ]]; then
+  echo "Environment=SHARD_RAFT_PEERS=${SHARD_RAFT_PEERS}" >>"$tmp_unit"
+fi
+if [[ -n "${SHARD_RAFT_ELECTION_MS:-}" ]]; then
+  echo "Environment=SHARD_RAFT_ELECTION_MS=${SHARD_RAFT_ELECTION_MS}" >>"$tmp_unit"
+fi
+if [[ -n "${SHARD_RAFT_HEARTBEAT_MS:-}" ]]; then
+  echo "Environment=SHARD_RAFT_HEARTBEAT_MS=${SHARD_RAFT_HEARTBEAT_MS}" >>"$tmp_unit"
+fi
+if [[ -n "${SHARD_BOOTSTRAP_ADMINS:-}" ]]; then
+  echo "Environment=SHARD_BOOTSTRAP_ADMINS=${SHARD_BOOTSTRAP_ADMINS}" >>"$tmp_unit"
+fi
+if [[ -n "${SHARD_BOOTSTRAP_ADMIN_SSO:-}" ]]; then
+  echo "Environment=SHARD_BOOTSTRAP_ADMIN_SSO=${SHARD_BOOTSTRAP_ADMIN_SSO}" >>"$tmp_unit"
+fi
+
 # Optional: OpenAI config for admin `aiping` command.
 if [[ -n "${OPENAI_API_BASE:-}" ]]; then
   echo "Environment=OPENAI_API_BASE=${OPENAI_API_BASE}" >>"$tmp_unit"

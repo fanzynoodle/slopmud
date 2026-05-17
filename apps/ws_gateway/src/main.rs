@@ -253,11 +253,10 @@ async fn route_resp(
                         }
                     }
                     Mode::Fbs => {
-                        let body = line.to_vec();
                         let b = ws_fb::finish_frame_buf(
                             mudproto::shard::RESP_OUTPUT,
                             session.to_be_bytes(),
-                            &body,
+                            line.as_ref(),
                         );
                         let _ = ci.tx.send(Outbound::FbsBin(b)).await;
                     }
@@ -276,13 +275,60 @@ async fn route_resp(
                         }
                     }
                     Mode::Fbs => {
-                        let body = msg.to_vec();
                         let b = ws_fb::finish_frame_buf(
                             mudproto::shard::RESP_ERR,
                             session.to_be_bytes(),
-                            &body,
+                            msg.as_ref(),
                         );
                         let _ = ci.tx.send(Outbound::FbsBin(b)).await;
+                    }
+                }
+            }
+        }
+        ShardResp::OutputBlob {
+            session,
+            prefix,
+            path,
+            len,
+            suffix,
+        } => {
+            let ci = { clients.lock().await.get(&session).cloned() };
+            if let Some(ci) = ci {
+                match ci.mode {
+                    Mode::Json => {
+                        let mut text = String::new();
+                        text.push_str(&String::from_utf8_lossy(prefix.as_ref()));
+                        text.push_str(&format!("# blob output: {len} bytes\r\n"));
+                        text.push_str(&String::from_utf8_lossy(suffix.as_ref()));
+                        let msg = JsonOut::Output { text };
+                        if let Ok(s) = serde_json::to_string(&msg) {
+                            let _ = ci.tx.send(Outbound::JsonText(s)).await;
+                        }
+                    }
+                    Mode::Fbs => {
+                        match mudproto::shard::build_output_blob_body(
+                            prefix.as_ref(),
+                            path.as_ref(),
+                            len,
+                            suffix.as_ref(),
+                        ) {
+                            Ok(body) => {
+                                let b = ws_fb::finish_frame_buf(
+                                    mudproto::shard::RESP_OUTPUT_BLOB,
+                                    session.to_be_bytes(),
+                                    &body,
+                                );
+                                let _ = ci.tx.send(Outbound::FbsBin(b)).await;
+                            }
+                            Err(e) => {
+                                let b = ws_fb::finish_frame_buf(
+                                    mudproto::shard::RESP_ERR,
+                                    session.to_be_bytes(),
+                                    e.to_string().as_bytes(),
+                                );
+                                let _ = ci.tx.send(Outbound::FbsBin(b)).await;
+                            }
+                        }
                     }
                 }
             }
@@ -482,7 +528,7 @@ async fn handle_ws_conn(
             Message::Binary(b) => {
                 // First binary message flips the connection to fbs mode.
                 mode = Mode::Fbs;
-                let buf = b;
+                let buf = Bytes::from(b);
                 let frame = unsafe { flatbuffers::root_unchecked::<ws_fb::Frame>(&buf) };
                 let t = frame.t();
                 let Some(sess_v) = frame.session() else {
@@ -492,19 +538,13 @@ async fn handle_ws_conn(
                     continue;
                 }
                 let mut sid = [0u8; 16];
-                for (i, b) in sid.iter_mut().enumerate() {
-                    *b = sess_v.get(i);
-                }
+                sid.copy_from_slice(sess_v.bytes());
                 let sid = SessionId::from_be_bytes(sid);
 
-                let mut body_vec = Vec::new();
-                if let Some(bv) = frame.body() {
-                    body_vec.reserve(bv.len());
-                    for i in 0..bv.len() {
-                        body_vec.push(bv.get(i));
-                    }
-                }
-                let body = Bytes::from(body_vec);
+                let body = frame
+                    .body()
+                    .map(|bv| buf.slice_ref(bv.bytes()))
+                    .unwrap_or_default();
 
                 if session.is_none() {
                     // First message must be attach so we can persist reattach metadata.

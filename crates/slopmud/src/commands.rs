@@ -29,15 +29,16 @@ pub async fn handle_whoami_command(
         " - role: {}\r\n",
         if si.is_bot { "bot" } else { "player" }
     ));
-    s.push_str(&format!(" - held: {}\r\n", if si.held { "yes" } else { "no" }));
+    s.push_str(&format!(
+        " - held: {}\r\n",
+        if si.held { "yes" } else { "no" }
+    ));
     s.push_str(&format!(" - peer_ip: {}\r\n", si.peer_ip));
     s.push_str("\r\n> ");
     s
 }
 
-pub async fn handle_who_command(
-    sessions: &Arc<Mutex<HashMap<SessionId, SessionInfo>>>,
-) -> String {
+pub async fn handle_who_command(sessions: &Arc<Mutex<HashMap<SessionId, SessionInfo>>>) -> String {
     let names = {
         let m = sessions.lock().await;
         let mut out = m

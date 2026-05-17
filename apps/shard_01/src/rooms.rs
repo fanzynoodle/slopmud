@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::Context;
 use flatbuffers::root_unchecked;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::rooms_fb;
 
@@ -10,7 +10,7 @@ mod embedded_areas {
     include!(concat!(env!("OUT_DIR"), "/world_areas.rs"));
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExitDef {
     pub dir: String,
     pub to: String,
@@ -18,7 +18,7 @@ pub struct ExitDef {
     pub gate: Option<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RoomDef {
     pub name: String,
     pub description: String,
@@ -241,6 +241,26 @@ impl Rooms {
 
     pub fn insert_room(&mut self, room_id: String, def: RoomDef) {
         self.dyn_rooms.insert(room_id, def);
+    }
+
+    pub fn remove_dyn_room(&mut self, room_id: &str) -> Option<RoomDef> {
+        self.dyn_rooms.remove(room_id)
+    }
+
+    pub fn dyn_room_ids_with_prefix(&self, prefix: &str) -> Vec<String> {
+        let p = if prefix.ends_with('.') {
+            prefix.to_string()
+        } else {
+            format!("{prefix}.")
+        };
+        let mut ids = self
+            .dyn_rooms
+            .keys()
+            .filter(|k| k.starts_with(&p))
+            .cloned()
+            .collect::<Vec<_>>();
+        ids.sort_unstable();
+        ids
     }
 
     pub fn find_exit(&self, room_id: &str, token: &str) -> Option<&ExitDef> {

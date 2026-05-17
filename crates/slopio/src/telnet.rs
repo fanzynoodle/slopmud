@@ -7,6 +7,18 @@
 //!
 //! It also strips subnegotiation blocks: `IAC SB ... IAC SE`.
 
+use std::borrow::Cow;
+
+use memchr::memchr;
+
+const IAC: u8 = 255;
+const DONT: u8 = 254;
+const DO: u8 = 253;
+const WONT: u8 = 252;
+const WILL: u8 = 251;
+const SB: u8 = 250;
+const SE: u8 = 240;
+
 #[derive(Debug, Default)]
 pub struct IacParser {
     state: State,
@@ -47,13 +59,17 @@ impl IacParser {
     /// - `data`: the stream with IAC sequences removed
     /// - `replies`: bytes to write back to the telnet peer (may be empty)
     pub fn parse(&mut self, chunk: &[u8]) -> (Vec<u8>, Vec<u8>) {
-        const IAC: u8 = 255;
-        const DONT: u8 = 254;
-        const DO: u8 = 253;
-        const WONT: u8 = 252;
-        const WILL: u8 = 251;
-        const SB: u8 = 250;
-        const SE: u8 = 240;
+        let (data, replies) = self.parse_cow(chunk);
+        (data.into_owned(), replies)
+    }
+
+    /// Parse a chunk while borrowing the original slice when no IAC processing
+    /// is needed. This keeps the common path allocation-free for ordinary text
+    /// and large blob payload chunks.
+    pub fn parse_cow<'a>(&mut self, chunk: &'a [u8]) -> (Cow<'a, [u8]>, Vec<u8>) {
+        if matches!(&self.state, State::Data) && memchr(IAC, chunk).is_none() {
+            return (Cow::Borrowed(chunk), Vec::new());
+        }
 
         let mut out = Vec::with_capacity(chunk.len());
         let mut replies = Vec::new();
@@ -139,7 +155,7 @@ impl IacParser {
             }
         }
 
-        (out, replies)
+        (Cow::Owned(out), replies)
     }
 }
 
@@ -152,6 +168,25 @@ mod tests {
         let mut p = IacParser::new();
         let (d, r) = p.parse(b"hello\n");
         assert_eq!(d, b"hello\n");
+        assert!(r.is_empty());
+    }
+
+    #[test]
+    fn borrows_plain_data_fast_path() {
+        let mut p = IacParser::new();
+        let input = b"plain data";
+        let (d, r) = p.parse_cow(input);
+        assert!(matches!(d, std::borrow::Cow::Borrowed(_)));
+        assert_eq!(d.as_ref(), input);
+        assert!(r.is_empty());
+    }
+
+    #[test]
+    fn owns_data_when_iac_is_removed() {
+        let mut p = IacParser::new();
+        let (d, r) = p.parse_cow(&[b'a', 255, 255, b'b']);
+        assert!(matches!(d, std::borrow::Cow::Owned(_)));
+        assert_eq!(d.as_ref(), &[b'a', 255, b'b']);
         assert!(r.is_empty());
     }
 

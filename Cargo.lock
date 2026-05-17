@@ -2036,6 +2036,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "io-uring"
+version = "0.7.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d09b98f7eace8982db770e4408e7470b028ce513ac28fecdc6bf4c30fe92b62"
+dependencies = [
+ "bitflags",
+ "cfg-if",
+ "libc",
+]
+
+[[package]]
 name = "ipnet"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3453,6 +3464,9 @@ dependencies = [
  "compliance",
  "fanzylog",
  "getrandom 0.2.17",
+ "io-uring",
+ "jsonwebtoken",
+ "libc",
  "memchr",
  "mudproto",
  "password-hash",
