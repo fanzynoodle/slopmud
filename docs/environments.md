@@ -80,6 +80,8 @@ The current one-box host can remain the build/deploy runner. The split deploy sc
 
 For the smallest gateway shape, set `SLOPMUD_SBC_ENABLED=0` unless the SBC sidecar services are also deployed. The render helper sets that by default, which keeps the broker from repeatedly trying to subscribe to a local SBC event socket that intentionally does not exist on the tiny gateway.
 
+Fresh gateways can restore cached cert material with `scripts/tls_cache_restore.sh /path/to/env.env` when the env defines `TLS_CACHE_FULLCHAIN_SSM` and `TLS_CACHE_PRIVKEY_SSM`. That gives the rebuilt gateway valid TLS before DNS is moved; verify with `curl --resolve mud.slopmud.com:4242:<gateway-ip> https://mud.slopmud.com:4242/healthz`.
+
 ## How to verify a `dev` push reaches mud.slopmud.com
 
 For this repo, a push to `dev` should trigger `.github/workflows/enterprise-cicd.yml` and run:

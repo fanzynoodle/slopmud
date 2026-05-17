@@ -210,6 +210,9 @@ certbot-tls-sync env="prd" domain="":
     "; \
   '
 
+tls-cache-restore env="prd-oauth":
+  ./scripts/tls_cache_restore.sh "env/{{env}}.env"
+
 certbot-renew env="prd" dry_run="0":
   bash -ceu ' \
     set -o pipefail; \
