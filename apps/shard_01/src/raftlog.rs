@@ -552,6 +552,37 @@ where
         Ok(())
     }
 
+    fn truncate_uncommitted_from(&mut self, index: u64) -> anyhow::Result<()> {
+        if index == 0 || index <= self.commit_index {
+            return Ok(());
+        }
+        let Some(pos) = self.entries.iter().position(|e| e.index >= index) else {
+            return Ok(());
+        };
+        self.entries.truncate(pos);
+        self.next_log_index = index;
+        self.next_apply_index = self.next_apply_index.min(self.next_log_index);
+        self.rewrite_log_file()
+    }
+
+    fn truncate_uncommitted_after(&mut self, index: u64) -> anyhow::Result<()> {
+        if index < self.commit_index {
+            return Err(anyhow::anyhow!(
+                "raft cannot truncate committed suffix: index={} commit={}",
+                index,
+                self.commit_index
+            ));
+        }
+        let keep = self.entries.iter().take_while(|e| e.index <= index).count();
+        if keep == self.entries.len() {
+            return Ok(());
+        }
+        self.entries.truncate(keep);
+        self.next_log_index = self.last_index().saturating_add(1).max(1);
+        self.next_apply_index = self.next_apply_index.min(self.next_log_index);
+        self.rewrite_log_file()
+    }
+
     fn append_env_to_disk(&mut self, env: &RaftEnvelope<E>) -> anyhow::Result<()> {
         if let Some(dir) = self.path.parent() {
             if !dir.as_os_str().is_empty() {
@@ -754,6 +785,15 @@ where
             return Ok(env);
         }
 
+        if let Err(err) = self
+            .inner
+            .lock()
+            .expect("raft log mutex poisoned")
+            .truncate_uncommitted_from(env.index)
+        {
+            tracing::warn!(err = %err, index = env.index, "raft failed append rollback failed");
+        }
+
         Err(anyhow::anyhow!("raft quorum unavailable"))
     }
 
@@ -898,11 +938,22 @@ where
             };
         }
 
+        let full_log_replace = prev_log_index == 0 && !entries.is_empty();
         let mut match_index = prev_log_index;
         for env in entries {
             match_index = env.index;
             if let Err(err) = inner.append_replicated(env) {
                 tracing::warn!(err = %err, "raft replicated append failed");
+                return RaftRpc::AppendResp {
+                    term: inner.current_term,
+                    success: false,
+                    match_index: inner.last_index(),
+                };
+            }
+        }
+        if full_log_replace {
+            if let Err(err) = inner.truncate_uncommitted_after(match_index) {
+                tracing::warn!(err = %err, "raft replicated suffix truncate failed");
                 return RaftRpc::AppendResp {
                     term: inner.current_term,
                     success: false,
@@ -1458,6 +1509,130 @@ mod tests {
         assert_eq!(inner.entries.len(), 1);
         assert_eq!(inner.entries[0].term, 2);
         assert_eq!(inner.entries[0].entry, "b");
+    }
+
+    #[test]
+    fn failed_leader_append_rolls_back_uncommitted_entry() {
+        let path = std::env::temp_dir().join(format!(
+            "slopmud_raftlog_failed_append_test_{}.jsonl",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let state_path = PathBuf::from(format!("{}.state.json", path.display()));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&state_path);
+
+        let mut inner = RaftLogInner::<String>::new(path.clone());
+        inner.set_term_vote(1, Some("n0".to_string())).unwrap();
+        let consensus = Consensus {
+            cfg: ConsensusConfig {
+                node_id: "n0".to_string(),
+                bind: None,
+                peers: vec![ConsensusPeer {
+                    node_id: "n1".to_string(),
+                    addr: "127.0.0.1:9".parse().unwrap(),
+                }],
+                election_timeout_ms: 5_000,
+                heartbeat_ms: 500,
+            },
+            inner: Arc::new(Mutex::new(inner)),
+            runtime: Mutex::new(RuntimeState {
+                role: Role::Leader,
+                leader_id: Some("n0".to_string()),
+                last_leader_seen: Instant::now(),
+                last_quorum_at: Some(Instant::now()),
+                replication_latency: ReplicationLatencyStats::default(),
+            }),
+        };
+
+        assert!(consensus.append(0, "uncommitted".to_string()).is_err());
+        let inner = consensus.inner.lock().unwrap();
+        assert_eq!(inner.last_index(), 0);
+        assert_eq!(inner.next_log_index, 1);
+        assert_eq!(inner.commit_index, 0);
+        drop(inner);
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn full_log_replication_truncates_divergent_suffix() {
+        let path = std::env::temp_dir().join(format!(
+            "slopmud_raftlog_full_truncate_test_{}.jsonl",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let state_path = PathBuf::from(format!("{}.state.json", path.display()));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&state_path);
+
+        let mut inner = RaftLogInner::<String>::new(path.clone());
+        inner
+            .append_replicated(RaftEnvelope {
+                index: 1,
+                term: 1,
+                ms: 0,
+                entry: "shared".to_string(),
+            })
+            .unwrap();
+        inner
+            .append_replicated(RaftEnvelope {
+                index: 2,
+                term: 9,
+                ms: 0,
+                entry: "divergent".to_string(),
+            })
+            .unwrap();
+        inner.set_commit_index(1).unwrap();
+
+        let consensus = Consensus {
+            cfg: ConsensusConfig {
+                node_id: "n1".to_string(),
+                bind: None,
+                peers: Vec::new(),
+                election_timeout_ms: 5_000,
+                heartbeat_ms: 500,
+            },
+            inner: Arc::new(Mutex::new(inner)),
+            runtime: Mutex::new(RuntimeState {
+                role: Role::Follower,
+                leader_id: Some("n0".to_string()),
+                last_leader_seen: Instant::now(),
+                last_quorum_at: None,
+                replication_latency: ReplicationLatencyStats::default(),
+            }),
+        };
+
+        let resp = consensus.handle_append_entries(
+            2,
+            "n0".to_string(),
+            0,
+            0,
+            vec![RaftEnvelope {
+                index: 1,
+                term: 1,
+                ms: 0,
+                entry: "shared".to_string(),
+            }],
+            1,
+        );
+        match resp {
+            RaftRpc::AppendResp { success, .. } => assert!(success),
+            _ => panic!("unexpected raft rpc response"),
+        }
+        let inner = consensus.inner.lock().unwrap();
+        assert_eq!(inner.last_index(), 1);
+        assert_eq!(inner.next_log_index, 2);
+        assert_eq!(inner.commit_index, 1);
+        drop(inner);
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
     }
 
     #[test]

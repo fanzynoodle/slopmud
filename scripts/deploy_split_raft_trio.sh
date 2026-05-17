@@ -162,7 +162,7 @@ raft_rpc_node() {
   local payload="$2"
   local payload_b64
   payload_b64="$(printf '%s' "$payload" | base64 | tr -d '\n')"
-  ssh_node "$i" "PAYLOAD_B64='${payload_b64}' RAFT_PORT='${raft_port}' bash -lc 'set -euo pipefail; payload=\$(printf %s \"\$PAYLOAD_B64\" | base64 -d); exec 3<>/dev/tcp/127.0.0.1/\$RAFT_PORT; printf \"%s\n\" \"\$payload\" >&3; IFS= read -r line <&3; printf \"%s\n\" \"\$line\"'"
+  ssh_node "$i" "PAYLOAD_B64='${payload_b64}' RAFT_PORT='${raft_port}' timeout 6 bash -lc 'set -euo pipefail; payload=\$(printf %s \"\$PAYLOAD_B64\" | base64 -d); exec 3<>/dev/tcp/127.0.0.1/\$RAFT_PORT; printf \"%s\n\" \"\$payload\" >&3; IFS= read -r -t 5 line <&3; printf \"%s\n\" \"\$line\"'"
 }
 
 raft_status_node() {
