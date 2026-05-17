@@ -346,7 +346,7 @@ resource "aws_iam_instance_profile" "raft" {
 }
 
 locals {
-  dns_record_lines  = join("\n", var.dns_record_names)
+  dns_record_words  = join(" ", var.dns_record_names)
   gateway_user_data = <<-EOT
     #!/usr/bin/env bash
     set -euxo pipefail
@@ -372,7 +372,7 @@ locals {
       fi
       if [ -n "$PUBLIC_IP" ] && [ -n "$PUBLIC_DNS" ]; then
         first="1"
-        while IFS= read -r name; do
+        for name in ${local.dns_record_words}; do
           [ -z "$name" ] && continue
           if [ "$first" = "1" ]; then
             rtype="A"
@@ -384,9 +384,7 @@ locals {
           fi
           change_batch="{\"Changes\":[{\"Action\":\"UPSERT\",\"ResourceRecordSet\":{\"Name\":\"$name\",\"Type\":\"$rtype\",\"TTL\":60,\"ResourceRecords\":[{\"Value\":\"$value\"}]}}]}"
           aws route53 change-resource-record-sets --region "${var.region}" --hosted-zone-id "${var.route53_zone_id}" --change-batch "$change_batch" >/dev/null
-        done <<'NAMES'
-    ${local.dns_record_lines}
-    NAMES
+        done
       fi
     fi
   EOT
