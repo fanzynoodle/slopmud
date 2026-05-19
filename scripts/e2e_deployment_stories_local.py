@@ -473,6 +473,18 @@ def test_cicd_asset_build_has_heartbeat() -> None:
         raise AssertionError("CI asset build should still capture the build_assets artifact path")
 
 
+def test_cicd_tiny_runner_memory_guards() -> None:
+    workflow = (REPO / ".github/workflows/enterprise-cicd.yml").read_text(encoding="utf-8")
+    build_script = (REPO / "scripts/build_bookworm_release.sh").read_text(encoding="utf-8")
+    bootstrap = (REPO / "scripts/cicd/bootstrap_runner.sh").read_text(encoding="utf-8")
+    if 'SLOPMUD_CARGO_BUILD_JOBS: "1"' not in workflow:
+        raise AssertionError("CI asset build must force single-job release builds on tiny runners")
+    if "build_cmd+=(-j" not in build_script or "CARGO_BUILD_JOBS" not in build_script:
+        raise AssertionError("bookworm release builder must honor the CI cargo job limit")
+    if "RUNNER_SWAPFILE_MB" not in bootstrap or "/sbin/mkswap" not in bootstrap:
+        raise AssertionError("runner bootstrap must provision swap for tiny build hosts")
+
+
 def test_rapid_split_raft_live_upgrade() -> None:
     with tempfile.TemporaryDirectory(prefix="slopmud_deploy_story_") as d:
         tmp = Path(d)
@@ -668,6 +680,7 @@ TESTS = [
     ("deployment DAG promotion contracts", test_deployment_dag_promotion_contracts),
     ("CI/CD runner inventory fallback", test_cicd_runner_inventory_fallback_does_not_skip_deploy),
     ("CI/CD asset build heartbeat", test_cicd_asset_build_has_heartbeat),
+    ("CI/CD tiny runner memory guards", test_cicd_tiny_runner_memory_guards),
     ("rapid split Raft live upgrade", test_rapid_split_raft_live_upgrade),
     ("current public one-box shard deploy", test_current_public_onebox_shard_deploy),
     ("split Raft S3 fanout upgrade", test_split_raft_s3_fanout_upgrade),

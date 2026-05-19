@@ -245,6 +245,8 @@ jobs:
           TRACK: ${{ steps.meta.outputs.deploy_env }}
           # Clean rebuild only on the stg branch/track.
           CLEAN_BUILD: ${{ steps.meta.outputs.deploy_env == 'stg' && '1' || '0' }}
+          # The mud runner is intentionally tiny; keep release builds single-job.
+          SLOPMUD_CARGO_BUILD_JOBS: "1"
         run: |
           set -euo pipefail
           start_ts="$(date +%s)"

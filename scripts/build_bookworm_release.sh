@@ -13,6 +13,16 @@ git_dirty="0"
 if ! git -C "${repo_root}" diff --quiet 2>/dev/null || ! git -C "${repo_root}" diff --cached --quiet 2>/dev/null; then
   git_dirty="1"
 fi
+cargo_jobs="${SLOPMUD_CARGO_BUILD_JOBS:-${CARGO_BUILD_JOBS:-}}"
+if [[ -n "${cargo_jobs}" && ! "${cargo_jobs}" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: SLOPMUD_CARGO_BUILD_JOBS/CARGO_BUILD_JOBS must be an integer" >&2
+  exit 2
+fi
+
+build_cmd=(cargo build -p "${pkg}" --release)
+if [[ -n "${cargo_jobs}" ]]; then
+  build_cmd+=(-j "${cargo_jobs}")
+fi
 
 if command -v podman >/dev/null 2>&1; then
   # Needs a Cargo new enough for edition=2024.
@@ -24,13 +34,14 @@ if command -v podman >/dev/null 2>&1; then
     -e CARGO_HOME=/cargo \
     -e SLOPMUD_GIT_SHA="${git_sha}" \
     -e SLOPMUD_GIT_DIRTY="${git_dirty}" \
+    -e CARGO_BUILD_JOBS="${cargo_jobs}" \
     -e PATH=/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     -v "${HOME}/.cargo:/cargo:Z" \
     -v "${repo_root}:/work:Z" \
     -w /work \
     "${image}" \
-    bash -lc "/usr/local/cargo/bin/cargo build -p \"${pkg}\" --release"
+    bash -lc "$(printf '/usr/local/cargo/bin/%q ' "${build_cmd[@]}")"
 else
   echo "podman not found; falling back to local build (may produce a binary incompatible with Debian 12)" >&2
-  SLOPMUD_GIT_SHA="${git_sha}" SLOPMUD_GIT_DIRTY="${git_dirty}" cargo build -p "${pkg}" --release
+  SLOPMUD_GIT_SHA="${git_sha}" SLOPMUD_GIT_DIRTY="${git_dirty}" "${build_cmd[@]}"
 fi
