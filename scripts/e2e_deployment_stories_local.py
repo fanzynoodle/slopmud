@@ -463,6 +463,16 @@ def test_cicd_runner_inventory_fallback_does_not_skip_deploy() -> None:
         raise AssertionError("CI runner inventory API failure path still emits runner_count=0")
 
 
+def test_cicd_asset_build_has_heartbeat() -> None:
+    workflow = (REPO / ".github/workflows/enterprise-cicd.yml").read_text(encoding="utf-8")
+    if "build_asset_heartbeat" not in workflow:
+        raise AssertionError("CI asset build step needs a heartbeat for long quiet release builds")
+    if "trap cleanup_heartbeat EXIT" not in workflow:
+        raise AssertionError("CI asset build heartbeat must be cleaned up on failure")
+    if "artifact_path=\"$(./scripts/cicd/build_assets.sh)\"" not in workflow:
+        raise AssertionError("CI asset build should still capture the build_assets artifact path")
+
+
 def test_rapid_split_raft_live_upgrade() -> None:
     with tempfile.TemporaryDirectory(prefix="slopmud_deploy_story_") as d:
         tmp = Path(d)
@@ -657,6 +667,7 @@ TESTS = [
     ("deployment DAG quorum contract", test_deployment_dag_quorum_contract),
     ("deployment DAG promotion contracts", test_deployment_dag_promotion_contracts),
     ("CI/CD runner inventory fallback", test_cicd_runner_inventory_fallback_does_not_skip_deploy),
+    ("CI/CD asset build heartbeat", test_cicd_asset_build_has_heartbeat),
     ("rapid split Raft live upgrade", test_rapid_split_raft_live_upgrade),
     ("current public one-box shard deploy", test_current_public_onebox_shard_deploy),
     ("split Raft S3 fanout upgrade", test_split_raft_s3_fanout_upgrade),

@@ -248,7 +248,27 @@ jobs:
         run: |
           set -euo pipefail
           start_ts="$(date +%s)"
+
+          heartbeat_pid=""
+          cleanup_heartbeat() {
+            if [[ -n "${heartbeat_pid}" ]]; then
+              kill "${heartbeat_pid}" 2>/dev/null || true
+              wait "${heartbeat_pid}" 2>/dev/null || true
+            fi
+          }
+          trap cleanup_heartbeat EXIT
+          (
+            while true; do
+              sleep 60
+              echo "::notice::build_asset_heartbeat $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            done
+          ) &
+          heartbeat_pid="$!"
+
           artifact_path="$(./scripts/cicd/build_assets.sh)"
+          cleanup_heartbeat
+          trap - EXIT
+
           echo "artifact_path=$artifact_path" >> "$GITHUB_OUTPUT"
           duration_s=$(( $(date +%s) - start_ts ))
           echo "::notice::build_asset_duration_s=${duration_s}"
