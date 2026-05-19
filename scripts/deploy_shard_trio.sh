@@ -159,6 +159,20 @@ EOF
   if [[ -n "${SHARD_RAFT_HEARTBEAT_MS:-}" ]]; then
     echo "Environment=SHARD_RAFT_HEARTBEAT_MS=${SHARD_RAFT_HEARTBEAT_MS}" >>"$tmp_unit"
   fi
+  for var in \
+    SLOPMUD_WAL_BACKUP_ENABLED \
+    SLOPMUD_WAL_BACKUP_DIR \
+    SLOPMUD_WAL_BACKUP_INTERVAL_S \
+    SLOPMUD_WAL_BACKUP_MAX_SEGMENT_BYTES \
+    SLOPMUD_WAL_BACKUP_MAX_LOCAL_MANIFESTS \
+    SLOPMUD_WAL_BACKUP_S3_BUCKET \
+    SLOPMUD_WAL_BACKUP_S3_PREFIX \
+    SLOPMUD_WAL_BACKUP_UPLOAD_ENABLED
+  do
+    if [[ -n "${!var:-}" ]]; then
+      echo "Environment=${var}=${!var}" >>"$tmp_unit"
+    fi
+  done
   if [[ -n "${WORLD_TICK_MS:-}" ]]; then
     echo "Environment=WORLD_TICK_MS=${WORLD_TICK_MS}" >>"$tmp_unit"
   fi

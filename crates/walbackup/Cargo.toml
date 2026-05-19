@@ -1,14 +1,14 @@
 [package]
-name = "slopmud_adminctl"
+name = "slopmud_walbackup"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR 0BSD"
 
 [dependencies]
 anyhow = "1.0.96"
-base64 = "0.22.1"
-getrandom = "0.2.15"
+aws-config = { version = "1.5.13", features = ["behavior-version-latest"] }
+aws-sdk-s3 = "1.74.0"
 serde = { version = "1.0.218", features = ["derive"] }
 serde_json = "1.0.140"
-slopmud_walbackup = { path = "../../crates/walbackup" }
 tokio = { version = "1.43.0", features = ["full"] }
+tracing = "0.1.41"

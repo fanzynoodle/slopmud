@@ -3377,6 +3377,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "slopio",
+ "slopmud_walbackup",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -3498,7 +3499,21 @@ dependencies = [
  "getrandom 0.2.17",
  "serde",
  "serde_json",
+ "slopmud_walbackup",
  "tokio",
+]
+
+[[package]]
+name = "slopmud_walbackup"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-config",
+ "aws-sdk-s3",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

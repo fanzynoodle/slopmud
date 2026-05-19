@@ -31,6 +31,7 @@ Optional env:
   SLOPMUD_RELEASE_S3_URI optional full s3:// URI for the shard_01 binary object
   SLOPMUD_RELEASE_S3_BUCKET default SLOPMUD_RELEASE_S3_BUCKET, ASSETS_BUCKET, or derived slopmud-assets bucket
   SLOPMUD_RELEASE_S3_PREFIX default split-raft/<ENV_NAME>/<release_id>
+  SLOPMUD_S3_PREFETCH_TIMEOUT_S default 60; per-node S3 prefetch timeout
   SLOPMUD_ATOMIC_BIN_SWAP default 1; install versioned binary and atomically swap symlink
   SLOPMUD_STRICT_LIVE_UPGRADE default 0; set 1 to require visible leader/healthy gateway after each restart
   SLOPMUD_QUORUM_RESTART_GUARD default 1; require the other two voters before each restart
@@ -512,6 +513,11 @@ trap 'rm -rf "$tmp_dir"' EXIT
 release_sha256="$(sha256sum "$bin_src" | awk '{print $1}')"
 aws_region="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
 release_s3_uri="${SLOPMUD_RELEASE_S3_URI:-}"
+s3_prefetch_timeout_s="${SLOPMUD_S3_PREFETCH_TIMEOUT_S:-60}"
+if ! [[ "$s3_prefetch_timeout_s" =~ ^[0-9]+$ ]] || [[ "$s3_prefetch_timeout_s" == "0" ]]; then
+  echo "ERROR: SLOPMUD_S3_PREFETCH_TIMEOUT_S must be a positive integer" >&2
+  exit 2
+fi
 
 stage_release_from_s3_node() {
   local i="$1"
@@ -539,7 +545,7 @@ stage_release_from_s3_node() {
       fi; \
     fi; \
     tmp='/tmp/shard_01.${release_id}'; \
-    AWS_REGION='${aws_region}' AWS_DEFAULT_REGION='${aws_region}' aws s3 cp \"\$release_uri\" \"\$tmp\" --only-show-errors; \
+    AWS_REGION='${aws_region}' AWS_DEFAULT_REGION='${aws_region}' timeout '${s3_prefetch_timeout_s}' aws s3 cp \"\$release_uri\" \"\$tmp\" --only-show-errors; \
     actual=\$(sha256sum \"\$tmp\" | awk '{print \$1}'); \
     if [ \"\$actual\" != '${release_sha256}' ]; then \
       echo \"checksum mismatch for \$release_uri: expected ${release_sha256}, got \$actual\" >&2; \
@@ -640,6 +646,20 @@ EOF
   if [[ -n "${SHARD_RAFT_APPLICATION_MAX_FORMAT:-}" ]]; then
     echo "Environment=SHARD_RAFT_APPLICATION_MAX_FORMAT=${SHARD_RAFT_APPLICATION_MAX_FORMAT}" >>"$tmp_unit"
   fi
+  for var in \
+    SLOPMUD_WAL_BACKUP_ENABLED \
+    SLOPMUD_WAL_BACKUP_DIR \
+    SLOPMUD_WAL_BACKUP_INTERVAL_S \
+    SLOPMUD_WAL_BACKUP_MAX_SEGMENT_BYTES \
+    SLOPMUD_WAL_BACKUP_MAX_LOCAL_MANIFESTS \
+    SLOPMUD_WAL_BACKUP_S3_BUCKET \
+    SLOPMUD_WAL_BACKUP_S3_PREFIX \
+    SLOPMUD_WAL_BACKUP_UPLOAD_ENABLED
+  do
+    if [[ -n "${!var:-}" ]]; then
+      echo "Environment=${var}=${!var}" >>"$tmp_unit"
+    fi
+  done
   if [[ -n "${WORLD_TICK_MS:-}" ]]; then
     echo "Environment=WORLD_TICK_MS=${WORLD_TICK_MS}" >>"$tmp_unit"
   fi

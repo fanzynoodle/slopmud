@@ -442,6 +442,9 @@ e2e-shard-raft-trio:
 e2e-shard-raft-trio-fast:
   cargo run -q -p e2e_shard_raft_trio -- --skip-build
 
+e2e-deployment-stories:
+  python3 scripts/e2e_deployment_stories_local.py
+
 e2e-web-local:
   python3 scripts/e2e_web_selenium_local.py
 

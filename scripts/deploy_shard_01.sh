@@ -25,11 +25,22 @@ ssh_port_opt=(-p "$SSH_PORT")
 scp_port_opt=(-P "$SSH_PORT")
 
 remote_bin_dir="$(dirname "$SHARD_REMOTE_BIN")"
+release_id="${SLOPMUD_RELEASE_ID:-$(git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)}"
+if ! [[ "$release_id" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "ERROR: SLOPMUD_RELEASE_ID must contain only letters, numbers, dot, underscore, or dash: ${release_id}" >&2
+  exit 2
+fi
+release_dir="${SLOPMUD_VERSIONED_BIN_DIR:-${remote_bin_dir}/releases}"
+remote_release_bin="${release_dir}/shard_01-${release_id}"
+bin_src="${SLOPMUD_BIN_SRC:-target/release/shard_01}"
 
-echo "Building shard_01 (release)"
-./scripts/build_bookworm_release.sh shard_01
+if [[ "${SLOPMUD_SKIP_BUILD:-0}" == "1" ]]; then
+  echo "Skipping build; using ${bin_src}"
+else
+  echo "Building shard_01 (release)"
+  ./scripts/build_bookworm_release.sh shard_01
+fi
 
-bin_src="target/release/shard_01"
 if [[ ! -x "$bin_src" ]]; then
   echo "ERROR: expected binary at $bin_src" >&2
   exit 2
@@ -49,17 +60,29 @@ ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
   if ! id -u slopmud >/dev/null 2>&1; then \
     sudo useradd --system --home \"${REMOTE_ROOT}\" --create-home --shell /usr/sbin/nologin slopmud; \
   fi; \
-  sudo mkdir -p \"${REMOTE_ROOT}\" \"${remote_bin_dir}\"; \
+  sudo mkdir -p \"${REMOTE_ROOT}\" \"${remote_bin_dir}\" \"${release_dir}\"; \
   sudo chown -R slopmud:slopmud \"${REMOTE_ROOT}\" \
 "
 
-echo "Uploading binary -> ${SSH_USER}@${HOST}:${SHARD_REMOTE_BIN}"
-scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$bin_src" "${SSH_USER}@${HOST}:/tmp/shard_01"
-ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
-  set -euo pipefail; \
-  sudo install -m 0755 -o root -g root /tmp/shard_01 \"${SHARD_REMOTE_BIN}\"; \
-  sudo rm -f /tmp/shard_01 \
-"
+if [[ "${SLOPMUD_ATOMIC_BIN_SWAP:-1}" == "1" ]]; then
+  echo "Uploading binary -> ${SSH_USER}@${HOST}:${remote_release_bin}"
+  scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$bin_src" "${SSH_USER}@${HOST}:/tmp/shard_01.${release_id}"
+  ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+    set -euo pipefail; \
+    sudo install -m 0755 -o root -g root '/tmp/shard_01.${release_id}' \"${remote_release_bin}\"; \
+    sudo ln -sfn \"${remote_release_bin}\" \"${SHARD_REMOTE_BIN}.next\"; \
+    sudo mv -Tf \"${SHARD_REMOTE_BIN}.next\" \"${SHARD_REMOTE_BIN}\"; \
+    sudo rm -f '/tmp/shard_01.${release_id}' \
+  "
+else
+  echo "Uploading binary -> ${SSH_USER}@${HOST}:${SHARD_REMOTE_BIN}"
+  scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$bin_src" "${SSH_USER}@${HOST}:/tmp/shard_01"
+  ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+    set -euo pipefail; \
+    sudo install -m 0755 -o root -g root /tmp/shard_01 \"${SHARD_REMOTE_BIN}\"; \
+    sudo rm -f /tmp/shard_01 \
+  "
+fi
 
 tmp_unit="$(mktemp)"
 trap 'rm -f "$tmp_unit"' EXIT
@@ -99,6 +122,20 @@ fi
 if [[ -n "${SHARD_RAFT_HEARTBEAT_MS:-}" ]]; then
   echo "Environment=SHARD_RAFT_HEARTBEAT_MS=${SHARD_RAFT_HEARTBEAT_MS}" >>"$tmp_unit"
 fi
+for var in \
+  SLOPMUD_WAL_BACKUP_ENABLED \
+  SLOPMUD_WAL_BACKUP_DIR \
+  SLOPMUD_WAL_BACKUP_INTERVAL_S \
+  SLOPMUD_WAL_BACKUP_MAX_SEGMENT_BYTES \
+  SLOPMUD_WAL_BACKUP_MAX_LOCAL_MANIFESTS \
+  SLOPMUD_WAL_BACKUP_S3_BUCKET \
+  SLOPMUD_WAL_BACKUP_S3_PREFIX \
+  SLOPMUD_WAL_BACKUP_UPLOAD_ENABLED
+do
+  if [[ -n "${!var:-}" ]]; then
+    echo "Environment=${var}=${!var}" >>"$tmp_unit"
+  fi
+done
 if [[ -n "${SHARD_BOOTSTRAP_ADMINS:-}" ]]; then
   echo "Environment=SHARD_BOOTSTRAP_ADMINS=${SHARD_BOOTSTRAP_ADMINS}" >>"$tmp_unit"
 fi

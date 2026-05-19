@@ -992,11 +992,12 @@ const COC_LINE_ITEMS: [&str; 8] = [
 ];
 
 fn usage_and_exit() -> ! {
-    eprintln!(
+    eprintln!(concat!(
         "shard_01\n\n\
 USAGE:\n  shard_01 [--bind HOST:PORT]\n\n\
-ENV:\n  SHARD_BIND                  default 127.0.0.1:5000\n  WORLD_SEED                  default 1 (deterministic; replace with raft time/seed later)\n  WORLD_TICK_MS               default 1000\n  WORLD_TIME_SCALE_PPM        default 1000000 (1000000 = real time, 500000 = half speed)\n  BARTENDER_EMOTE_MS          default 30000\n  MOB_WANDER_MS               default 15000\n  SHARD_RAFT_LOG              default var/shard_01_raft.jsonl\n  SHARD_RAFT_NODE_ID          default NODE_ID or SHARD_BIND\n  SHARD_RAFT_BIND             optional raft RPC bind address\n  SHARD_RAFT_PEERS            optional comma-separated node@host:port peers\n  SHARD_RAFT_ELECTION_MS      optional; default 450+jitter\n  SHARD_RAFT_HEARTBEAT_MS     optional; default 120\n  SHARD_RAFT_APPLICATION_MAX_FORMAT optional; default current binary max\n  SHARD_BOOTSTRAP_ADMINS      comma-separated acct names added to admin group (genesis only)\n  SHARD_BOOTSTRAP_ADMIN_SSO   comma-separated principals added to admin group (genesis only)\n                             ex: google_email:rob@caskey.org,google_sub:123,acct:rob\n"
-    );
+ENV:\n  SHARD_BIND                  default 127.0.0.1:5000\n  WORLD_SEED                  default 1 (deterministic; replace with raft time/seed later)\n  WORLD_TICK_MS               default 1000\n  WORLD_TIME_SCALE_PPM        default 1000000 (1000000 = real time, 500000 = half speed)\n  BARTENDER_EMOTE_MS          default 30000\n  MOB_WANDER_MS               default 15000\n  SHARD_RAFT_LOG              default var/shard_01_raft.jsonl\n  SHARD_RAFT_NODE_ID          default NODE_ID or SHARD_BIND\n  SHARD_RAFT_BIND             optional raft RPC bind address\n  SHARD_RAFT_PEERS            optional comma-separated node@host:port peers\n  SHARD_RAFT_ELECTION_MS      optional; default 450+jitter\n  SHARD_RAFT_HEARTBEAT_MS     optional; default 120\n  SHARD_RAFT_APPLICATION_MAX_FORMAT optional; default current binary max\n  SHARD_BOOTSTRAP_ADMINS      comma-separated acct names added to admin group (genesis only)\n  SHARD_BOOTSTRAP_ADMIN_SSO   comma-separated principals added to admin group (genesis only)\n                             ex: google_email:rob@caskey.org,google_sub:123,acct:rob\n",
+        "  SLOPMUD_WAL_BACKUP_ENABLED optional; enables raw WAL extent backups\n  SLOPMUD_WAL_BACKUP_DIR     local WAL backup root; default SHARD_RAFT_LOG.walbackup when enabled\n  SLOPMUD_WAL_BACKUP_INTERVAL_S default 60\n  SLOPMUD_WAL_BACKUP_MAX_SEGMENT_BYTES default 536870912\n  SLOPMUD_WAL_BACKUP_S3_BUCKET optional S3 bucket for WAL backup extents/manifests\n  SLOPMUD_WAL_BACKUP_S3_PREFIX default slopmud/wal-backups\n"
+    ));
     std::process::exit(2);
 }
 
@@ -1010,6 +1011,7 @@ struct Config {
     mob_wander_ms: u64,
     raft_log_path: PathBuf,
     raft_consensus: raftlog::ConsensusConfig,
+    wal_backup: Option<slopmud_walbackup::WalBackupConfig>,
     bootstrap_admins: Vec<String>,
     bootstrap_admin_sso: Vec<String>,
 }
@@ -1080,6 +1082,14 @@ fn parse_args() -> Config {
         heartbeat_ms: raft_heartbeat_ms,
         application_max_format: raft_application_max_format,
     };
+    let wal_backup = slopmud_walbackup::WalBackupConfig::from_env(
+        raft_log_path.clone(),
+        raft_consensus.node_id.clone(),
+    )
+    .unwrap_or_else(|e| {
+        eprintln!("bad WAL backup config: {e}");
+        std::process::exit(2);
+    });
     let bootstrap_admins: Vec<String> = std::env::var("SHARD_BOOTSTRAP_ADMINS")
         .ok()
         .map(|v| {
@@ -1120,6 +1130,7 @@ fn parse_args() -> Config {
         mob_wander_ms,
         raft_log_path,
         raft_consensus,
+        wal_backup,
         bootstrap_admins,
         bootstrap_admin_sso,
     }
@@ -5349,6 +5360,17 @@ async fn main() -> anyhow::Result<()> {
     let cfg = parse_args();
     let listener = TcpListener::bind(cfg.bind).await?;
     info!(bind = %cfg.bind, "shard_01 listening");
+
+    if let Some(wal_backup) = cfg.wal_backup.clone() {
+        info!(
+            dir = %wal_backup.local_dir.display(),
+            node = %wal_backup.node_id,
+            interval_s = wal_backup.interval.as_secs(),
+            s3_bucket = wal_backup.s3_bucket.as_deref().unwrap_or("-"),
+            "wal backup enabled"
+        );
+        tokio::spawn(slopmud_walbackup::run_backup_loop(wal_backup));
+    }
 
     let rooms = rooms::Rooms::load()?;
     let world = Arc::new(Mutex::new(World::new(
