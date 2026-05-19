@@ -9,22 +9,31 @@ use argon2::Argon2;
 use bytes::Bytes;
 use chrono::{TimeZone, Utc};
 use compliance::LogStream;
+use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use memchr::memchr;
 use mudproto::session::SessionId;
-use mudproto::shard::{REQ_ATTACH, REQ_DETACH, REQ_INPUT, ShardResp};
+use mudproto::shard::{
+    REQ_ATTACH, REQ_DETACH, REQ_INPUT, REQ_INPUT_BLOB, REQ_INPUT_IDEMPOTENT, ShardResp,
+    build_input_idempotent_body,
+};
 use password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use serde::{Deserialize, Serialize};
 use slopio::frame::{FrameReader, FrameWriter};
 use slopio::telnet::IacParser;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use slopio::writev::write_all_bytes_vectored;
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream, UnixStream};
 use tracing::{Level, info, warn};
 use zeroize::Zeroize;
 
+use crate::commands::{handle_who_command, handle_whoami_command};
+
 mod ban;
+mod commands;
 mod email;
 mod eventlog;
 mod hold;
+mod kzc;
 mod nearline;
 
 const LOGIN_BACKOFF_BASE: Duration = Duration::from_secs(1);
@@ -47,6 +56,8 @@ const REPORT_LAST_MAX: usize = 200;
 const REPORT_SEARCH_LIMIT: usize = 20;
 const REPORT_CONTEXT_LINES: usize = 3;
 const REPORT_NOTE_MAX_CHARS: usize = 500;
+const BLOB_STREAM_CHUNK_BYTES: usize = 1024 * 1024;
+const MAX_DECLARED_BLOB_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 
 const REPORT_REASONS: &[(&str, &str)] = &[
     ("bullying", "Bullying / harassment"),
@@ -178,6 +189,7 @@ struct ServerInfo {
     started_instant: std::time::Instant,
     started_unix: u64,
     shard_addr: SocketAddr,
+    shard_addrs: Vec<SocketAddr>,
     bind: SocketAddr,
 }
 
@@ -191,6 +203,19 @@ const COC_LINE_ITEMS: [&str; 8] = [
     "7. don't lie about being a bot",
     "8. zero privacy (except passwords): we will share logs with various folks and train our models on them",
 ];
+
+const PUBLIC_ACK_VERSION: u32 = 1;
+const COC_ACK_VERSION: u32 = 1;
+const LEGACY_PUBLIC_ACK_VERSION: u32 = 1;
+const LEGACY_COC_ACK_VERSION: u32 = 1;
+
+fn default_legacy_public_ack_version() -> u32 {
+    LEGACY_PUBLIC_ACK_VERSION
+}
+
+fn default_legacy_coc_ack_version() -> u32 {
+    LEGACY_COC_ACK_VERSION
+}
 
 const RACE_TOKENS: [&str; 9] = [
     "dragonborn",
@@ -250,20 +275,41 @@ fn usage_and_exit() -> ! {
     eprintln!(
         "slopmud (session broker)\n\n\
 USAGE:\n  slopmud [--bind HOST:PORT] [--shard-addr HOST:PORT]\n\n\
-ENV:\n  SLOPMUD_BIND               default 0.0.0.0:4000\n  SHARD_ADDR                 default 127.0.0.1:5000\n  NODE_ID                    optional (for logs only)\n  SLOPMUD_ACCOUNTS_PATH       optional; default accounts.json (in WorkingDirectory)\n  SLOPMUD_LOCALE              optional; default en\n  SLOPMUD_ADMIN_BIND          optional; default 127.0.0.1:4011 (local admin JSON)\n  SLOPMUD_BANS_PATH           optional; default locks/bans.json\n  SBC_ADMIN_SOCK              optional; default /run/slopmud/sbc-admin.sock\n  SBC_EVENTS_SOCK             optional; default /run/slopmud/sbc-events.sock\n  SLOPMUD_EMAIL_MODE          optional; default disabled (disabled | ses | smtp | file)\n  SLOPMUD_EMAIL_FROM          required for ses/smtp; optional for file\n  SLOPMUD_SMTP_HOST           required for smtp\n  SLOPMUD_SMTP_PORT           optional; default 587\n  SLOPMUD_SMTP_USERNAME       optional\n  SLOPMUD_SMTP_PASSWORD       optional\n  SLOPMUD_EMAIL_FILE_DIR      optional; default /tmp/slopmud_email_outbox\n  SLOPMUD_EVENTLOG_ENABLED    optional; default 0\n  SLOPMUD_EVENTLOG_SPOOL_DIR  optional; default locks/eventlog\n  SLOPMUD_EVENTLOG_FLUSH_INTERVAL_S optional; default 60\n  SLOPMUD_EVENTLOG_S3_BUCKET  optional; if set, uploads target this bucket\n  SLOPMUD_EVENTLOG_S3_PREFIX  optional; default slopmud/eventlog\n  SLOPMUD_EVENTLOG_UPLOAD_ENABLED optional; default 0\n  SLOPMUD_EVENTLOG_UPLOAD_DELETE_LOCAL optional; default 1\n  SLOPMUD_EVENTLOG_UPLOAD_SCAN_INTERVAL_S optional; default 600\n  SLOPMUD_NEARLINE_ENABLED    optional; default 1\n  SLOPMUD_NEARLINE_DIR        optional; default locks/nearline_scrollback\n  SLOPMUD_NEARLINE_MAX_SEGMENTS optional; default 12\n  SLOPMUD_NEARLINE_SEGMENT_MAX_BYTES optional; default 2000000\n  SLOPMUD_GOOGLE_OAUTH_DIR    optional; default locks/google_oauth (shared with static_web)\n  SLOPMUD_GOOGLE_AUTH_BASE_URL optional; default http://127.0.0.1:8080 (where to open OAuth in browser)\n  SLOPMUD_OIDC_TOKEN_URL      optional; if set, mint a session token at login\n  SLOPMUD_OIDC_CLIENT_ID      required if token url set\n  SLOPMUD_OIDC_CLIENT_SECRET  required if token url set\n  SLOPMUD_OIDC_SCOPE          optional; default slopmud:session\n"
+ENV:\n  SLOPMUD_BIND               default 0.0.0.0:4000\n  SHARD_ADDR                 default 127.0.0.1:5000\n  SHARD_ADDRS                optional comma-separated shard failover list\n  NODE_ID                    optional (for logs only)\n  SLOPMUD_ACCOUNTS_PATH       optional; default accounts.json (in WorkingDirectory)\n  SLOPMUD_LOCALE              optional; default en\n  SLOPMUD_ADMIN_BIND          optional; default 127.0.0.1:4011 (local admin JSON)\n  SLOPMUD_BANS_PATH           optional; default locks/bans.json\n  SBC_ADMIN_SOCK              optional; default /run/slopmud/sbc-admin.sock\n  SBC_EVENTS_SOCK             optional; default /run/slopmud/sbc-events.sock\n  SLOPMUD_SBC_ENABLED         optional; default 1 (set 0/false/no/off to skip SBC event subscriber)\n  SLOPMUD_EMAIL_MODE          optional; default disabled (disabled | ses | smtp | file)\n  SLOPMUD_EMAIL_FROM          required for ses/smtp; optional for file\n  SLOPMUD_SMTP_HOST           required for smtp\n  SLOPMUD_SMTP_PORT           optional; default 587\n  SLOPMUD_SMTP_USERNAME       optional\n  SLOPMUD_SMTP_PASSWORD       optional\n  SLOPMUD_EMAIL_FILE_DIR      optional; default /tmp/slopmud_email_outbox\n  SLOPMUD_EVENTLOG_ENABLED    optional; default 0\n  SLOPMUD_EVENTLOG_SPOOL_DIR  optional; default locks/eventlog\n  SLOPMUD_EVENTLOG_FLUSH_INTERVAL_S optional; default 60\n  SLOPMUD_EVENTLOG_S3_BUCKET  optional; if set, uploads target this bucket\n  SLOPMUD_EVENTLOG_S3_PREFIX  optional; default slopmud/eventlog\n  SLOPMUD_EVENTLOG_UPLOAD_ENABLED optional; default 0\n  SLOPMUD_EVENTLOG_UPLOAD_DELETE_LOCAL optional; default 1\n  SLOPMUD_EVENTLOG_UPLOAD_SCAN_INTERVAL_S optional; default 600\n  SLOPMUD_NEARLINE_ENABLED    optional; default 1\n  SLOPMUD_NEARLINE_DIR        optional; default locks/nearline_scrollback\n  SLOPMUD_NEARLINE_MAX_SEGMENTS optional; default 12\n  SLOPMUD_NEARLINE_SEGMENT_MAX_BYTES optional; default 2000000\n  SLOPMUD_GOOGLE_OAUTH_DIR    optional; default locks/google_oauth (shared with static_web)\n  SLOPMUD_GOOGLE_AUTH_BASE_URL optional; default http://127.0.0.1:8080 (where to open OAuth in browser)\n  SLOPMUD_OIDC_TOKEN_URL      optional; if set, mint a session token at login\n  SLOPMUD_OIDC_CLIENT_ID      required if token url set\n  SLOPMUD_OIDC_CLIENT_SECRET  required if token url set\n  SLOPMUD_OIDC_SCOPE          optional; default slopmud:session\n  SLOPMUD_WEBAUTH_JWT_SECRET optional; if set, WEB_AUTH must include valid HS256 JWT proof from slopmud_web\n"
     );
     std::process::exit(2);
+}
+
+fn parse_shard_addrs_env(primary: SocketAddr) -> Vec<SocketAddr> {
+    let Some(raw) = std::env::var("SHARD_ADDRS")
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+    else {
+        return vec![primary];
+    };
+    let mut out = Vec::new();
+    for part in raw.split(',') {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        let addr: SocketAddr = part.parse().unwrap_or_else(|_| usage_and_exit());
+        if !out.contains(&addr) {
+            out.push(addr);
+        }
+    }
+    if out.is_empty() { vec![primary] } else { out }
 }
 
 #[derive(Clone, Debug)]
 struct Config {
     bind: SocketAddr,
     shard_addr: SocketAddr,
+    shard_addrs: Vec<SocketAddr>,
     node_id: Option<String>,
     // Accounts DB (stores only password hashes, never raw passwords).
     accounts_path: String,
-    // Shared player snapshot file written by shard_01.
-    players_path: PathBuf,
     // Directory used for cross-process OAuth handoffs (static_web writes results here).
     google_oauth_dir: String,
     // Base URL for the user to open in a browser for OAuth (points at static_web).
@@ -278,16 +324,19 @@ struct Config {
     oidc_client_secret: Option<String>,
     #[allow(dead_code)]
     oidc_scope: Option<String>,
+    webauth_jwt_secret: Option<String>,
     locale: String,
 
     admin_bind: SocketAddr,
     bans_path: PathBuf,
     sbc_admin_sock: PathBuf,
     sbc_events_sock: PathBuf,
+    sbc_enabled: bool,
     #[allow(dead_code)]
     email: email::EmailConfig,
     eventlog: eventlog::EventLogConfig,
     nearline: nearline::NearlineConfig,
+    blob_spool_dir: PathBuf,
 }
 
 fn parse_args() -> Config {
@@ -300,13 +349,11 @@ fn parse_args() -> Config {
         .unwrap_or_else(|_| "127.0.0.1:5000".to_string())
         .parse()
         .unwrap_or_else(|_| usage_and_exit());
+    let mut shard_addrs = parse_shard_addrs_env(shard_addr);
 
     let node_id = std::env::var("NODE_ID").ok();
     let accounts_path =
         std::env::var("SLOPMUD_ACCOUNTS_PATH").unwrap_or_else(|_| "accounts.json".to_string());
-    let players_path: PathBuf = std::env::var("SLOPMUD_PLAYERS_PATH")
-        .unwrap_or_else(|_| "var/shard_01_players.json".to_string())
-        .into();
     let google_oauth_dir = std::env::var("SLOPMUD_GOOGLE_OAUTH_DIR")
         .unwrap_or_else(|_| "locks/google_oauth".to_string());
     let google_auth_base_url = std::env::var("SLOPMUD_GOOGLE_AUTH_BASE_URL")
@@ -315,6 +362,10 @@ fn parse_args() -> Config {
     let oidc_client_id = std::env::var("SLOPMUD_OIDC_CLIENT_ID").ok();
     let oidc_client_secret = std::env::var("SLOPMUD_OIDC_CLIENT_SECRET").ok();
     let oidc_scope = std::env::var("SLOPMUD_OIDC_SCOPE").ok();
+    let webauth_jwt_secret = std::env::var("SLOPMUD_WEBAUTH_JWT_SECRET")
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
     let locale = std::env::var("SLOPMUD_LOCALE").unwrap_or_else(|_| "en".to_string());
 
     let admin_bind: SocketAddr = std::env::var("SLOPMUD_ADMIN_BIND")
@@ -332,6 +383,12 @@ fn parse_args() -> Config {
     let sbc_events_sock: PathBuf = std::env::var("SBC_EVENTS_SOCK")
         .unwrap_or_else(|_| "/run/slopmud/sbc-events.sock".to_string())
         .into();
+    let sbc_enabled = std::env::var("SLOPMUD_SBC_ENABLED")
+        .map(|v| {
+            let v = v.trim().to_ascii_lowercase();
+            !(v == "0" || v == "false" || v == "no" || v == "off")
+        })
+        .unwrap_or(true);
 
     let mut email = email::EmailConfig::default();
     email.mode = std::env::var("SLOPMUD_EMAIL_MODE").unwrap_or_else(|_| email.mode.clone());
@@ -398,6 +455,9 @@ fn parse_args() -> Config {
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(nearline.segment_max_bytes);
+    let blob_spool_dir: PathBuf = std::env::var("SLOPMUD_BLOB_SPOOL_DIR")
+        .unwrap_or_else(|_| "locks/blob_spool".to_string())
+        .into();
 
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
@@ -409,6 +469,7 @@ fn parse_args() -> Config {
             "--shard-addr" => {
                 let v = it.next().unwrap_or_else(|| usage_and_exit());
                 shard_addr = v.parse().unwrap_or_else(|_| usage_and_exit());
+                shard_addrs = vec![shard_addr];
             }
             "-h" | "--help" => usage_and_exit(),
             _ => usage_and_exit(),
@@ -418,23 +479,26 @@ fn parse_args() -> Config {
     Config {
         bind,
         shard_addr,
+        shard_addrs,
         node_id,
         accounts_path,
-        players_path,
         google_oauth_dir,
         google_auth_base_url,
         oidc_token_url,
         oidc_client_id,
         oidc_client_secret,
         oidc_scope,
+        webauth_jwt_secret,
         locale,
         admin_bind,
         bans_path,
         sbc_admin_sock,
         sbc_events_sock,
+        sbc_enabled,
         email,
         eventlog,
         nearline,
+        blob_spool_dir,
     }
 }
 
@@ -1506,7 +1570,7 @@ async fn handle_account_command(
                     let (email, google_email) = {
                         let a = accounts.lock().await;
                         match a.by_name.get(name) {
-                            Some(r) => (r.email.clone(), r.google_email.clone()),
+                            Some(r) => (r.email.clone(), r.auth_email_for_method("google")),
                             None => (None, None),
                         }
                     };
@@ -1586,9 +1650,49 @@ struct SessionInfo {
     sex: String,
     pronouns: String,
     peer_ip: IpAddr,
-    write_tx: tokio::sync::mpsc::Sender<Bytes>,
+    write_tx: ClientWriteTx,
     disconnect_tx: tokio::sync::watch::Sender<bool>,
     scrollback: Arc<tokio::sync::Mutex<Scrollback>>,
+    next_cmd_id: u64,
+}
+
+#[derive(Debug)]
+enum ClientWrite {
+    Bytes(Bytes),
+    Blob {
+        prefix: Bytes,
+        path: PathBuf,
+        len: u64,
+        suffix: Bytes,
+    },
+}
+
+#[derive(Debug, Clone)]
+struct ClientWriteTx(tokio::sync::mpsc::Sender<ClientWrite>);
+
+impl ClientWriteTx {
+    async fn send(&self, bytes: Bytes) -> Result<(), ()> {
+        self.0.send(ClientWrite::Bytes(bytes)).await.map_err(|_| ())
+    }
+
+    async fn send_blob(
+        &self,
+        prefix: Bytes,
+        path: Bytes,
+        len: u64,
+        suffix: Bytes,
+    ) -> Result<(), ()> {
+        let path = PathBuf::from(String::from_utf8_lossy(path.as_ref()).into_owned());
+        self.0
+            .send(ClientWrite::Blob {
+                prefix,
+                path,
+                len,
+                suffix,
+            })
+            .await
+            .map_err(|_| ())
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1605,16 +1709,6 @@ struct ShardAuthBlob {
     oidc_email: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     caps: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct SavedPlayerSnapshot {
-    name: String,
-    is_bot: bool,
-    race: String,
-    class: String,
-    sex: String,
-    pronouns: String,
 }
 
 fn make_shard_auth_blob(
@@ -1655,114 +1749,6 @@ fn make_shard_auth_blob(
     Bytes::from(serde_json::to_vec(&b).expect("serialize shard auth blob"))
 }
 
-fn load_saved_player(path: &Path, name: &str) -> Option<SavedPlayerSnapshot> {
-    let target = sanitize_name(name);
-    if target.is_empty() {
-        return None;
-    }
-    let raw = std::fs::read_to_string(path).ok()?;
-    let snapshots = serde_json::from_str::<Vec<SavedPlayerSnapshot>>(&raw).ok()?;
-    snapshots
-        .into_iter()
-        .find(|p| sanitize_name(&p.name).eq_ignore_ascii_case(&target))
-}
-
-async fn wait_for_saved_player(
-    path: &Path,
-    name: &str,
-    timeout: Duration,
-) -> Option<SavedPlayerSnapshot> {
-    let deadline = std::time::Instant::now() + timeout;
-    loop {
-        if let Some(saved) = load_saved_player(path, name) {
-            return Some(saved);
-        }
-        if std::time::Instant::now() >= deadline {
-            return None;
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-}
-
-async fn attach_authenticated_session(
-    session: SessionId,
-    peer_ip: IpAddr,
-    name: &str,
-    bot: bool,
-    race: &str,
-    class: &str,
-    sex: &str,
-    pronouns: &str,
-    shard_auth: Bytes,
-    auth_method: &str,
-    write_tx: &tokio::sync::mpsc::Sender<Bytes>,
-    disconnect_tx: &tokio::sync::watch::Sender<bool>,
-    sessions: &Arc<tokio::sync::Mutex<HashMap<SessionId, SessionInfo>>>,
-    holds: &Arc<tokio::sync::Mutex<hold::HoldCache>>,
-    eventlog: &Arc<eventlog::EventLog>,
-    shard_tx: &tokio::sync::mpsc::Sender<ShardMsg>,
-) -> anyhow::Result<()> {
-    let held = { holds.lock().await.is_held(name).is_some() };
-
-    {
-        let mut m = sessions.lock().await;
-        m.insert(
-            session,
-            SessionInfo {
-                name: name.to_string(),
-                held,
-                is_bot: bot,
-                auth: Some(shard_auth.clone()),
-                race: race.to_string(),
-                class: class.to_string(),
-                sex: sex.to_string(),
-                pronouns: pronouns.to_string(),
-                peer_ip,
-                write_tx: write_tx.clone(),
-                disconnect_tx: disconnect_tx.clone(),
-                scrollback: Arc::new(tokio::sync::Mutex::new(Scrollback::new(
-                    SCROLLBACK_MAX_LINES,
-                ))),
-            },
-        );
-    }
-
-    {
-        let ts = Utc::now().to_rfc3339();
-        let sid = session_hex(session);
-        let entry = format!(
-            "ts={} kind=login session={} ip={} name={} bot={} auth_method={}",
-            logfmt_str(&ts),
-            logfmt_str(&sid),
-            logfmt_str(&peer_ip.to_string()),
-            logfmt_str(name),
-            logfmt_str(&(if bot { "1" } else { "0" }).to_string()),
-            logfmt_str(auth_method),
-        );
-        eventlog.log_line(LogStream::All, &entry).await;
-        eventlog.log_line(LogStream::Character(name), &entry).await;
-        eventlog.log_line(LogStream::Login, &entry).await;
-    }
-
-    let body = attach_body(
-        bot,
-        Some(shard_auth.as_ref()),
-        race,
-        class,
-        sex,
-        pronouns,
-        name.as_bytes(),
-    );
-    let _ = shard_tx
-        .send(ShardMsg {
-            t: REQ_ATTACH,
-            session,
-            body,
-        })
-        .await;
-    Ok(())
-}
-
 #[derive(Debug, Clone)]
 struct ShardMsg {
     t: u8,
@@ -1788,24 +1774,258 @@ enum ConnState {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+struct AccountAuthIdentity {
+    method: String, // google | oidc | future methods
+    sub: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    email: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct AccountRec {
     name: String,
     #[serde(default)]
     pw_hash: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    auth_identities: Vec<AccountAuthIdentity>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     google_sub: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     google_email: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     oidc_sub: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     oidc_email: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     caps: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    is_bot: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    race: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    class: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sex: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pronouns: Option<String>,
+    #[serde(default = "default_legacy_public_ack_version")]
+    public_ack_version: u32,
+    #[serde(default = "default_legacy_coc_ack_version")]
+    coc_ack_version: u32,
     // User-configured email address for notifications. Not used for auth.
     #[serde(default)]
     email: Option<String>,
     created_unix: u64,
+}
+
+impl AccountRec {
+    fn absorb_legacy_auth_fields(&mut self) {
+        if let Some(sub) = self.google_sub.clone() {
+            let email = self.google_email.clone();
+            let _ = self.link_auth_identity("google", &sub, email);
+        }
+        if let Some(sub) = self.oidc_sub.clone() {
+            let email = self.oidc_email.clone();
+            let _ = self.link_auth_identity("oidc", &sub, email);
+        }
+        self.google_sub = None;
+        self.google_email = None;
+        self.oidc_sub = None;
+        self.oidc_email = None;
+    }
+
+    fn has_auth_method(&self, method: &str) -> bool {
+        let method = method.trim().to_ascii_lowercase();
+        self.auth_identities.iter().any(|id| id.method == method)
+    }
+
+    fn has_auth_identity(&self, method: &str, sub: &str) -> bool {
+        let method = method.trim().to_ascii_lowercase();
+        let sub = sub.trim();
+        self.auth_identities
+            .iter()
+            .any(|id| id.method == method && id.sub == sub)
+    }
+
+    fn auth_email_for_method(&self, method: &str) -> Option<String> {
+        let method = method.trim().to_ascii_lowercase();
+        self.auth_identities
+            .iter()
+            .find(|id| id.method == method)
+            .and_then(|id| id.email.clone())
+    }
+
+    fn auth_email_for_identity(&self, method: &str, sub: &str) -> Option<String> {
+        let method = method.trim().to_ascii_lowercase();
+        let sub = sub.trim();
+        self.auth_identities
+            .iter()
+            .find(|id| id.method == method && id.sub == sub)
+            .and_then(|id| id.email.clone())
+    }
+
+    fn link_auth_identity(&mut self, method: &str, sub: &str, email: Option<String>) -> bool {
+        let method = method.trim().to_ascii_lowercase();
+        let sub = sub.trim();
+        if method.is_empty() || sub.is_empty() {
+            return false;
+        }
+        if let Some(existing) = self
+            .auth_identities
+            .iter_mut()
+            .find(|id| id.method == method && id.sub == sub)
+        {
+            if email.is_some() && existing.email != email {
+                existing.email = email;
+                return true;
+            }
+            return false;
+        }
+        self.auth_identities.push(AccountAuthIdentity {
+            method,
+            sub: sub.to_string(),
+            email,
+        });
+        true
+    }
+}
+
+fn normalize_stored_race(s: &str) -> Option<String> {
+    let token = s.trim().to_ascii_lowercase();
+    is_allowed_token(&token, &RACE_TOKENS).then_some(token)
+}
+
+fn normalize_stored_class(s: &str) -> Option<String> {
+    let token = s.trim().to_ascii_lowercase();
+    is_allowed_token(&token, &CLASS_TOKENS).then_some(token)
+}
+
+fn normalize_stored_sex(s: &str) -> Option<String> {
+    let token = s.trim().to_ascii_lowercase();
+    matches!(token.as_str(), "male" | "female" | "none" | "other").then_some(token)
+}
+
+fn stored_account_onboarding(rec: &AccountRec) -> Option<(bool, String, String, String, String)> {
+    let bot = rec.is_bot?;
+    let race = normalize_stored_race(rec.race.as_deref()?)?;
+    let class = normalize_stored_class(rec.class.as_deref()?)?;
+    let sex = normalize_stored_sex(rec.sex.as_deref()?)?;
+    let pronouns = normalize_pronouns("en", rec.pronouns.as_deref()?)?.to_string();
+    Some((bot, race, class, sex, pronouns))
+}
+
+fn seed_legacy_onboarding_defaults(
+    is_bot: &mut Option<bool>,
+    race: &mut Option<String>,
+    class: &mut Option<String>,
+    sex: &mut Option<String>,
+    pronouns: &mut Option<String>,
+) {
+    *is_bot = Some(false);
+    *race = Some("human".to_string());
+    *class = Some("fighter".to_string());
+    *sex = Some("none".to_string());
+    *pronouns = Some("they".to_string());
+}
+
+fn seed_account_onboarding(
+    rec: &AccountRec,
+    is_bot: &mut Option<bool>,
+    race: &mut Option<String>,
+    class: &mut Option<String>,
+    sex: &mut Option<String>,
+    pronouns: &mut Option<String>,
+) -> bool {
+    if let Some((bot, race_s, class_s, sex_s, pronouns_s)) = stored_account_onboarding(rec) {
+        *is_bot = Some(bot);
+        *race = Some(race_s);
+        *class = Some(class_s);
+        *sex = Some(sex_s);
+        *pronouns = Some(pronouns_s);
+        true
+    } else {
+        seed_legacy_onboarding_defaults(is_bot, race, class, sex, pronouns);
+        false
+    }
+}
+
+fn store_account_onboarding(
+    rec: &mut AccountRec,
+    is_bot: bool,
+    race: &str,
+    class: &str,
+    sex: &str,
+    pronouns: &str,
+) {
+    rec.is_bot = Some(is_bot);
+    rec.race = Some(race.to_string());
+    rec.class = Some(class.to_string());
+    rec.sex = Some(sex.to_string());
+    rec.pronouns = Some(pronouns.to_string());
+}
+
+fn prepare_existing_account_onboarding(
+    rec: &AccountRec,
+    is_bot: &mut Option<bool>,
+    race: &mut Option<String>,
+    class: &mut Option<String>,
+    sex: &mut Option<String>,
+    pronouns: &mut Option<String>,
+    public_ack_version: &mut u32,
+    coc_ack_version: &mut u32,
+    persist_account_profile: &mut bool,
+) -> ConnState {
+    *public_ack_version = rec.public_ack_version;
+    *coc_ack_version = rec.coc_ack_version;
+    if !seed_account_onboarding(rec, is_bot, race, class, sex, pronouns) {
+        *persist_account_profile = false;
+    }
+    if *public_ack_version < PUBLIC_ACK_VERSION {
+        ConnState::NeedPublicAck
+    } else if *coc_ack_version < COC_ACK_VERSION {
+        ConnState::NeedCocAck
+    } else {
+        ConnState::NeedSex
+    }
+}
+
+fn prompt_bot_disclosure() -> Bytes {
+    Bytes::from_static(
+        b"character creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
+    )
+}
+
+fn prompt_public_ack() -> Bytes {
+    Bytes::from_static(
+        b"character creation (step 3/4)\r\ncontent + licensing:\r\n- anything you submit - consider it publicly licensed and publicly published\r\n- zero privacy: logs may be shared and used for training\r\n- exception: passwords are never logged/echoed; only password hashes are stored\r\ntype: agree\r\n> ",
+    )
+}
+
+fn prompt_coc_ack() -> Bytes {
+    let mut b = Vec::new();
+    b.extend_from_slice(b"character creation (step 4/4)\r\ncode of conduct:\r\n");
+    for li in COC_LINE_ITEMS {
+        b.extend_from_slice(li.as_bytes());
+        b.extend_from_slice(b"\r\n");
+    }
+    b.extend_from_slice(b"type: agree\r\n> ");
+    Bytes::from(b)
+}
+
+fn prompt_race() -> Bytes {
+    Bytes::from_static(
+        b"character creation (step 5/7)\r\nchoose race:\r\ntype: race list | race <name>\r\n> ",
+    )
+}
+
+fn prompt_for_onboarding_state(state: ConnState) -> Option<Bytes> {
+    match state {
+        ConnState::NeedBotDisclosure => Some(prompt_bot_disclosure()),
+        ConnState::NeedPublicAck => Some(prompt_public_ack()),
+        ConnState::NeedCocAck => Some(prompt_coc_ack()),
+        ConnState::NeedRace => Some(prompt_race()),
+        _ => None,
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1822,11 +2042,13 @@ struct GoogleOAuthPending {
     google_email: Option<String>,
     #[serde(default)]
     error: Option<String>,
+    #[serde(default)]
+    return_to: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct WebAuthReq {
-    action: String, // login | create | auto
+    action: String, // login | create | auto | link
     method: String, // password | google | oidc
     name: String,
     #[serde(default)]
@@ -1841,6 +2063,80 @@ struct WebAuthReq {
     oidc_email: Option<String>,
     #[serde(default)]
     caps: Option<Vec<String>>,
+    #[serde(default)]
+    jwt: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct WebAuthJwtClaims {
+    iss: String,
+    aud: String,
+    iat: usize,
+    nbf: usize,
+    exp: usize,
+    action: String,
+    method: String,
+    name: String,
+    #[serde(default)]
+    google_sub: Option<String>,
+    #[serde(default)]
+    google_email: Option<String>,
+    #[serde(default)]
+    oidc_sub: Option<String>,
+    #[serde(default)]
+    oidc_email: Option<String>,
+    #[serde(default)]
+    caps: Option<Vec<String>>,
+}
+
+fn verify_webauth_jwt(cfg: &Config, req: &WebAuthReq) -> Result<(), &'static str> {
+    let Some(secret) = cfg.webauth_jwt_secret.as_deref() else {
+        return Ok(());
+    };
+    let tok = req.jwt.as_deref().map(str::trim).unwrap_or("");
+    if tok.is_empty() {
+        return Err("missing jwt");
+    }
+
+    let mut v = Validation::new(Algorithm::HS256);
+    v.set_audience(&["slopmud_broker"]);
+    v.set_issuer(&["slopmud_web"]);
+    v.leeway = 5;
+
+    let claims = match jsonwebtoken::decode::<WebAuthJwtClaims>(
+        tok,
+        &DecodingKey::from_secret(secret.as_bytes()),
+        &v,
+    ) {
+        Ok(c) => c.claims,
+        Err(_) => return Err("bad jwt"),
+    };
+
+    if claims.action.trim().to_ascii_lowercase() != req.action.trim().to_ascii_lowercase() {
+        return Err("jwt action mismatch");
+    }
+    if claims.method.trim().to_ascii_lowercase() != req.method.trim().to_ascii_lowercase() {
+        return Err("jwt method mismatch");
+    }
+    if claims.name.trim() != req.name.trim() {
+        return Err("jwt name mismatch");
+    }
+    if claims.google_sub != req.google_sub {
+        return Err("jwt google_sub mismatch");
+    }
+    if claims.google_email != req.google_email {
+        return Err("jwt google_email mismatch");
+    }
+    if claims.oidc_sub != req.oidc_sub {
+        return Err("jwt oidc_sub mismatch");
+    }
+    if claims.oidc_email != req.oidc_email {
+        return Err("jwt oidc_email mismatch");
+    }
+    if claims.caps != req.caps {
+        return Err("jwt caps mismatch");
+    }
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -1854,7 +2150,8 @@ impl Accounts {
         let mut by_name = HashMap::new();
         if let Ok(s) = std::fs::read_to_string(&path) {
             if let Ok(v) = serde_json::from_str::<Vec<AccountRec>>(&s) {
-                for a in v {
+                for mut a in v {
+                    a.absorb_legacy_auth_fields();
                     by_name.insert(a.name.clone(), a);
                 }
             }
@@ -1864,12 +2161,35 @@ impl Accounts {
 
     fn save(&self) -> anyhow::Result<()> {
         let mut v = self.by_name.values().cloned().collect::<Vec<_>>();
+        for rec in v.iter_mut() {
+            rec.absorb_legacy_auth_fields();
+        }
         v.sort_by(|a, b| a.name.cmp(&b.name));
         let s = serde_json::to_string_pretty(&v)?;
         let tmp = format!("{}.tmp", self.path);
         std::fs::write(&tmp, s)?;
         std::fs::rename(&tmp, &self.path)?;
         Ok(())
+    }
+
+    fn linked_names_for_identity(&self, method: &str, sub: &str) -> Vec<String> {
+        self.by_name
+            .values()
+            .filter_map(|r| {
+                if r.has_auth_identity(method, sub) {
+                    Some(r.name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    }
+
+    fn identity_linked_to_other_account(&self, method: &str, sub: &str, name: &str) -> bool {
+        let name = name.trim().to_ascii_lowercase();
+        self.by_name
+            .values()
+            .any(|r| r.name.trim().to_ascii_lowercase() != name && r.has_auth_identity(method, sub))
     }
 }
 
@@ -1900,6 +2220,7 @@ async fn main() -> anyhow::Result<()> {
             .unwrap_or_default()
             .as_secs(),
         shard_addr: cfg.shard_addr,
+        shard_addrs: cfg.shard_addrs.clone(),
         bind: cfg.bind,
     });
 
@@ -1923,7 +2244,7 @@ async fn main() -> anyhow::Result<()> {
 
     let (shard_tx, shard_rx) = tokio::sync::mpsc::channel::<ShardMsg>(4096);
     tokio::spawn(shard_manager_task(
-        cfg.shard_addr,
+        cfg.shard_addrs.clone(),
         sessions.clone(),
         line_ids.clone(),
         nearline.clone(),
@@ -1938,20 +2259,26 @@ async fn main() -> anyhow::Result<()> {
         accounts.clone(),
     ));
 
-    tokio::spawn(sbc_holds_events_task(
-        cfg.sbc_events_sock.clone(),
-        holds.clone(),
-        sessions.clone(),
-    ));
+    if cfg.sbc_enabled {
+        tokio::spawn(sbc_holds_events_task(
+            cfg.sbc_events_sock.clone(),
+            holds.clone(),
+            sessions.clone(),
+        ));
+    } else {
+        info!("sbc event subscriber disabled");
+    }
 
     info!(
         bind = %cfg.bind,
         shard_addr = %cfg.shard_addr,
+        shard_addrs = ?cfg.shard_addrs,
         node_id = %cfg.node_id.as_deref().unwrap_or("-"),
         admin_bind = %cfg.admin_bind,
         bans_path = %cfg.bans_path.display(),
         sbc_admin_sock = %cfg.sbc_admin_sock.display(),
         sbc_events_sock = %cfg.sbc_events_sock.display(),
+        sbc_enabled = cfg.sbc_enabled,
         "session broker listening"
     );
 
@@ -1991,19 +2318,26 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn shard_manager_task(
-    shard_addr: SocketAddr,
+    shard_addrs: Vec<SocketAddr>,
     sessions: Arc<tokio::sync::Mutex<HashMap<SessionId, SessionInfo>>>,
     line_ids: Arc<tokio::sync::Mutex<LineIdGen>>,
     nearline: Arc<nearline::NearlineRing>,
     eventlog: Arc<eventlog::EventLog>,
     mut rx: tokio::sync::mpsc::Receiver<ShardMsg>,
 ) {
-    let mut announced_down = false;
+    if shard_addrs.is_empty() {
+        warn!("no shard addresses configured");
+        return;
+    }
+
+    let mut addr_i = 0usize;
+    let mut pending: VecDeque<ShardMsg> = VecDeque::new();
+    let mut inflight: VecDeque<ShardMsg> = VecDeque::new();
 
     loop {
+        let shard_addr = shard_addrs[addr_i % shard_addrs.len()];
         match TcpStream::connect(shard_addr).await {
             Ok(stream) => {
-                announced_down = false;
                 info!(shard_addr = %shard_addr, "connected to shard");
 
                 let (rd, wr) = stream.into_split();
@@ -2028,9 +2362,11 @@ async fn shard_manager_task(
                         })
                         .collect::<Vec<_>>()
                 };
+                let mut reattach_failed = false;
                 for (sid, is_bot, auth, race, class, sex, pronouns, name) in snapshot {
                     let body = attach_body(
                         is_bot,
+                        true,
                         auth.as_deref(),
                         &race,
                         &class,
@@ -2038,18 +2374,51 @@ async fn shard_manager_task(
                         &pronouns,
                         name.as_bytes(),
                     );
-                    let _ = write_req(&mut fw, REQ_ATTACH, sid, &body).await;
+                    if let Err(err) = write_req(&mut fw, REQ_ATTACH, sid, &body).await {
+                        warn!(shard_addr = %shard_addr, err=%err, "reattach to shard failed");
+                        reattach_failed = true;
+                        break;
+                    }
                 }
-                let _ = fw.flush().await;
+                if !reattach_failed {
+                    if let Err(err) = fw.flush().await {
+                        warn!(shard_addr = %shard_addr, err=%err, "reattach flush to shard failed");
+                        reattach_failed = true;
+                    }
+                }
+                if reattach_failed {
+                    addr_i = addr_i.wrapping_add(1);
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    continue;
+                }
 
                 // Connection loop.
                 loop {
+                    if let Some(msg) = pending.pop_front() {
+                        if let Err(err) = write_req(&mut fw, msg.t, msg.session, &msg.body).await {
+                            warn!(shard_addr = %shard_addr, err=%err, "pending shard request write failed");
+                            pending.push_front(msg);
+                            break;
+                        }
+                        if shard_msg_expects_response(&msg) {
+                            inflight.push_back(msg);
+                        }
+                        continue;
+                    }
+
                     tokio::select! {
                         msg = rx.recv() => {
                             let Some(msg) = msg else {
                                 return;
                             };
-                            let _ = write_req(&mut fw, msg.t, msg.session, &msg.body).await;
+                            if let Err(err) = write_req(&mut fw, msg.t, msg.session, &msg.body).await {
+                                warn!(shard_addr = %shard_addr, err=%err, "shard request write failed");
+                                pending.push_front(msg);
+                                break;
+                            }
+                            if shard_msg_expects_response(&msg) {
+                                inflight.push_back(msg);
+                            }
                         }
                         res = fr.read_frame() => {
                             let frame = match res {
@@ -2059,6 +2428,7 @@ async fn shard_manager_task(
                             };
                             match mudproto::shard::parse_resp(frame) {
                                 Ok(resp) => {
+                                    ack_inflight_for_response(&mut inflight, &resp);
                                     route_resp(resp, &sessions, &line_ids, &nearline, &eventlog)
                                         .await
                                 }
@@ -2071,31 +2441,38 @@ async fn shard_manager_task(
                 }
 
                 // Shard connection dropped.
-                warn!(shard_addr = %shard_addr, "shard disconnected; reconnecting");
-                notify_all(&sessions, b"# shard disconnected; reconnecting...\r\n").await;
+                requeue_inflight(&mut pending, &mut inflight);
+                warn!(shard_addr = %shard_addr, "shard disconnected; failing over");
+                addr_i = addr_i.wrapping_add(1);
+                tokio::time::sleep(Duration::from_millis(100)).await;
             }
             Err(e) => {
-                if !announced_down {
-                    announced_down = true;
-                    warn!(shard_addr = %shard_addr, err=%e, "shard offline; retrying");
-                    notify_all(&sessions, b"# shard offline; retrying...\r\n").await;
-                }
-
-                // Don't let the outbound queue grow unbounded while offline.
-                while let Ok(msg) = rx.try_recv() {
-                    if msg.t == REQ_INPUT {
-                        notify_one(
-                            &sessions,
-                            msg.session,
-                            b"# shard offline; input dropped\r\n",
-                        )
-                        .await;
-                    }
-                }
-
-                tokio::time::sleep(Duration::from_millis(500)).await;
+                warn!(shard_addr = %shard_addr, err=%e, "shard offline; trying next shard");
+                addr_i = addr_i.wrapping_add(1);
+                tokio::time::sleep(Duration::from_millis(250)).await;
             }
         }
+    }
+}
+
+fn shard_msg_expects_response(msg: &ShardMsg) -> bool {
+    msg.t != REQ_DETACH
+}
+
+fn ack_inflight_for_response(inflight: &mut VecDeque<ShardMsg>, resp: &ShardResp) {
+    let session = match resp {
+        ShardResp::Output { session, .. }
+        | ShardResp::Err { session, .. }
+        | ShardResp::OutputBlob { session, .. } => *session,
+    };
+    if let Some(i) = inflight.iter().position(|msg| msg.session == session) {
+        inflight.remove(i);
+    }
+}
+
+fn requeue_inflight(pending: &mut VecDeque<ShardMsg>, inflight: &mut VecDeque<ShardMsg>) {
+    while let Some(msg) = inflight.pop_back() {
+        pending.push_front(msg);
     }
 }
 
@@ -2222,6 +2599,62 @@ async fn route_resp(
                 }
 
                 let _ = si.write_tx.send(msg).await;
+            }
+        }
+        ShardResp::OutputBlob {
+            session,
+            prefix,
+            path,
+            len,
+            suffix,
+        } => {
+            let si = { sessions.lock().await.get(&session).cloned() };
+            if let Some(si) = si {
+                let now = Utc::now();
+                let now_ms = u64::try_from(now.timestamp_millis()).unwrap_or(0);
+                let sid_hex = session_hex(session);
+                let name = si.name.clone();
+                let ip = si.peer_ip.to_string();
+                let path_text = String::from_utf8_lossy(path.as_ref()).to_string();
+                let text = format!("# blob output: {len} bytes from {path_text}");
+
+                {
+                    let mut id_gen = line_ids.lock().await;
+                    let mut sb = si.scrollback.lock().await;
+                    let id = id_gen.next_id(now_ms);
+                    sb.push_line(id, now_ms, clamp_chars(&text, SCROLLBACK_MAX_LINE_CHARS));
+
+                    nearline.try_append(nearline::NearlineRecord {
+                        v: 1,
+                        id: id.to_string(),
+                        ts_unix_ms: now_ms,
+                        kind: "output_blob".to_string(),
+                        session: sid_hex.clone(),
+                        name: name.clone(),
+                        ip: ip.clone(),
+                        text: if si.held {
+                            redact_pii(&text)
+                        } else {
+                            text.clone()
+                        },
+                    });
+
+                    let ts = now.to_rfc3339();
+                    let entry = format!(
+                        "ts={} kind=output_blob session={} ip={} name={} line_id={} bytes={} path={}",
+                        logfmt_str(&ts),
+                        logfmt_str(&sid_hex),
+                        logfmt_str(&ip),
+                        logfmt_str(&name),
+                        logfmt_str(&id.to_string()),
+                        logfmt_str(&len.to_string()),
+                        logfmt_str(if si.held { "[redacted]" } else { &path_text }),
+                    );
+                    eventlog.log_line(LogStream::All, &entry).await;
+                    eventlog.log_line(LogStream::Character(&name), &entry).await;
+                }
+
+                let _ = si.write_tx.send_blob(prefix, path, len, suffix).await;
             }
         }
     }
@@ -2479,11 +2912,19 @@ async fn handle_admin_conn(
                             AccountRec {
                                 name: uname.clone(),
                                 pw_hash: Some(hash),
+                                auth_identities: Vec::new(),
                                 google_sub: None,
                                 google_email: None,
                                 oidc_sub: None,
                                 oidc_email: None,
                                 caps,
+                                is_bot: None,
+                                race: None,
+                                class: None,
+                                sex: None,
+                                pronouns: None,
+                                public_ack_version: 0,
+                                coc_ack_version: 0,
                                 email: None,
                                 created_unix: now_unix,
                             },
@@ -2676,31 +3117,129 @@ async fn kick_by_ip(
     targets.len() as u64
 }
 
-async fn notify_all(
-    sessions: &Arc<tokio::sync::Mutex<HashMap<SessionId, SessionInfo>>>,
-    msg: &'static [u8],
+async fn client_writer_loop(
+    mut wr: tokio::net::tcp::OwnedWriteHalf,
+    mut rx: tokio::sync::mpsc::Receiver<ClientWrite>,
 ) {
-    let txs = {
-        let m = sessions.lock().await;
-        m.values().map(|s| s.write_tx.clone()).collect::<Vec<_>>()
-    };
-    for tx in txs {
-        let _ = tx.send(Bytes::from_static(msg)).await;
+    while let Some(item) = rx.recv().await {
+        let res = match item {
+            ClientWrite::Bytes(bytes) => write_all_bytes_vectored(&mut wr, &[bytes]).await,
+            ClientWrite::Blob {
+                prefix,
+                path,
+                len,
+                suffix,
+            } => write_blob_to_client(&mut wr, prefix, &path, len, suffix).await,
+        };
+        if res.is_err() {
+            break;
+        }
     }
 }
 
-async fn notify_one(
-    sessions: &Arc<tokio::sync::Mutex<HashMap<SessionId, SessionInfo>>>,
-    session: SessionId,
-    msg: &'static [u8],
-) {
-    let tx = {
-        let m = sessions.lock().await;
-        m.get(&session).map(|s| s.write_tx.clone())
-    };
-    if let Some(tx) = tx {
-        let _ = tx.send(Bytes::from_static(msg)).await;
+async fn write_blob_to_client(
+    wr: &mut tokio::net::tcp::OwnedWriteHalf,
+    prefix: Bytes,
+    path: &Path,
+    len: u64,
+    suffix: Bytes,
+) -> std::io::Result<()> {
+    let mut parts = Vec::with_capacity(2);
+    if !prefix.is_empty() {
+        parts.push(prefix);
     }
+    if !parts.is_empty() {
+        write_all_bytes_vectored(wr, &parts).await?;
+    }
+
+    let sent = kzc::send_file_to_writer(wr, path, len).await?;
+    if sent < len {
+        warn!(
+            path = %path.display(),
+            expected = len,
+            sent,
+            "blob output ended before advertised byte length"
+        );
+    }
+
+    if !suffix.is_empty() {
+        write_all_bytes_vectored(wr, &[suffix]).await?;
+    }
+    Ok(())
+}
+
+fn parse_sayblob_len(line: &str) -> Option<Result<u64, &'static str>> {
+    let mut words = line.split_ascii_whitespace();
+    match words.next()? {
+        "sayblob" | "say-blob" => {}
+        _ => return None,
+    }
+    let Some(raw_len) = words.next() else {
+        return Some(Err("usage: sayblob <byte-count>"));
+    };
+    if words.next().is_some() {
+        return Some(Err("usage: sayblob <byte-count>"));
+    }
+    let Ok(len) = raw_len.parse::<u64>() else {
+        return Some(Err("sayblob: bad byte count"));
+    };
+    if len == 0 || len > MAX_DECLARED_BLOB_BYTES {
+        return Some(Err("sayblob: byte count out of range"));
+    }
+    Some(Ok(len))
+}
+
+async fn spool_blob_payload<R>(
+    rd: &mut R,
+    iac: &mut IacParser,
+    linebuf: &mut Vec<u8>,
+    spool_dir: &Path,
+    session: SessionId,
+    len: u64,
+) -> std::io::Result<PathBuf>
+where
+    R: AsyncRead + Unpin,
+{
+    tokio::fs::create_dir_all(spool_dir).await?;
+    let path = spool_dir.join(format!(
+        "{}-{}.blob",
+        session_hex(session),
+        Utc::now().timestamp_nanos_opt().unwrap_or_default()
+    ));
+    let mut file = tokio::fs::File::create(&path).await?;
+    let mut remaining = len;
+
+    if !linebuf.is_empty() {
+        let take = remaining.min(linebuf.len() as u64) as usize;
+        file.write_all(&linebuf[..take]).await?;
+        linebuf.drain(0..take);
+        remaining = remaining.saturating_sub(take as u64);
+    }
+
+    let mut buf = vec![0u8; BLOB_STREAM_CHUNK_BYTES];
+    while remaining > 0 {
+        let read_cap = remaining.min(buf.len() as u64) as usize;
+        let n = rd.read(&mut buf[..read_cap]).await?;
+        if n == 0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                "client disconnected during blob payload",
+            ));
+        }
+        let (data, _replies) = iac.parse_cow(&buf[..n]);
+        if data.is_empty() {
+            continue;
+        }
+        let bytes = data.as_ref();
+        let take = remaining.min(bytes.len() as u64) as usize;
+        file.write_all(&bytes[..take]).await?;
+        remaining = remaining.saturating_sub(take as u64);
+        if take < bytes.len() {
+            linebuf.extend_from_slice(&bytes[take..]);
+        }
+    }
+    file.flush().await?;
+    Ok(path)
 }
 
 async fn write_req(
@@ -2717,6 +3256,7 @@ async fn write_req(
 
 fn attach_body(
     is_bot: bool,
+    quiet: bool,
     auth: Option<&[u8]>,
     race: &str,
     class: &str,
@@ -2740,6 +3280,9 @@ fn attach_body(
     let mut flags = 0u8;
     if is_bot {
         flags |= 0x01;
+    }
+    if quiet {
+        flags |= 0x08;
     }
     if auth.is_some() {
         flags |= 0x02;
@@ -2906,18 +3449,13 @@ async fn handle_conn(
     let mut peer_ip = peer.ip();
     let mut peer_port = peer.port();
     let trusted_proxy_peer = peer_ip.is_loopback();
-    let (mut rd, mut wr) = stream.into_split();
+    let (mut rd, wr) = stream.into_split();
 
     let (disconnect_tx, mut disconnect_rx) = tokio::sync::watch::channel(false);
 
-    let (write_tx, mut write_rx) = tokio::sync::mpsc::channel::<Bytes>(128);
-    let writer = tokio::spawn(async move {
-        while let Some(b) = write_rx.recv().await {
-            if wr.write_all(&b[..]).await.is_err() {
-                break;
-            }
-        }
-    });
+    let (raw_write_tx, write_rx) = tokio::sync::mpsc::channel::<ClientWrite>(128);
+    let write_tx = ClientWriteTx(raw_write_tx);
+    let writer = tokio::spawn(client_writer_loop(wr, write_rx));
 
     // Log connect early (prior to optional proxy protocol rewriting).
     {
@@ -2963,27 +3501,12 @@ async fn handle_conn(
     let mut class: Option<String> = None;
     let mut sex: Option<String> = None;
     let mut pronouns: Option<String> = None;
+    let mut public_ack_version = 0u32;
+    let mut coc_ack_version = 0u32;
+    let mut persist_account_profile = true;
     let mut password_echo_disabled = false;
     let mut state = ConnState::NeedName;
     let mut proxy_checked = false;
-    let has_oidc_webauth = cfg.oidc_token_url.is_some()
-        && cfg.oidc_client_id.is_some()
-        && cfg.oidc_client_secret.is_some();
-    let auth_prompt = if has_oidc_webauth {
-        "\r\nauth method:\r\n- password\r\n- google\r\n- slopsso\r\ntype: password | google | slopsso\r\n> "
-    } else {
-        "\r\nauth method:\r\n- password\r\n- google\r\ntype: password | google\r\n> "
-    };
-    let auth_prompt_cancelled = if has_oidc_webauth {
-        "\r\ncancelled\r\nauth method:\r\n- password\r\n- google\r\n- slopsso\r\ntype: password | google | slopsso\r\n> "
-    } else {
-        "\r\ncancelled\r\nauth method:\r\n- password\r\n- google\r\ntype: password | google\r\n> "
-    };
-    let auth_prompt_invalid = if has_oidc_webauth {
-        "please type: password | google | slopsso\r\n> "
-    } else {
-        "please type: password | google\r\n> "
-    };
 
     write_tx
         .send(Bytes::from_static(
@@ -3098,7 +3621,10 @@ async fn handle_conn(
                     // in-band character creation prompts. Only accept this from trusted loopback
                     // peers (static_web / slopmud_web).
                     if trusted_proxy_peer {
-                        if let Some(rest) = line.strip_prefix("WEB_AUTH ") {
+                        let webauth_rest = line
+                            .strip_prefix("WEB_AUTH ")
+                            .or_else(|| line.strip_prefix("GMCP Slopmud.WebAuth "));
+                        if let Some(rest) = webauth_rest {
                             let req: WebAuthReq = match serde_json::from_str(rest) {
                                 Ok(v) => v,
                                 Err(_) => {
@@ -3108,8 +3634,13 @@ async fn handle_conn(
                                     continue;
                                 }
                             };
+                            if let Err(msg) = verify_webauth_jwt(&cfg, &req) {
+                                let out = format!("web_auth: {msg}\r\nname: ");
+                                let _ = write_tx.send(Bytes::from(out)).await;
+                                continue;
+                            }
 
-                            let mut action = req.action.trim().to_ascii_lowercase();
+                            let action = req.action.trim().to_ascii_lowercase();
                             let method = req.method.trim().to_ascii_lowercase();
 
                             let mut uname = sanitize_name(&req.name);
@@ -3131,22 +3662,15 @@ async fn handle_conn(
 
                                 let linked_names = {
                                     let a = accounts.lock().await;
-                                    a.by_name
-                                        .values()
-                                        .filter_map(|r| {
-                                            let linked = if method == "google" {
-                                                r.google_sub.as_deref() == Some(sub)
-                                            } else {
-                                                r.oidc_sub.as_deref() == Some(sub)
-                                            };
-                                            if linked { Some(r.name.clone()) } else { None }
-                                        })
-                                        .collect::<Vec<_>>()
+                                    a.linked_names_for_identity(&method, sub)
                                 };
 
                                 match linked_names.as_slice() {
                                     [] => {
-                                        let pending = if method == "google" {
+                                        // No linked account yet. Keep the player in-band at `name:`
+                                        // so they can choose an in-game character name, then we'll
+                                        // create/link via this pending web auth identity.
+                                        pending_auto_webauth = Some(if method == "google" {
                                             PendingAutoWebAuth::Google {
                                                 sub: sub.to_string(),
                                                 email: req.google_email.clone(),
@@ -3158,50 +3682,13 @@ async fn handle_conn(
                                                 email: req.oidc_email.clone(),
                                                 caps: req.caps.clone(),
                                             }
-                                        };
-
-                                        if let Some(chosen_name) = name
-                                            .as_deref()
-                                            .map(sanitize_name)
-                                            .filter(|n| !n.is_empty())
-                                        {
-                                            let exists = {
-                                                let a = accounts.lock().await;
-                                                a.by_name.get(&chosen_name).cloned()
-                                            };
-                                            match exists {
-                                                Some(r) => {
-                                                    let linked = if method == "google" {
-                                                        r.google_sub.as_deref() == Some(sub)
-                                                    } else {
-                                                        r.oidc_sub.as_deref() == Some(sub)
-                                                    };
-                                                    if !linked {
-                                                        pending_auto_webauth = Some(pending);
-                                                        name = None;
-                                                        state = ConnState::NeedName;
-                                                        let _ = write_tx
-                                                            .send(Bytes::from_static(
-                                                                b"name already taken\r\nname: ",
-                                                            ))
-                                                            .await;
-                                                        continue;
-                                                    }
-                                                    uname = chosen_name;
-                                                    action = "login".to_string();
-                                                }
-                                                None => {
-                                                    uname = chosen_name;
-                                                    action = "create".to_string();
-                                                }
-                                            }
-                                        } else {
-                                            // No linked account yet. Keep the player in-band at `name:`
-                                            // so they can choose an in-game character name, then we'll
-                                            // create/link via this pending web auth identity.
-                                            pending_auto_webauth = Some(pending);
-                                            continue;
-                                        }
+                                        });
+                                        let _ = write_tx
+                                            .send(Bytes::from_static(
+                                                b"web_auth: no linked character yet; enter a character name to create/link\r\nname: ",
+                                            ))
+                                            .await;
+                                        continue;
                                     }
                                     [only] => {
                                         uname = only.clone();
@@ -3246,6 +3733,7 @@ async fn handle_conn(
                                 break 'read;
                             }
 
+                            let mut account_created = false;
                             let ok = match (action.as_str(), method.as_str()) {
                                 ("create", "password") => {
                                     let pw = req.password.as_deref().unwrap_or("").as_bytes();
@@ -3288,11 +3776,19 @@ async fn handle_conn(
                                                 AccountRec {
                                                     name: uname.clone(),
                                                     pw_hash: Some(hash),
+                                                    auth_identities: Vec::new(),
                                                     google_sub: None,
                                                     google_email: None,
                                                     oidc_sub: None,
                                                     oidc_email: None,
                                                     caps: None,
+                                                    is_bot: None,
+                                                    race: None,
+                                                    class: None,
+                                                    sex: None,
+                                                    pronouns: None,
+                                                    public_ack_version: 0,
+                                                    coc_ack_version: 0,
                                                     email: None,
                                                     created_unix: now_unix,
                                                 },
@@ -3300,6 +3796,7 @@ async fn handle_conn(
                                             a.save()?;
                                         }
 
+                                        account_created = true;
                                         auth_method = Some("password".to_string());
                                         auth_blob = Some(make_shard_auth_blob(
                                             &uname,
@@ -3371,7 +3868,10 @@ async fn handle_conn(
                                         },
                                     }
                                 }
-                                ("create", "google") | ("login", "google") | ("auto", "google") => {
+                                ("create", "google")
+                                | ("login", "google")
+                                | ("auto", "google")
+                                | ("link", "google") => {
                                     let sub = req.google_sub.as_deref().unwrap_or("").trim();
                                     if sub.is_empty() {
                                         let _ = write_tx
@@ -3391,7 +3891,102 @@ async fn handle_conn(
                                             a.by_name.get(&uname).cloned()
                                         };
 
-                                        if action == "login" || action == "auto" {
+                                        if action == "link" {
+                                            let pw =
+                                                req.password.as_deref().unwrap_or("").as_bytes();
+                                            if pw.is_empty() {
+                                                let _ = write_tx
+                                                    .send(Bytes::from_static(
+                                                        b"web_auth: missing password for link\r\nname: ",
+                                                    ))
+                                                    .await;
+                                                false
+                                            } else {
+                                                let mut a = accounts.lock().await;
+                                                if a.identity_linked_to_other_account(
+                                                    "google", sub, &uname,
+                                                ) {
+                                                    let _ = write_tx
+                                                        .send(Bytes::from_static(
+                                                            b"web_auth: google identity already linked to another account\r\nname: ",
+                                                        ))
+                                                        .await;
+                                                    false
+                                                } else {
+                                                    let linked_email = match a
+                                                        .by_name
+                                                        .get_mut(&uname)
+                                                    {
+                                                        None => {
+                                                            let _ = write_tx
+                                                                .send(Bytes::from_static(
+                                                                    b"web_auth: account not found\r\nname: ",
+                                                                ))
+                                                                .await;
+                                                            None
+                                                        }
+                                                        Some(r) => match r.pw_hash.as_deref() {
+                                                            None => {
+                                                                let _ = write_tx
+                                                                    .send(Bytes::from_static(
+                                                                        b"web_auth: account has no password set\r\nname: ",
+                                                                    ))
+                                                                    .await;
+                                                                None
+                                                            }
+                                                            Some(hash) => {
+                                                                let ok = if let Ok(ph) =
+                                                                    PasswordHash::new(hash)
+                                                                {
+                                                                    Argon2::default()
+                                                                        .verify_password(pw, &ph)
+                                                                        .is_ok()
+                                                                } else {
+                                                                    false
+                                                                };
+                                                                if !ok {
+                                                                    let _ = write_tx
+                                                                        .send(Bytes::from_static(
+                                                                            b"web_auth: bad password\r\nname: ",
+                                                                        ))
+                                                                        .await;
+                                                                    None
+                                                                } else {
+                                                                    let _ = r.link_auth_identity(
+                                                                        "google",
+                                                                        sub,
+                                                                        email.clone(),
+                                                                    );
+                                                                    r.auth_email_for_identity(
+                                                                        "google", sub,
+                                                                    )
+                                                                    .or(email.clone())
+                                                                }
+                                                            }
+                                                        },
+                                                    };
+                                                    if let Some(linked_email) = linked_email {
+                                                        a.save()?;
+                                                        google_sub = Some(sub.to_string());
+                                                        google_email = Some(linked_email);
+                                                        auth_method = Some("google".to_string());
+                                                        auth_blob = Some(make_shard_auth_blob(
+                                                            &uname,
+                                                            "google",
+                                                            Some(sub),
+                                                            google_email.as_deref(),
+                                                            None,
+                                                            None,
+                                                            req.caps.as_deref(),
+                                                        ));
+                                                        name = Some(uname.clone());
+                                                        true
+                                                    } else {
+                                                        false
+                                                    }
+                                                }
+                                            }
+                                        } else if action == "login" || action == "auto" {
                                             match exists {
                                                 None => {
                                                     let _ = write_tx
@@ -3402,7 +3997,7 @@ async fn handle_conn(
                                                     false
                                                 }
                                                 Some(r) => {
-                                                    if r.google_sub.as_deref() != Some(sub) {
+                                                    if !r.has_auth_identity("google", sub) {
                                                         let _ = write_tx
                                                             .send(Bytes::from_static(
                                                                 b"web_auth: account not linked to google\r\nname: ",
@@ -3412,8 +4007,7 @@ async fn handle_conn(
                                                     } else {
                                                         google_sub = Some(sub.to_string());
                                                         google_email = r
-                                                            .google_email
-                                                            .clone()
+                                                            .auth_email_for_identity("google", sub)
                                                             .or(email.clone());
                                                         auth_method = Some("google".to_string());
                                                         auth_blob = Some(make_shard_auth_blob(
@@ -3438,43 +4032,76 @@ async fn handle_conn(
                                                 .await;
                                             false
                                         } else {
-                                            {
+                                            let created = {
                                                 let mut a = accounts.lock().await;
-                                                a.by_name.insert(
-                                                    uname.clone(),
-                                                    AccountRec {
-                                                        name: uname.clone(),
-                                                        pw_hash: None,
-                                                        google_sub: Some(sub.to_string()),
-                                                        google_email: email.clone(),
-                                                        oidc_sub: None,
-                                                        oidc_email: None,
-                                                        caps: None,
-                                                        email: None,
-                                                        created_unix: now_unix,
-                                                    },
-                                                );
-                                                a.save()?;
+                                                if a.identity_linked_to_other_account(
+                                                    "google", sub, &uname,
+                                                ) {
+                                                    false
+                                                } else {
+                                                    a.by_name.insert(
+                                                        uname.clone(),
+                                                        AccountRec {
+                                                            name: uname.clone(),
+                                                            pw_hash: None,
+                                                            auth_identities: vec![
+                                                                AccountAuthIdentity {
+                                                                    method: "google".to_string(),
+                                                                    sub: sub.to_string(),
+                                                                    email: email.clone(),
+                                                                },
+                                                            ],
+                                                            google_sub: None,
+                                                            google_email: None,
+                                                            oidc_sub: None,
+                                                            oidc_email: None,
+                                                            caps: None,
+                                                            is_bot: None,
+                                                            race: None,
+                                                            class: None,
+                                                            sex: None,
+                                                            pronouns: None,
+                                                            public_ack_version: 0,
+                                                            coc_ack_version: 0,
+                                                            email: None,
+                                                            created_unix: now_unix,
+                                                        },
+                                                    );
+                                                    a.save()?;
+                                                    true
+                                                }
+                                            };
+                                            if !created {
+                                                let _ = write_tx
+                                                    .send(Bytes::from_static(
+                                                        b"web_auth: google identity already linked to another account\r\nname: ",
+                                                    ))
+                                                    .await;
+                                                false
+                                            } else {
+                                                account_created = true;
+                                                google_sub = Some(sub.to_string());
+                                                google_email = email.clone();
+                                                auth_method = Some("google".to_string());
+                                                auth_blob = Some(make_shard_auth_blob(
+                                                    &uname,
+                                                    "google",
+                                                    Some(sub),
+                                                    google_email.as_deref(),
+                                                    None,
+                                                    None,
+                                                    req.caps.as_deref(),
+                                                ));
+                                                name = Some(uname.clone());
+                                                true
                                             }
-
-                                            google_sub = Some(sub.to_string());
-                                            google_email = email.clone();
-                                            auth_method = Some("google".to_string());
-                                            auth_blob = Some(make_shard_auth_blob(
-                                                &uname,
-                                                "google",
-                                                Some(sub),
-                                                google_email.as_deref(),
-                                                None,
-                                                None,
-                                                req.caps.as_deref(),
-                                            ));
-                                            name = Some(uname.clone());
-                                            true
                                         }
                                     }
                                 }
-                                ("create", "oidc") | ("login", "oidc") | ("auto", "oidc") => {
+                                ("create", "oidc")
+                                | ("login", "oidc")
+                                | ("auto", "oidc")
+                                | ("link", "oidc") => {
                                     let sub = req.oidc_sub.as_deref().unwrap_or("").trim();
                                     if sub.is_empty() {
                                         let _ = write_tx
@@ -3494,7 +4121,102 @@ async fn handle_conn(
                                             a.by_name.get(&uname).cloned()
                                         };
 
-                                        if action == "login" || action == "auto" {
+                                        if action == "link" {
+                                            let pw =
+                                                req.password.as_deref().unwrap_or("").as_bytes();
+                                            if pw.is_empty() {
+                                                let _ = write_tx
+                                                    .send(Bytes::from_static(
+                                                        b"web_auth: missing password for link\r\nname: ",
+                                                    ))
+                                                    .await;
+                                                false
+                                            } else {
+                                                let mut a = accounts.lock().await;
+                                                if a.identity_linked_to_other_account(
+                                                    "oidc", sub, &uname,
+                                                ) {
+                                                    let _ = write_tx
+                                                        .send(Bytes::from_static(
+                                                            b"web_auth: oidc identity already linked to another account\r\nname: ",
+                                                        ))
+                                                        .await;
+                                                    false
+                                                } else {
+                                                    let linked_email = match a
+                                                        .by_name
+                                                        .get_mut(&uname)
+                                                    {
+                                                        None => {
+                                                            let _ = write_tx
+                                                                .send(Bytes::from_static(
+                                                                    b"web_auth: account not found\r\nname: ",
+                                                                ))
+                                                                .await;
+                                                            None
+                                                        }
+                                                        Some(r) => match r.pw_hash.as_deref() {
+                                                            None => {
+                                                                let _ = write_tx
+                                                                    .send(Bytes::from_static(
+                                                                        b"web_auth: account has no password set\r\nname: ",
+                                                                    ))
+                                                                    .await;
+                                                                None
+                                                            }
+                                                            Some(hash) => {
+                                                                let ok = if let Ok(ph) =
+                                                                    PasswordHash::new(hash)
+                                                                {
+                                                                    Argon2::default()
+                                                                        .verify_password(pw, &ph)
+                                                                        .is_ok()
+                                                                } else {
+                                                                    false
+                                                                };
+                                                                if !ok {
+                                                                    let _ = write_tx
+                                                                        .send(Bytes::from_static(
+                                                                            b"web_auth: bad password\r\nname: ",
+                                                                        ))
+                                                                        .await;
+                                                                    None
+                                                                } else {
+                                                                    let _ = r.link_auth_identity(
+                                                                        "oidc",
+                                                                        sub,
+                                                                        email.clone(),
+                                                                    );
+                                                                    r.auth_email_for_identity(
+                                                                        "oidc", sub,
+                                                                    )
+                                                                    .or(email.clone())
+                                                                }
+                                                            }
+                                                        },
+                                                    };
+                                                    if let Some(linked_email) = linked_email {
+                                                        a.save()?;
+                                                        oidc_sub = Some(sub.to_string());
+                                                        oidc_email = Some(linked_email);
+                                                        auth_method = Some("oidc".to_string());
+                                                        auth_blob = Some(make_shard_auth_blob(
+                                                            &uname,
+                                                            "oidc",
+                                                            None,
+                                                            None,
+                                                            Some(sub),
+                                                            oidc_email.as_deref(),
+                                                            req.caps.as_deref(),
+                                                        ));
+                                                        name = Some(uname.clone());
+                                                        true
+                                                    } else {
+                                                        false
+                                                    }
+                                                }
+                                            }
+                                        } else if action == "login" || action == "auto" {
                                             match exists {
                                                 None => {
                                                     let _ = write_tx
@@ -3505,7 +4227,7 @@ async fn handle_conn(
                                                     false
                                                 }
                                                 Some(r) => {
-                                                    if r.oidc_sub.as_deref() != Some(sub) {
+                                                    if !r.has_auth_identity("oidc", sub) {
                                                         let _ = write_tx
                                                             .send(Bytes::from_static(
                                                                 b"web_auth: account not linked to oidc\r\nname: ",
@@ -3514,8 +4236,9 @@ async fn handle_conn(
                                                         false
                                                     } else {
                                                         oidc_sub = Some(sub.to_string());
-                                                        oidc_email =
-                                                            r.oidc_email.clone().or(email.clone());
+                                                        oidc_email = r
+                                                            .auth_email_for_identity("oidc", sub)
+                                                            .or(email.clone());
                                                         auth_method = Some("oidc".to_string());
                                                         auth_blob = Some(make_shard_auth_blob(
                                                             &uname,
@@ -3539,39 +4262,69 @@ async fn handle_conn(
                                                 .await;
                                             false
                                         } else {
-                                            {
+                                            let created = {
                                                 let mut a = accounts.lock().await;
-                                                a.by_name.insert(
-                                                    uname.clone(),
-                                                    AccountRec {
-                                                        name: uname.clone(),
-                                                        pw_hash: None,
-                                                        google_sub: None,
-                                                        google_email: None,
-                                                        oidc_sub: Some(sub.to_string()),
-                                                        oidc_email: email.clone(),
-                                                        caps: None,
-                                                        email: None,
-                                                        created_unix: now_unix,
-                                                    },
-                                                );
-                                                a.save()?;
+                                                if a.identity_linked_to_other_account(
+                                                    "oidc", sub, &uname,
+                                                ) {
+                                                    false
+                                                } else {
+                                                    a.by_name.insert(
+                                                        uname.clone(),
+                                                        AccountRec {
+                                                            name: uname.clone(),
+                                                            pw_hash: None,
+                                                            auth_identities: vec![
+                                                                AccountAuthIdentity {
+                                                                    method: "oidc".to_string(),
+                                                                    sub: sub.to_string(),
+                                                                    email: email.clone(),
+                                                                },
+                                                            ],
+                                                            google_sub: None,
+                                                            google_email: None,
+                                                            oidc_sub: None,
+                                                            oidc_email: None,
+                                                            caps: None,
+                                                            is_bot: None,
+                                                            race: None,
+                                                            class: None,
+                                                            sex: None,
+                                                            pronouns: None,
+                                                            public_ack_version: 0,
+                                                            coc_ack_version: 0,
+                                                            email: None,
+                                                            created_unix: now_unix,
+                                                        },
+                                                    );
+                                                    a.save()?;
+                                                    true
+                                                }
+                                            };
+                                            if !created {
+                                                let _ = write_tx
+                                                    .send(Bytes::from_static(
+                                                        b"web_auth: oidc identity already linked to another account\r\nname: ",
+                                                    ))
+                                                    .await;
+                                                false
+                                            } else {
+                                                account_created = true;
+                                                oidc_sub = Some(sub.to_string());
+                                                oidc_email = email.clone();
+                                                auth_method = Some("oidc".to_string());
+                                                auth_blob = Some(make_shard_auth_blob(
+                                                    &uname,
+                                                    "oidc",
+                                                    None,
+                                                    None,
+                                                    Some(sub),
+                                                    oidc_email.as_deref(),
+                                                    req.caps.as_deref(),
+                                                ));
+                                                name = Some(uname.clone());
+                                                true
                                             }
-
-                                            oidc_sub = Some(sub.to_string());
-                                            oidc_email = email.clone();
-                                            auth_method = Some("oidc".to_string());
-                                            auth_blob = Some(make_shard_auth_blob(
-                                                &uname,
-                                                "oidc",
-                                                None,
-                                                None,
-                                                Some(sub),
-                                                oidc_email.as_deref(),
-                                                req.caps.as_deref(),
-                                            ));
-                                            name = Some(uname.clone());
-                                            true
                                         }
                                     }
                                 }
@@ -3585,46 +4338,41 @@ async fn handle_conn(
                                 }
                             };
 
-                            if ok {
-                                let uname = name.as_deref().unwrap_or("");
-                                if let Some(saved) = wait_for_saved_player(
-                                    &cfg.players_path,
-                                    uname,
-                                    Duration::from_secs(2),
-                                )
-                                .await
-                                {
-                                    let shard_auth = auth_blob.clone().expect("auth blob set");
-                                    attach_authenticated_session(
-                                        session,
-                                        peer_ip,
-                                        uname,
-                                        saved.is_bot,
-                                        &saved.race,
-                                        &saved.class,
-                                        &saved.sex,
-                                        &saved.pronouns,
-                                        shard_auth,
-                                        auth_method.as_deref().unwrap_or("unknown"),
-                                        &write_tx,
-                                        &disconnect_tx,
-                                        &sessions,
-                                        &holds,
-                                        &eventlog,
-                                        &shard_tx,
-                                    )
-                                    .await?;
-                                    state = ConnState::InWorld;
+                            if !ok {
+                                continue;
+                            }
+                            if account_created {
+                                persist_account_profile = true;
+                                public_ack_version = 0;
+                                coc_ack_version = 0;
+                                state = ConnState::NeedBotDisclosure;
+                            } else if let Some(nm) = name.as_deref() {
+                                let rec = {
+                                    let a = accounts.lock().await;
+                                    a.by_name.get(nm).cloned()
+                                };
+                                if let Some(rec) = rec.as_ref() {
+                                    state = prepare_existing_account_onboarding(
+                                        rec,
+                                        &mut is_bot,
+                                        &mut race,
+                                        &mut class,
+                                        &mut sex,
+                                        &mut pronouns,
+                                        &mut public_ack_version,
+                                        &mut coc_ack_version,
+                                        &mut persist_account_profile,
+                                    );
                                 } else {
                                     state = ConnState::NeedBotDisclosure;
-                                    let _ = write_tx
-                                        .send(Bytes::from_static(
-                                            b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                        ))
-                                        .await;
                                 }
+                            } else {
+                                state = ConnState::NeedBotDisclosure;
                             }
-                            continue;
+                            if let Some(prompt) = prompt_for_onboarding_state(state) {
+                                let _ = write_tx.send(prompt).await;
+                                continue;
+                            }
                         }
                     }
 
@@ -3667,7 +4415,7 @@ async fn handle_conn(
                                 };
                                 match exists {
                                     Some(r) => {
-                                        if r.google_sub.as_deref() != Some(sub.as_str()) {
+                                        if !r.has_auth_identity("google", sub.as_str()) {
                                             let _ = write_tx
                                                 .send(Bytes::from_static(
                                                     b"name already taken\r\nname: ",
@@ -3676,7 +4424,9 @@ async fn handle_conn(
                                             continue;
                                         }
                                         google_sub = Some(sub.clone());
-                                        google_email = r.google_email.clone().or(email.clone());
+                                        google_email = r
+                                            .auth_email_for_identity("google", sub.as_str())
+                                            .or(email.clone());
                                         auth_method = Some("google".to_string());
                                         auth_blob = Some(make_shard_auth_blob(
                                             &n,
@@ -3689,43 +4439,21 @@ async fn handle_conn(
                                         ));
                                         name = Some(n.clone());
                                         pending_auto_webauth = None;
-                                        if let Some(saved) = wait_for_saved_player(
-                                            &cfg.players_path,
-                                            &n,
-                                            Duration::from_secs(2),
-                                        )
-                                        .await
-                                        {
-                                            let shard_auth = auth_blob.clone().expect("auth blob set");
-                                            attach_authenticated_session(
-                                                session,
-                                                peer_ip,
-                                                &n,
-                                                saved.is_bot,
-                                                &saved.race,
-                                                &saved.class,
-                                                &saved.sex,
-                                                &saved.pronouns,
-                                                shard_auth,
-                                                auth_method.as_deref().unwrap_or("unknown"),
-                                                &write_tx,
-                                                &disconnect_tx,
-                                                &sessions,
-                                                &holds,
-                                                &eventlog,
-                                                &shard_tx,
-                                            )
-                                            .await?;
-                                            state = ConnState::InWorld;
-                                        } else {
-                                            state = ConnState::NeedBotDisclosure;
-                                            let _ = write_tx
-                                                .send(Bytes::from_static(
-                                                    b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                                ))
-                                                .await;
+                                        state = prepare_existing_account_onboarding(
+                                            &r,
+                                            &mut is_bot,
+                                            &mut race,
+                                            &mut class,
+                                            &mut sex,
+                                            &mut pronouns,
+                                            &mut public_ack_version,
+                                            &mut coc_ack_version,
+                                            &mut persist_account_profile,
+                                        );
+                                        if let Some(prompt) = prompt_for_onboarding_state(state) {
+                                            let _ = write_tx.send(prompt).await;
+                                            continue;
                                         }
-                                        continue;
                                     }
                                     None => {
                                         let now_unix = std::time::SystemTime::now()
@@ -3739,11 +4467,23 @@ async fn handle_conn(
                                                 AccountRec {
                                                     name: n.clone(),
                                                     pw_hash: None,
-                                                    google_sub: Some(sub.clone()),
-                                                    google_email: email.clone(),
+                                                    auth_identities: vec![AccountAuthIdentity {
+                                                        method: "google".to_string(),
+                                                        sub: sub.clone(),
+                                                        email: email.clone(),
+                                                    }],
+                                                    google_sub: None,
+                                                    google_email: None,
                                                     oidc_sub: None,
                                                     oidc_email: None,
                                                     caps: None,
+                                                    is_bot: None,
+                                                    race: None,
+                                                    class: None,
+                                                    sex: None,
+                                                    pronouns: None,
+                                                    public_ack_version: 0,
+                                                    coc_ack_version: 0,
                                                     email: None,
                                                     created_unix: now_unix,
                                                 },
@@ -3764,42 +4504,8 @@ async fn handle_conn(
                                         ));
                                         name = Some(n.clone());
                                         pending_auto_webauth = None;
-                                        if let Some(saved) = wait_for_saved_player(
-                                            &cfg.players_path,
-                                            &n,
-                                            Duration::from_secs(2),
-                                        )
-                                        .await
-                                        {
-                                            let shard_auth = auth_blob.clone().expect("auth blob set");
-                                            attach_authenticated_session(
-                                                session,
-                                                peer_ip,
-                                                &n,
-                                                saved.is_bot,
-                                                &saved.race,
-                                                &saved.class,
-                                                &saved.sex,
-                                                &saved.pronouns,
-                                                shard_auth,
-                                                auth_method.as_deref().unwrap_or("unknown"),
-                                                &write_tx,
-                                                &disconnect_tx,
-                                                &sessions,
-                                                &holds,
-                                                &eventlog,
-                                                &shard_tx,
-                                            )
-                                            .await?;
-                                            state = ConnState::InWorld;
-                                        } else {
-                                            state = ConnState::NeedBotDisclosure;
-                                            let _ = write_tx
-                                                .send(Bytes::from_static(
-                                                    b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                                ))
-                                                .await;
-                                        }
+                                        state = ConnState::NeedBotDisclosure;
+                                        let _ = write_tx.send(prompt_bot_disclosure()).await;
                                         continue;
                                     }
                                 }
@@ -3811,7 +4517,7 @@ async fn handle_conn(
                                 };
                                 match exists {
                                     Some(r) => {
-                                        if r.oidc_sub.as_deref() != Some(sub.as_str()) {
+                                        if !r.has_auth_identity("oidc", sub.as_str()) {
                                             let _ = write_tx
                                                 .send(Bytes::from_static(
                                                     b"name already taken\r\nname: ",
@@ -3820,7 +4526,9 @@ async fn handle_conn(
                                             continue;
                                         }
                                         oidc_sub = Some(sub.clone());
-                                        oidc_email = r.oidc_email.clone().or(email.clone());
+                                        oidc_email = r
+                                            .auth_email_for_identity("oidc", sub.as_str())
+                                            .or(email.clone());
                                         auth_method = Some("oidc".to_string());
                                         auth_blob = Some(make_shard_auth_blob(
                                             &n,
@@ -3833,43 +4541,21 @@ async fn handle_conn(
                                         ));
                                         name = Some(n.clone());
                                         pending_auto_webauth = None;
-                                        if let Some(saved) = wait_for_saved_player(
-                                            &cfg.players_path,
-                                            &n,
-                                            Duration::from_secs(2),
-                                        )
-                                        .await
-                                        {
-                                            let shard_auth = auth_blob.clone().expect("auth blob set");
-                                            attach_authenticated_session(
-                                                session,
-                                                peer_ip,
-                                                &n,
-                                                saved.is_bot,
-                                                &saved.race,
-                                                &saved.class,
-                                                &saved.sex,
-                                                &saved.pronouns,
-                                                shard_auth,
-                                                auth_method.as_deref().unwrap_or("unknown"),
-                                                &write_tx,
-                                                &disconnect_tx,
-                                                &sessions,
-                                                &holds,
-                                                &eventlog,
-                                                &shard_tx,
-                                            )
-                                            .await?;
-                                            state = ConnState::InWorld;
-                                        } else {
-                                            state = ConnState::NeedBotDisclosure;
-                                            let _ = write_tx
-                                                .send(Bytes::from_static(
-                                                    b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                                ))
-                                                .await;
+                                        state = prepare_existing_account_onboarding(
+                                            &r,
+                                            &mut is_bot,
+                                            &mut race,
+                                            &mut class,
+                                            &mut sex,
+                                            &mut pronouns,
+                                            &mut public_ack_version,
+                                            &mut coc_ack_version,
+                                            &mut persist_account_profile,
+                                        );
+                                        if let Some(prompt) = prompt_for_onboarding_state(state) {
+                                            let _ = write_tx.send(prompt).await;
+                                            continue;
                                         }
-                                        continue;
                                     }
                                     None => {
                                         let now_unix = std::time::SystemTime::now()
@@ -3883,11 +4569,23 @@ async fn handle_conn(
                                                 AccountRec {
                                                     name: n.clone(),
                                                     pw_hash: None,
+                                                    auth_identities: vec![AccountAuthIdentity {
+                                                        method: "oidc".to_string(),
+                                                        sub: sub.clone(),
+                                                        email: email.clone(),
+                                                    }],
                                                     google_sub: None,
                                                     google_email: None,
-                                                    oidc_sub: Some(sub.clone()),
-                                                    oidc_email: email.clone(),
+                                                    oidc_sub: None,
+                                                    oidc_email: None,
                                                     caps: None,
+                                                    is_bot: None,
+                                                    race: None,
+                                                    class: None,
+                                                    sex: None,
+                                                    pronouns: None,
+                                                    public_ack_version: 0,
+                                                    coc_ack_version: 0,
                                                     email: None,
                                                     created_unix: now_unix,
                                                 },
@@ -3908,42 +4606,8 @@ async fn handle_conn(
                                         ));
                                         name = Some(n.clone());
                                         pending_auto_webauth = None;
-                                        if let Some(saved) = wait_for_saved_player(
-                                            &cfg.players_path,
-                                            &n,
-                                            Duration::from_secs(2),
-                                        )
-                                        .await
-                                        {
-                                            let shard_auth = auth_blob.clone().expect("auth blob set");
-                                            attach_authenticated_session(
-                                                session,
-                                                peer_ip,
-                                                &n,
-                                                saved.is_bot,
-                                                &saved.race,
-                                                &saved.class,
-                                                &saved.sex,
-                                                &saved.pronouns,
-                                                shard_auth,
-                                                auth_method.as_deref().unwrap_or("unknown"),
-                                                &write_tx,
-                                                &disconnect_tx,
-                                                &sessions,
-                                                &holds,
-                                                &eventlog,
-                                                &shard_tx,
-                                            )
-                                            .await?;
-                                            state = ConnState::InWorld;
-                                        } else {
-                                            state = ConnState::NeedBotDisclosure;
-                                            let _ = write_tx
-                                                .send(Bytes::from_static(
-                                                    b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                                ))
-                                                .await;
-                                        }
+                                        state = ConnState::NeedBotDisclosure;
+                                        let _ = write_tx.send(prompt_bot_disclosure()).await;
                                         continue;
                                     }
                                 }
@@ -3953,27 +4617,208 @@ async fn handle_conn(
 
                     name = Some(n);
                     state = ConnState::NeedAuthMethod;
-                    let _ = write_tx.send(Bytes::from(auth_prompt)).await;
+                    let _ = write_tx
+                        .send(Bytes::from_static(
+                            b"\r\nauth method:\r\n- password\r\n- google\r\ntype: password | google\r\n> ",
+                        ))
+                        .await;
                     continue;
                 }
                 ConnState::NeedAuthMethod => {
-                    if trusted_proxy_peer
-                        && std::str::from_utf8(&line_bytes)
-                            .map(|s| s.starts_with("WEB_AUTH "))
-                            .unwrap_or(false)
-                    {
-                        state = ConnState::NeedName;
-                        let mut replay = line_bytes.clone();
-                        replay.push(b'\n');
-                        linebuf.splice(0..0, replay);
+                    let line_raw = String::from_utf8_lossy(&line_bytes).trim().to_string();
+                    let line = line_raw.to_ascii_lowercase();
+                    if line.is_empty() {
                         continue;
                     }
 
-                    let line = String::from_utf8_lossy(&line_bytes)
-                        .trim()
-                        .to_ascii_lowercase();
-                    if line.is_empty() {
-                        continue;
+                    if trusted_proxy_peer {
+                        let webauth_rest = line_raw
+                            .strip_prefix("WEB_AUTH ")
+                            .or_else(|| line_raw.strip_prefix("GMCP Slopmud.WebAuth "));
+                        if let Some(rest) = webauth_rest {
+                            let req: WebAuthReq = match serde_json::from_str(rest) {
+                                Ok(v) => v,
+                                Err(_) => {
+                                    let _ = write_tx
+                                        .send(Bytes::from_static(
+                                            b"web_auth: bad json\r\nplease type: password | google\r\n> ",
+                                        ))
+                                        .await;
+                                    continue;
+                                }
+                            };
+                            if let Err(msg) = verify_webauth_jwt(&cfg, &req) {
+                                let out = format!(
+                                    "web_auth: {msg}\r\nplease type: password | google\r\n> "
+                                );
+                                let _ = write_tx.send(Bytes::from(out)).await;
+                                continue;
+                            }
+
+                            let action = req.action.trim().to_ascii_lowercase();
+                            let method = req.method.trim().to_ascii_lowercase();
+                            if action == "auto" && (method == "google" || method == "oidc") {
+                                let sub = if method == "google" {
+                                    req.google_sub.as_deref().unwrap_or("").trim()
+                                } else {
+                                    req.oidc_sub.as_deref().unwrap_or("").trim()
+                                };
+                                if sub.is_empty() {
+                                    let _ = write_tx
+                                        .send(Bytes::from_static(
+                                            b"web_auth: missing provider sub\r\nplease type: password | google\r\n> ",
+                                        ))
+                                        .await;
+                                    continue;
+                                }
+
+                                let mut uname = name.clone().unwrap_or_default();
+                                if uname.is_empty() {
+                                    uname = sanitize_name(&req.name);
+                                }
+                                if uname.is_empty() {
+                                    let linked_names = {
+                                        let a = accounts.lock().await;
+                                        a.linked_names_for_identity(&method, sub)
+                                    };
+                                    if linked_names.len() == 1 {
+                                        uname = linked_names[0].clone();
+                                    }
+                                }
+                                if uname.is_empty() {
+                                    pending_auto_webauth = Some(if method == "google" {
+                                        PendingAutoWebAuth::Google {
+                                            sub: sub.to_string(),
+                                            email: req.google_email.clone(),
+                                            caps: req.caps.clone(),
+                                        }
+                                    } else {
+                                        PendingAutoWebAuth::Oidc {
+                                            sub: sub.to_string(),
+                                            email: req.oidc_email.clone(),
+                                            caps: req.caps.clone(),
+                                        }
+                                    });
+                                    state = ConnState::NeedName;
+                                    let _ = write_tx.send(Bytes::from_static(b"name: ")).await;
+                                    continue;
+                                }
+
+                                let email = if method == "google" {
+                                    req.google_email.clone()
+                                } else {
+                                    req.oidc_email.clone()
+                                };
+                                let now_unix = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs();
+                                let mut account_created = false;
+                                {
+                                    let mut a = accounts.lock().await;
+                                    if let Some(r) = a.by_name.get(&uname) {
+                                        if !r.has_auth_identity(&method, sub) {
+                                            let _ = write_tx
+                                                .send(Bytes::from_static(
+                                                    b"name already taken\r\nplease type: password | google\r\n> ",
+                                                ))
+                                                .await;
+                                            continue;
+                                        }
+                                    } else {
+                                        a.by_name.insert(
+                                            uname.clone(),
+                                            AccountRec {
+                                                name: uname.clone(),
+                                                pw_hash: None,
+                                                auth_identities: vec![AccountAuthIdentity {
+                                                    method: method.clone(),
+                                                    sub: sub.to_string(),
+                                                    email: email.clone(),
+                                                }],
+                                                google_sub: None,
+                                                google_email: None,
+                                                oidc_sub: None,
+                                                oidc_email: None,
+                                                caps: None,
+                                                is_bot: None,
+                                                race: None,
+                                                class: None,
+                                                sex: None,
+                                                pronouns: None,
+                                                public_ack_version: 0,
+                                                coc_ack_version: 0,
+                                                email: None,
+                                                created_unix: now_unix,
+                                            },
+                                        );
+                                        a.save()?;
+                                        account_created = true;
+                                    }
+                                }
+
+                                if method == "google" {
+                                    google_sub = Some(sub.to_string());
+                                    google_email = email.clone();
+                                    auth_method = Some("google".to_string());
+                                    auth_blob = Some(make_shard_auth_blob(
+                                        &uname,
+                                        "google",
+                                        Some(sub),
+                                        email.as_deref(),
+                                        None,
+                                        None,
+                                        req.caps.as_deref(),
+                                    ));
+                                } else {
+                                    oidc_sub = Some(sub.to_string());
+                                    oidc_email = email.clone();
+                                    auth_method = Some("oidc".to_string());
+                                    auth_blob = Some(make_shard_auth_blob(
+                                        &uname,
+                                        "oidc",
+                                        None,
+                                        None,
+                                        Some(sub),
+                                        email.as_deref(),
+                                        req.caps.as_deref(),
+                                    ));
+                                }
+
+                                name = Some(uname.clone());
+                                pending_auto_webauth = None;
+                                if account_created {
+                                    persist_account_profile = true;
+                                    public_ack_version = 0;
+                                    coc_ack_version = 0;
+                                    state = ConnState::NeedBotDisclosure;
+                                } else {
+                                    let rec = {
+                                        let a = accounts.lock().await;
+                                        a.by_name.get(&uname).cloned()
+                                    };
+                                    if let Some(rec) = rec.as_ref() {
+                                        state = prepare_existing_account_onboarding(
+                                            rec,
+                                            &mut is_bot,
+                                            &mut race,
+                                            &mut class,
+                                            &mut sex,
+                                            &mut pronouns,
+                                            &mut public_ack_version,
+                                            &mut coc_ack_version,
+                                            &mut persist_account_profile,
+                                        );
+                                    } else {
+                                        state = ConnState::NeedBotDisclosure;
+                                    }
+                                }
+                                if let Some(prompt) = prompt_for_onboarding_state(state) {
+                                    let _ = write_tx.send(prompt).await;
+                                    continue;
+                                }
+                            }
+                        }
                     }
 
                     let uname = name.as_deref().expect("name set");
@@ -3989,15 +4834,9 @@ async fn handle_conn(
                             if let Some(r) = rec.as_ref() {
                                 if r.pw_hash.is_none() {
                                     let _ = write_tx
-                                        .send(if has_oidc_webauth {
-                                            Bytes::from_static(
-                                                b"account has no password; use google or slopsso\r\n> ",
-                                            )
-                                        } else {
-                                            Bytes::from_static(
-                                                b"account has no password; use google\r\n> ",
-                                            )
-                                        })
+                                        .send(Bytes::from_static(
+                                            b"account has no password; use google\r\n> ",
+                                        ))
                                         .await;
                                     continue;
                                 }
@@ -4022,7 +4861,7 @@ async fn handle_conn(
                         "google" => {
                             auth_method = Some("google".to_string());
                             if let Some(r) = rec.as_ref() {
-                                if r.google_sub.is_none() {
+                                if !r.has_auth_method("google") {
                                     let _ = write_tx
                                         .send(Bytes::from_static(
                                             b"account not linked to google; use password\r\n> ",
@@ -4056,6 +4895,7 @@ async fn handle_conn(
                                 google_sub: None,
                                 google_email: None,
                                 error: None,
+                                return_to: None,
                             };
 
                             let mut path = PathBuf::from(&cfg.google_oauth_dir);
@@ -4075,38 +4915,255 @@ async fn handle_conn(
                             let _ = write_tx.send(Bytes::from(msg)).await;
                             continue;
                         }
-                        "oidc" | "slopsso" => {
-                            let _ = write_tx
-                                .send(if has_oidc_webauth {
-                                    Bytes::from_static(
-                                        b"slopsso is web-client-only; open the web auth gate\r\n> ",
-                                    )
-                                } else {
-                                    Bytes::from_static(b"please type: password | google\r\n> ")
-                                })
-                                .await;
-                            continue;
-                        }
                         _ => {
                             let _ = write_tx
-                                .send(Bytes::from(auth_prompt_invalid))
+                                .send(Bytes::from_static(b"please type: password | google\r\n> "))
                                 .await;
                             continue;
                         }
                     }
                 }
                 ConnState::NeedGoogleWait => {
-                    let line = String::from_utf8_lossy(&line_bytes)
-                        .trim()
-                        .to_ascii_lowercase();
-                    if line.is_empty() {
+                    let line_raw = String::from_utf8_lossy(&line_bytes).trim().to_string();
+                    if line_raw.is_empty() {
                         continue;
+                    }
+                    let line = line_raw.to_ascii_lowercase();
+
+                    // Allow trusted web proxy auth to complete an OAuth-waiting session without
+                    // requiring a manual `check` command.
+                    if trusted_proxy_peer {
+                        let webauth_rest = line_raw
+                            .strip_prefix("WEB_AUTH ")
+                            .or_else(|| line_raw.strip_prefix("GMCP Slopmud.WebAuth "));
+                        if let Some(rest) = webauth_rest {
+                            let req: WebAuthReq = match serde_json::from_str(rest) {
+                                Ok(v) => v,
+                                Err(_) => {
+                                    let _ = write_tx
+                                        .send(Bytes::from_static(
+                                            b"web_auth: bad json\r\ntype: check | cancel\r\n> ",
+                                        ))
+                                        .await;
+                                    continue;
+                                }
+                            };
+                            if let Err(msg) = verify_webauth_jwt(&cfg, &req) {
+                                let out = format!("web_auth: {msg}\r\ntype: check | cancel\r\n> ");
+                                let _ = write_tx.send(Bytes::from(out)).await;
+                                continue;
+                            }
+
+                            let action = req.action.trim().to_ascii_lowercase();
+                            let method = req.method.trim().to_ascii_lowercase();
+                            if action != "auto" || (method != "google" && method != "oidc") {
+                                let _ = write_tx
+                                    .send(Bytes::from_static(b"type: check | cancel\r\n> "))
+                                    .await;
+                                continue;
+                            }
+
+                            let sub = if method == "google" {
+                                req.google_sub.as_deref().unwrap_or("").trim()
+                            } else {
+                                req.oidc_sub.as_deref().unwrap_or("").trim()
+                            };
+                            if sub.is_empty() {
+                                let msg = if method == "google" {
+                                    b"web_auth: missing google_sub\r\ntype: check | cancel\r\n> "
+                                        .as_slice()
+                                } else {
+                                    b"web_auth: missing oidc_sub\r\ntype: check | cancel\r\n> "
+                                        .as_slice()
+                                };
+                                let _ = write_tx.send(Bytes::copy_from_slice(msg)).await;
+                                continue;
+                            }
+
+                            let mut uname = name.clone().unwrap_or_default();
+                            if uname.is_empty() {
+                                uname = sanitize_name(&req.name);
+                            }
+                            if uname.is_empty() {
+                                let linked_names = {
+                                    let a = accounts.lock().await;
+                                    a.linked_names_for_identity(&method, sub)
+                                };
+                                if linked_names.len() == 1 {
+                                    uname = linked_names[0].clone();
+                                }
+                            }
+                            if uname.is_empty() {
+                                let _ = write_tx
+                                    .send(Bytes::from_static(
+                                        b"web_auth: no linked character found\r\ntype: check | cancel\r\n> ",
+                                    ))
+                                    .await;
+                                continue;
+                            }
+
+                            let now_unix = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs();
+                            let email = if method == "google" {
+                                req.google_email.clone()
+                            } else {
+                                req.oidc_email.clone()
+                            };
+
+                            let mut account_created = false;
+                            {
+                                let mut a = accounts.lock().await;
+                                if let Some(r) = a.by_name.get(&uname) {
+                                    if !r.has_auth_identity(&method, sub) {
+                                        let _ = write_tx
+                                            .send(Bytes::from_static(
+                                                b"name already taken\r\nbye\r\n",
+                                            ))
+                                            .await;
+                                        break 'read;
+                                    }
+                                } else {
+                                    a.by_name.insert(
+                                        uname.clone(),
+                                        AccountRec {
+                                            name: uname.clone(),
+                                            pw_hash: None,
+                                            auth_identities: vec![AccountAuthIdentity {
+                                                method: method.clone(),
+                                                sub: sub.to_string(),
+                                                email: email.clone(),
+                                            }],
+                                            google_sub: None,
+                                            google_email: None,
+                                            oidc_sub: None,
+                                            oidc_email: None,
+                                            caps: None,
+                                            is_bot: None,
+                                            race: None,
+                                            class: None,
+                                            sex: None,
+                                            pronouns: None,
+                                            public_ack_version: 0,
+                                            coc_ack_version: 0,
+                                            email: None,
+                                            created_unix: now_unix,
+                                        },
+                                    );
+                                    a.save()?;
+                                    account_created = true;
+                                }
+                            }
+
+                            if method == "google" {
+                                google_sub = Some(sub.to_string());
+                                google_email = email.clone();
+                                auth_method = Some("google".to_string());
+                                auth_blob = Some(make_shard_auth_blob(
+                                    &uname,
+                                    "google",
+                                    Some(sub),
+                                    email.as_deref(),
+                                    None,
+                                    None,
+                                    req.caps.as_deref(),
+                                ));
+                            } else {
+                                oidc_sub = Some(sub.to_string());
+                                oidc_email = email.clone();
+                                auth_method = Some("oidc".to_string());
+                                auth_blob = Some(make_shard_auth_blob(
+                                    &uname,
+                                    "oidc",
+                                    None,
+                                    None,
+                                    Some(sub),
+                                    email.as_deref(),
+                                    req.caps.as_deref(),
+                                ));
+                            }
+                            name = Some(uname.clone());
+
+                            if let Some(code) = google_oauth_code.take() {
+                                let mut path = PathBuf::from(&cfg.google_oauth_dir);
+                                path.push(format!("{}.json", code));
+                                let _ = std::fs::remove_file(&path);
+                            }
+
+                            let mut resumed_live = false;
+                            if let Some(nm) = name.as_deref() {
+                                let prior = {
+                                    let m = sessions.lock().await;
+                                    m.iter()
+                                        .find(|(sid, s)| {
+                                            **sid != session && s.name.eq_ignore_ascii_case(nm)
+                                        })
+                                        .map(|(sid, s)| (*sid, s.clone()))
+                                };
+                                if let Some((old_sid, old)) = prior {
+                                    let _ = old.disconnect_tx.send(true);
+                                    {
+                                        let mut m = sessions.lock().await;
+                                        m.remove(&old_sid);
+                                    }
+                                    let _ = shard_tx
+                                        .send(ShardMsg {
+                                            t: REQ_DETACH,
+                                            session: old_sid,
+                                            body: Bytes::new(),
+                                        })
+                                        .await;
+                                    is_bot = Some(old.is_bot);
+                                    race = Some(old.race);
+                                    class = Some(old.class);
+                                    sex = Some(old.sex);
+                                    pronouns = Some(old.pronouns);
+                                    state = ConnState::NeedSex;
+                                    resumed_live = true;
+                                }
+                            }
+                            if !resumed_live {
+                                if account_created {
+                                    persist_account_profile = true;
+                                    public_ack_version = 0;
+                                    coc_ack_version = 0;
+                                    state = ConnState::NeedBotDisclosure;
+                                } else {
+                                    let rec = {
+                                        let a = accounts.lock().await;
+                                        a.by_name.get(&uname).cloned()
+                                    };
+                                    if let Some(rec) = rec.as_ref() {
+                                        state = prepare_existing_account_onboarding(
+                                            rec,
+                                            &mut is_bot,
+                                            &mut race,
+                                            &mut class,
+                                            &mut sex,
+                                            &mut pronouns,
+                                            &mut public_ack_version,
+                                            &mut coc_ack_version,
+                                            &mut persist_account_profile,
+                                        );
+                                    } else {
+                                        state = ConnState::NeedBotDisclosure;
+                                    }
+                                }
+                                if let Some(prompt) = prompt_for_onboarding_state(state) {
+                                    let _ = write_tx.send(prompt).await;
+                                    continue;
+                                }
+                            }
+                        }
                     }
 
                     let Some(code) = google_oauth_code.as_deref() else {
                         state = ConnState::NeedAuthMethod;
                         let _ = write_tx
-                            .send(Bytes::from(auth_prompt))
+                            .send(Bytes::from_static(
+                                b"oauth state lost; pick auth method\r\n> ",
+                            ))
                             .await;
                         continue;
                     };
@@ -4120,7 +5177,9 @@ async fn handle_conn(
                             google_oauth_code = None;
                             state = ConnState::NeedAuthMethod;
                             let _ = write_tx
-                                .send(Bytes::from(auth_prompt_cancelled))
+                                .send(Bytes::from_static(
+                                    b"cancelled\r\nauth method:\r\n- password\r\n- google\r\ntype: password | google\r\n> ",
+                                ))
                                 .await;
                             continue;
                         }
@@ -4199,10 +5258,11 @@ async fn handle_conn(
 
                             // Bind to account name.
                             let uname = name.as_deref().expect("name set").to_string();
+                            let mut account_created = false;
                             {
                                 let mut a = accounts.lock().await;
                                 if let Some(r) = a.by_name.get(&uname) {
-                                    if r.google_sub.as_deref() != Some(sub) {
+                                    if !r.has_auth_identity("google", sub) {
                                         let _ = write_tx
                                             .send(Bytes::from_static(
                                                 b"name already taken\r\nbye\r\n",
@@ -4216,16 +5276,29 @@ async fn handle_conn(
                                         AccountRec {
                                             name: uname.clone(),
                                             pw_hash: None,
-                                            google_sub: Some(sub.to_string()),
-                                            google_email: email.clone(),
+                                            auth_identities: vec![AccountAuthIdentity {
+                                                method: "google".to_string(),
+                                                sub: sub.to_string(),
+                                                email: email.clone(),
+                                            }],
+                                            google_sub: None,
+                                            google_email: None,
                                             oidc_sub: None,
                                             oidc_email: None,
                                             caps: None,
+                                            is_bot: None,
+                                            race: None,
+                                            class: None,
+                                            sex: None,
+                                            pronouns: None,
+                                            public_ack_version: 0,
+                                            coc_ack_version: 0,
                                             email: None,
                                             created_unix: now_unix,
                                         },
                                     );
                                     a.save()?;
+                                    account_created = true;
                                 }
                             }
 
@@ -4241,44 +5314,37 @@ async fn handle_conn(
 
                             let _ = std::fs::remove_file(&path);
                             google_oauth_code = None;
-                            let uname = name.as_deref().unwrap_or("");
-                            if let Some(saved) = wait_for_saved_player(
-                                &cfg.players_path,
-                                uname,
-                                Duration::from_secs(2),
-                            )
-                            .await
-                            {
-                                let shard_auth = auth_blob.clone().expect("auth blob set");
-                                attach_authenticated_session(
-                                    session,
-                                    peer_ip,
-                                    uname,
-                                    saved.is_bot,
-                                    &saved.race,
-                                    &saved.class,
-                                    &saved.sex,
-                                    &saved.pronouns,
-                                    shard_auth,
-                                    auth_method.as_deref().unwrap_or("unknown"),
-                                    &write_tx,
-                                    &disconnect_tx,
-                                    &sessions,
-                                    &holds,
-                                    &eventlog,
-                                    &shard_tx,
-                                )
-                                .await?;
-                                state = ConnState::InWorld;
-                            } else {
+
+                            if account_created {
+                                persist_account_profile = true;
+                                public_ack_version = 0;
+                                coc_ack_version = 0;
                                 state = ConnState::NeedBotDisclosure;
-                                let _ = write_tx
-                                    .send(Bytes::from_static(
-                                        b"\r\ncharacter creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                                    ))
-                                    .await;
+                            } else {
+                                let rec = {
+                                    let a = accounts.lock().await;
+                                    a.by_name.get(&uname).cloned()
+                                };
+                                if let Some(rec) = rec.as_ref() {
+                                    state = prepare_existing_account_onboarding(
+                                        rec,
+                                        &mut is_bot,
+                                        &mut race,
+                                        &mut class,
+                                        &mut sex,
+                                        &mut pronouns,
+                                        &mut public_ack_version,
+                                        &mut coc_ack_version,
+                                        &mut persist_account_profile,
+                                    );
+                                } else {
+                                    state = ConnState::NeedBotDisclosure;
+                                }
                             }
-                            continue;
+                            if let Some(prompt) = prompt_for_onboarding_state(state) {
+                                let _ = write_tx.send(prompt).await;
+                                continue;
+                            }
                         }
                         _ => {
                             let _ = write_tx
@@ -4369,11 +5435,19 @@ async fn handle_conn(
                             AccountRec {
                                 name: uname,
                                 pw_hash: Some(hash),
+                                auth_identities: Vec::new(),
                                 google_sub: None,
                                 google_email: None,
                                 oidc_sub: None,
                                 oidc_email: None,
                                 caps: None,
+                                is_bot: None,
+                                race: None,
+                                class: None,
+                                sex: None,
+                                pronouns: None,
+                                public_ack_version: 0,
+                                coc_ack_version: 0,
                                 email: None,
                                 created_unix: now_unix,
                             },
@@ -4398,44 +5472,46 @@ async fn handle_conn(
                     ));
 
                     line_bytes.zeroize();
-                    let uname = name.as_deref().unwrap_or("");
-                    if let Some(saved) = wait_for_saved_player(
-                        &cfg.players_path,
-                        uname,
-                        Duration::from_secs(2),
-                    )
-                    .await
-                    {
-                        let shard_auth = auth_blob.clone().expect("auth blob set");
-                        attach_authenticated_session(
-                            session,
-                            peer_ip,
-                            uname,
-                            saved.is_bot,
-                            &saved.race,
-                            &saved.class,
-                            &saved.sex,
-                            &saved.pronouns,
-                            shard_auth,
-                            auth_method.as_deref().unwrap_or("unknown"),
-                            &write_tx,
-                            &disconnect_tx,
-                            &sessions,
-                            &holds,
-                            &eventlog,
-                            &shard_tx,
-                        )
-                        .await?;
-                        state = ConnState::InWorld;
-                    } else {
-                        state = ConnState::NeedBotDisclosure;
-                        let _ = write_tx
-                            .send(Bytes::from_static(
-                                b"character creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                            ))
-                            .await;
+                    let mut resumed_live = false;
+                    if let Some(nm) = name.as_deref() {
+                        let prior = {
+                            let m = sessions.lock().await;
+                            m.iter()
+                                .find(|(sid, s)| {
+                                    **sid != session && s.name.eq_ignore_ascii_case(nm)
+                                })
+                                .map(|(sid, s)| (*sid, s.clone()))
+                        };
+                        if let Some((old_sid, old)) = prior {
+                            let _ = old.disconnect_tx.send(true);
+                            {
+                                let mut m = sessions.lock().await;
+                                m.remove(&old_sid);
+                            }
+                            let _ = shard_tx
+                                .send(ShardMsg {
+                                    t: REQ_DETACH,
+                                    session: old_sid,
+                                    body: Bytes::new(),
+                                })
+                                .await;
+                            is_bot = Some(old.is_bot);
+                            race = Some(old.race);
+                            class = Some(old.class);
+                            sex = Some(old.sex);
+                            pronouns = Some(old.pronouns);
+                            state = ConnState::NeedSex;
+                            resumed_live = true;
+                        }
                     }
-                    continue;
+                    if !resumed_live {
+                        persist_account_profile = true;
+                        public_ack_version = 0;
+                        coc_ack_version = 0;
+                        state = ConnState::NeedBotDisclosure;
+                        let _ = write_tx.send(prompt_bot_disclosure()).await;
+                        continue;
+                    }
                 }
                 ConnState::NeedPasswordLogin => {
                     let uname = name.as_deref().expect("name set");
@@ -4465,8 +5541,8 @@ async fn handle_conn(
                         let a = accounts.lock().await;
                         a.by_name.get(uname).cloned()
                     };
-                    let (hash, caps) = match rec {
-                        Some(r) => (r.pw_hash, r.caps),
+                    let (hash, caps) = match rec.as_ref() {
+                        Some(r) => (r.pw_hash.clone(), r.caps.clone()),
                         None => (None, None),
                     };
 
@@ -4543,43 +5619,59 @@ async fn handle_conn(
                     ));
 
                     line_bytes.zeroize();
-                    if let Some(saved) = wait_for_saved_player(
-                        &cfg.players_path,
-                        uname,
-                        Duration::from_secs(2),
-                    )
-                    .await
-                    {
-                        let shard_auth = auth_blob.clone().expect("auth blob set");
-                        attach_authenticated_session(
-                            session,
-                            peer_ip,
-                            uname,
-                            saved.is_bot,
-                            &saved.race,
-                            &saved.class,
-                            &saved.sex,
-                            &saved.pronouns,
-                            shard_auth,
-                            auth_method.as_deref().unwrap_or("unknown"),
-                            &write_tx,
-                            &disconnect_tx,
-                            &sessions,
-                            &holds,
-                            &eventlog,
-                            &shard_tx,
-                        )
-                        .await?;
-                        state = ConnState::InWorld;
-                    } else {
-                        state = ConnState::NeedBotDisclosure;
-                        let _ = write_tx
-                            .send(Bytes::from_static(
-                                b"character creation (step 2/4)\r\nare you using automation?\r\ntype: human | bot\r\n> ",
-                            ))
-                            .await;
+                    let mut resumed_live = false;
+                    if let Some(nm) = name.as_deref() {
+                        let prior = {
+                            let m = sessions.lock().await;
+                            m.iter()
+                                .find(|(sid, s)| {
+                                    **sid != session && s.name.eq_ignore_ascii_case(nm)
+                                })
+                                .map(|(sid, s)| (*sid, s.clone()))
+                        };
+                        if let Some((old_sid, old)) = prior {
+                            let _ = old.disconnect_tx.send(true);
+                            {
+                                let mut m = sessions.lock().await;
+                                m.remove(&old_sid);
+                            }
+                            let _ = shard_tx
+                                .send(ShardMsg {
+                                    t: REQ_DETACH,
+                                    session: old_sid,
+                                    body: Bytes::new(),
+                                })
+                                .await;
+                            is_bot = Some(old.is_bot);
+                            race = Some(old.race);
+                            class = Some(old.class);
+                            sex = Some(old.sex);
+                            pronouns = Some(old.pronouns);
+                            state = ConnState::NeedSex;
+                            resumed_live = true;
+                        }
                     }
-                    continue;
+                    if !resumed_live {
+                        if let Some(rec) = rec.as_ref() {
+                            state = prepare_existing_account_onboarding(
+                                rec,
+                                &mut is_bot,
+                                &mut race,
+                                &mut class,
+                                &mut sex,
+                                &mut pronouns,
+                                &mut public_ack_version,
+                                &mut coc_ack_version,
+                                &mut persist_account_profile,
+                            );
+                        } else {
+                            state = ConnState::NeedBotDisclosure;
+                        }
+                        if let Some(prompt) = prompt_for_onboarding_state(state) {
+                            let _ = write_tx.send(prompt).await;
+                            continue;
+                        }
+                    }
                 }
                 ConnState::NeedBotDisclosure => {
                     let line = String::from_utf8_lossy(&line_bytes).trim().to_string();
@@ -4618,16 +5710,19 @@ async fn handle_conn(
                             .await;
                         continue;
                     }
-                    state = ConnState::NeedCocAck;
-                    let mut b = Vec::new();
-                    b.extend_from_slice(b"character creation (step 4/4)\r\ncode of conduct:\r\n");
-                    for li in COC_LINE_ITEMS {
-                        b.extend_from_slice(li.as_bytes());
-                        b.extend_from_slice(b"\r\n");
+                    public_ack_version = PUBLIC_ACK_VERSION;
+                    if coc_ack_version < COC_ACK_VERSION {
+                        state = ConnState::NeedCocAck;
+                        let _ = write_tx.send(prompt_coc_ack()).await;
+                        continue;
                     }
-                    b.extend_from_slice(b"type: agree\r\n> ");
-                    let _ = write_tx.send(Bytes::from(b)).await;
-                    continue;
+                    if race.is_some() && class.is_some() && sex.is_some() && pronouns.is_some() {
+                        state = ConnState::NeedSex;
+                    } else {
+                        state = ConnState::NeedRace;
+                        let _ = write_tx.send(prompt_race()).await;
+                        continue;
+                    }
                 }
                 ConnState::NeedCocAck => {
                     let line = String::from_utf8_lossy(&line_bytes).trim().to_string();
@@ -4641,12 +5736,14 @@ async fn handle_conn(
                             .await;
                         continue;
                     }
-                    state = ConnState::NeedRace;
-                    let mut s = String::new();
-                    s.push_str("character creation (step 5/7)\r\nchoose race:\r\n");
-                    s.push_str("type: race list | race <name>\r\n> ");
-                    let _ = write_tx.send(Bytes::from(s)).await;
-                    continue;
+                    coc_ack_version = COC_ACK_VERSION;
+                    if race.is_some() && class.is_some() && sex.is_some() && pronouns.is_some() {
+                        state = ConnState::NeedSex;
+                    } else {
+                        state = ConnState::NeedRace;
+                        let _ = write_tx.send(prompt_race()).await;
+                        continue;
+                    }
                 }
                 ConnState::NeedRace => {
                     let line = String::from_utf8_lossy(&line_bytes)
@@ -4809,6 +5906,35 @@ async fn handle_conn(
                 let held = { holds.lock().await.is_held(&n).is_some() };
 
                 {
+                    let mut a = accounts.lock().await;
+                    if let Some(r) = a.by_name.get_mut(&n) {
+                        let mut changed = false;
+                        if persist_account_profile {
+                            if r.is_bot != Some(bot)
+                                || r.race.as_deref() != Some(race_s.as_str())
+                                || r.class.as_deref() != Some(class_s.as_str())
+                                || r.sex.as_deref() != Some(sex_s.as_str())
+                                || r.pronouns.as_deref() != Some(pro_s.as_str())
+                            {
+                                store_account_onboarding(r, bot, &race_s, &class_s, &sex_s, &pro_s);
+                                changed = true;
+                            }
+                        }
+                        if r.public_ack_version != PUBLIC_ACK_VERSION {
+                            r.public_ack_version = PUBLIC_ACK_VERSION;
+                            changed = true;
+                        }
+                        if r.coc_ack_version != COC_ACK_VERSION {
+                            r.coc_ack_version = COC_ACK_VERSION;
+                            changed = true;
+                        }
+                        if changed {
+                            a.save()?;
+                        }
+                    }
+                }
+
+                {
                     let mut m = sessions.lock().await;
                     m.insert(
                         session,
@@ -4827,6 +5953,7 @@ async fn handle_conn(
                             scrollback: Arc::new(tokio::sync::Mutex::new(Scrollback::new(
                                 SCROLLBACK_MAX_LINES,
                             ))),
+                            next_cmd_id: 1,
                         },
                     );
                 }
@@ -4850,6 +5977,7 @@ async fn handle_conn(
 
                 let body = attach_body(
                     bot,
+                    false,
                     Some(shard_auth.as_ref()),
                     &race_s,
                     &class_s,
@@ -4893,20 +6021,67 @@ async fn handle_conn(
                 eventlog.log_line(LogStream::Character(nm), &entry).await;
             }
 
+            if let Some(blob_len) = parse_sayblob_len(&lc) {
+                let len = match blob_len {
+                    Ok(v) => v,
+                    Err(msg) => {
+                        let _ = write_tx.send(Bytes::from(format!("{msg}\r\n> "))).await;
+                        continue;
+                    }
+                };
+                let _ = write_tx
+                    .send(Bytes::from(format!(
+                        "# send {len} raw bytes for sayblob now\r\n"
+                    )))
+                    .await;
+                match spool_blob_payload(
+                    &mut rd,
+                    &mut iac,
+                    &mut linebuf,
+                    &cfg.blob_spool_dir,
+                    session,
+                    len,
+                )
+                .await
+                {
+                    Ok(path) => {
+                        let path_text = path.to_string_lossy().to_string();
+                        match mudproto::shard::build_input_blob_body(
+                            b"say",
+                            path_text.as_bytes(),
+                            len,
+                        ) {
+                            Ok(body) => {
+                                let _ = shard_tx
+                                    .send(ShardMsg {
+                                        t: REQ_INPUT_BLOB,
+                                        session,
+                                        body: Bytes::from(body),
+                                    })
+                                    .await;
+                            }
+                            Err(e) => {
+                                let _ = write_tx
+                                    .send(Bytes::from(format!("sayblob: {e}\r\n> ")))
+                                    .await;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let _ = write_tx
+                            .send(Bytes::from(format!("sayblob: {e}\r\n> ")))
+                            .await;
+                    }
+                }
+                continue;
+            }
+
             if lc == "exit" || lc == "quit" {
                 let _ = write_tx.send(Bytes::from_static(b"bye\r\n")).await;
                 break 'read;
             }
 
             if lc == "uptime" || lc == "uptime broker" || lc == "uptime session" {
-                fn fmt_uptime(secs: u64) -> String {
-                    let days = secs / 86_400;
-                    let hours = (secs % 86_400) / 3_600;
-                    let minutes = (secs % 3_600) / 60;
-                    let seconds = secs % 60;
-                    format!("{days}d {hours}h {minutes}m {seconds}s")
-                }
-
                 let now_unix = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -4920,9 +6095,18 @@ async fn handle_conn(
                     " - broker_started_unix: {}\r\n",
                     server_info.started_unix
                 ));
-                s.push_str(&format!(" - broker_uptime: {}\r\n", fmt_uptime(up_s)));
+                s.push_str(&format!(" - broker_uptime_s: {up_s}\r\n"));
                 s.push_str(&format!(" - broker_bind: {}\r\n", server_info.bind));
                 s.push_str(&format!(" - shard_addr: {}\r\n", server_info.shard_addr));
+                if server_info.shard_addrs.len() > 1 {
+                    let addrs = server_info
+                        .shard_addrs
+                        .iter()
+                        .map(|a| a.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    s.push_str(&format!(" - shard_addrs: {addrs}\r\n"));
+                }
                 s.push_str(" - note: shard uptime/time via `uptime` (forwarded to shard)\r\n");
                 let _ = write_tx.send(Bytes::from(s)).await;
 
@@ -4966,13 +6150,37 @@ async fn handle_conn(
                 continue;
             }
 
-            let _ = shard_tx
-                .send(ShardMsg {
-                    t: REQ_INPUT,
-                    session,
-                    body: Bytes::from(line.into_bytes()),
-                })
-                .await;
+            if lc == "whoami" {
+                let out = handle_whoami_command(&sessions, session).await;
+                let _ = write_tx.send(Bytes::from(out)).await;
+                continue;
+            }
+
+            if lc == "who" {
+                let out = handle_who_command(&sessions).await;
+                let _ = write_tx.send(Bytes::from(out)).await;
+                continue;
+            }
+
+            let cmd_id = {
+                let mut m = sessions.lock().await;
+                if let Some(si) = m.get_mut(&session) {
+                    let id = si.next_cmd_id;
+                    si.next_cmd_id = si.next_cmd_id.saturating_add(1).max(1);
+                    id
+                } else {
+                    0
+                }
+            };
+            let (t, body) = if cmd_id == 0 {
+                (REQ_INPUT, Bytes::from(line.into_bytes()))
+            } else {
+                (
+                    REQ_INPUT_IDEMPOTENT,
+                    Bytes::from(build_input_idempotent_body(cmd_id, line.as_bytes())),
+                )
+            };
+            let _ = shard_tx.send(ShardMsg { t, session, body }).await;
         }
     }
 
@@ -5321,9 +6529,307 @@ fn try_pop_line(buf: &mut Vec<u8>) -> Option<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{BTreeSet, VecDeque};
+
     use super::{
-        LineId, Scrollback, extract_scrollback_lines, normalize_email, redact_pii, trim_ascii_ws,
+        AccountRec, COC_ACK_VERSION, ConnState, LineId, PUBLIC_ACK_VERSION, REQ_DETACH, REQ_INPUT,
+        REQ_INPUT_IDEMPOTENT, Scrollback, ShardMsg, ack_inflight_for_response,
+        build_input_idempotent_body, extract_scrollback_lines, normalize_email, parse_sayblob_len,
+        prepare_existing_account_onboarding, redact_pii, requeue_inflight, seed_account_onboarding,
+        shard_msg_expects_response, store_account_onboarding, stored_account_onboarding,
+        trim_ascii_ws,
     };
+    use bytes::Bytes;
+    use mudproto::session::SessionId;
+    use mudproto::shard::ShardResp;
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum BrokerStateClass {
+        TransportLocal,
+        DerivedLocal,
+        RaftRequiredDebt,
+    }
+
+    struct BrokerStateField {
+        owner: &'static str,
+        field: &'static str,
+        class: BrokerStateClass,
+        reason: &'static str,
+    }
+
+    static BROKER_STATE_MANIFEST: &[BrokerStateField] = &[
+        bf(
+            "SessionInfo",
+            "name",
+            BrokerStateClass::RaftRequiredDebt,
+            "character identity is resumable across broker reconnects",
+        ),
+        bf(
+            "SessionInfo",
+            "held",
+            BrokerStateClass::DerivedLocal,
+            "legal hold status is derived from the compliance cache",
+        ),
+        bf(
+            "SessionInfo",
+            "is_bot",
+            BrokerStateClass::RaftRequiredDebt,
+            "bot/player role affects resumable shard attach state",
+        ),
+        bf(
+            "SessionInfo",
+            "auth",
+            BrokerStateClass::RaftRequiredDebt,
+            "auth assertion is needed when the shard connection is rebuilt",
+        ),
+        bf(
+            "SessionInfo",
+            "race",
+            BrokerStateClass::RaftRequiredDebt,
+            "character build state must resume through raft state",
+        ),
+        bf(
+            "SessionInfo",
+            "class",
+            BrokerStateClass::RaftRequiredDebt,
+            "character build state must resume through raft state",
+        ),
+        bf(
+            "SessionInfo",
+            "sex",
+            BrokerStateClass::RaftRequiredDebt,
+            "character profile state must resume through raft state",
+        ),
+        bf(
+            "SessionInfo",
+            "pronouns",
+            BrokerStateClass::RaftRequiredDebt,
+            "character profile state must resume through raft state",
+        ),
+        bf(
+            "SessionInfo",
+            "peer_ip",
+            BrokerStateClass::TransportLocal,
+            "current TCP peer is connection-local",
+        ),
+        bf(
+            "SessionInfo",
+            "write_tx",
+            BrokerStateClass::TransportLocal,
+            "socket writer channel is connection-local",
+        ),
+        bf(
+            "SessionInfo",
+            "disconnect_tx",
+            BrokerStateClass::TransportLocal,
+            "disconnect signal is connection-local",
+        ),
+        bf(
+            "SessionInfo",
+            "scrollback",
+            BrokerStateClass::DerivedLocal,
+            "scrollback is mirrored into nearline/event logs, not raft consensus state",
+        ),
+        bf(
+            "SessionInfo",
+            "next_cmd_id",
+            BrokerStateClass::TransportLocal,
+            "per-session input id generator is only used while this transport session is live; ids are carried on in-flight shard messages",
+        ),
+    ];
+
+    const fn bf(
+        owner: &'static str,
+        field: &'static str,
+        class: BrokerStateClass,
+        reason: &'static str,
+    ) -> BrokerStateField {
+        BrokerStateField {
+            owner,
+            field,
+            class,
+            reason,
+        }
+    }
+
+    fn struct_field_names(source: &str, owner: &str) -> BTreeSet<String> {
+        let needle = format!("struct {owner} {{");
+        let Some(start) = source.find(&needle) else {
+            panic!("missing struct {owner}");
+        };
+        let body_start = start + needle.len();
+        let mut depth = 1i32;
+        let mut end = body_start;
+        for (off, ch) in source[body_start..].char_indices() {
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = body_start + off;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        assert!(end > body_start, "could not parse struct {owner}");
+        source[body_start..end]
+            .lines()
+            .filter_map(|line| {
+                let line = line.split("//").next().unwrap_or("").trim();
+                if line.is_empty() || line.starts_with('#') {
+                    return None;
+                }
+                let (name, _) = line.split_once(':')?;
+                let name = name.trim().trim_start_matches("pub ").trim();
+                if name.is_empty() {
+                    return None;
+                }
+                Some(name.to_string())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn broker_session_manifest_covers_all_session_info_fields() {
+        let source = include_str!("main.rs");
+        let parsed = struct_field_names(source, "SessionInfo");
+        let declared = BROKER_STATE_MANIFEST
+            .iter()
+            .filter(|f| f.owner == "SessionInfo")
+            .map(|f| f.field.to_string())
+            .collect::<BTreeSet<_>>();
+        let missing = parsed.difference(&declared).cloned().collect::<Vec<_>>();
+        let stale = declared.difference(&parsed).cloned().collect::<Vec<_>>();
+        assert!(
+            missing.is_empty() && stale.is_empty(),
+            "broker state manifest mismatch for SessionInfo: missing={missing:?} stale={stale:?}"
+        );
+    }
+
+    #[test]
+    fn broker_resumable_state_is_marked_for_raft() {
+        let raft_required = BROKER_STATE_MANIFEST
+            .iter()
+            .filter(|f| f.class == BrokerStateClass::RaftRequiredDebt)
+            .collect::<Vec<_>>();
+        assert!(
+            !raft_required.is_empty(),
+            "broker resumable state must be explicitly tracked as raft migration debt"
+        );
+        for field in BROKER_STATE_MANIFEST {
+            assert!(
+                !field.reason.trim().is_empty(),
+                "broker field {}.{} needs a state-boundary reason",
+                field.owner,
+                field.field
+            );
+        }
+    }
+
+    fn bare_test_account(name: &str) -> AccountRec {
+        AccountRec {
+            name: name.to_string(),
+            pw_hash: None,
+            auth_identities: Vec::new(),
+            google_sub: None,
+            google_email: None,
+            oidc_sub: None,
+            oidc_email: None,
+            caps: None,
+            is_bot: None,
+            race: None,
+            class: None,
+            sex: None,
+            pronouns: None,
+            public_ack_version: 0,
+            coc_ack_version: 0,
+            email: None,
+            created_unix: 1,
+        }
+    }
+
+    #[test]
+    fn legacy_account_defaults_skip_current_rules_but_not_profile_persistence() {
+        let rec: AccountRec = serde_json::from_str(r#"{"name":"rob","created_unix":1}"#).unwrap();
+        assert_eq!(rec.public_ack_version, PUBLIC_ACK_VERSION);
+        assert_eq!(rec.coc_ack_version, COC_ACK_VERSION);
+
+        let mut is_bot = None;
+        let mut race = None;
+        let mut class = None;
+        let mut sex = None;
+        let mut pronouns = None;
+        assert!(!seed_account_onboarding(
+            &rec,
+            &mut is_bot,
+            &mut race,
+            &mut class,
+            &mut sex,
+            &mut pronouns
+        ));
+        assert_eq!(is_bot, Some(false));
+        assert_eq!(race.as_deref(), Some("human"));
+        assert_eq!(class.as_deref(), Some("fighter"));
+        assert_eq!(sex.as_deref(), Some("none"));
+        assert_eq!(pronouns.as_deref(), Some("they"));
+    }
+
+    #[test]
+    fn existing_account_onboarding_routes_by_ack_version() {
+        let mut rec = bare_test_account("alice");
+        store_account_onboarding(&mut rec, false, "elf", "wizard", "female", "she");
+        rec.public_ack_version = PUBLIC_ACK_VERSION;
+        rec.coc_ack_version = COC_ACK_VERSION;
+
+        let mut is_bot = None;
+        let mut race = None;
+        let mut class = None;
+        let mut sex = None;
+        let mut pronouns = None;
+        let mut public_ack = 0;
+        let mut coc_ack = 0;
+        let mut persist_profile = true;
+
+        let route = prepare_existing_account_onboarding(
+            &rec,
+            &mut is_bot,
+            &mut race,
+            &mut class,
+            &mut sex,
+            &mut pronouns,
+            &mut public_ack,
+            &mut coc_ack,
+            &mut persist_profile,
+        );
+        assert_eq!(route, ConnState::NeedSex);
+        assert!(persist_profile);
+        assert_eq!(
+            stored_account_onboarding(&rec),
+            Some((
+                false,
+                "elf".to_string(),
+                "wizard".to_string(),
+                "female".to_string(),
+                "she".to_string()
+            ))
+        );
+
+        rec.public_ack_version = PUBLIC_ACK_VERSION.saturating_sub(1);
+        let route = prepare_existing_account_onboarding(
+            &rec,
+            &mut is_bot,
+            &mut race,
+            &mut class,
+            &mut sex,
+            &mut pronouns,
+            &mut public_ack,
+            &mut coc_ack,
+            &mut persist_profile,
+        );
+        assert_eq!(route, ConnState::NeedPublicAck);
+    }
 
     #[test]
     fn trim_ascii_ws_basic() {
@@ -5397,5 +6903,70 @@ mod tests {
             "call [phone] now".to_string()
         );
         assert_eq!(redact_pii("no pii here"), "no pii here".to_string());
+    }
+
+    #[test]
+    fn sayblob_len_parser_is_strict() {
+        assert_eq!(parse_sayblob_len("look"), None);
+        assert_eq!(parse_sayblob_len("sayblob 1024"), Some(Ok(1024)));
+        assert!(matches!(parse_sayblob_len("sayblob"), Some(Err(_))));
+        assert!(matches!(parse_sayblob_len("sayblob 0"), Some(Err(_))));
+        assert!(matches!(parse_sayblob_len("sayblob nope"), Some(Err(_))));
+        assert!(matches!(
+            parse_sayblob_len("sayblob 10 extra"),
+            Some(Err(_))
+        ));
+    }
+
+    #[test]
+    fn shard_failover_requeues_only_unacked_requests() {
+        let alice = SessionId(1);
+        let bob = SessionId(2);
+        let req_a = ShardMsg {
+            t: REQ_INPUT_IDEMPOTENT,
+            session: alice,
+            body: Bytes::from(build_input_idempotent_body(10, b"quest get trio.probe")),
+        };
+        let req_b = ShardMsg {
+            t: REQ_INPUT,
+            session: bob,
+            body: Bytes::from_static(b"look"),
+        };
+        let req_c = ShardMsg {
+            t: REQ_INPUT,
+            session: alice,
+            body: Bytes::from_static(b"quest get trio.step"),
+        };
+        let detach = ShardMsg {
+            t: REQ_DETACH,
+            session: alice,
+            body: Bytes::new(),
+        };
+
+        assert!(shard_msg_expects_response(&req_a));
+        assert!(!shard_msg_expects_response(&detach));
+
+        let mut pending = VecDeque::new();
+        pending.push_back(req_c.clone());
+        let mut inflight = VecDeque::new();
+        inflight.push_back(req_a.clone());
+        inflight.push_back(req_b.clone());
+
+        ack_inflight_for_response(
+            &mut inflight,
+            &ShardResp::Output {
+                session: alice,
+                line: Bytes::from_static(b"quest: trio.probe=alive\r\n"),
+            },
+        );
+        assert_eq!(inflight.len(), 1);
+        assert_eq!(inflight[0].session, bob);
+
+        requeue_inflight(&mut pending, &mut inflight);
+        assert!(inflight.is_empty());
+        assert_eq!(pending.len(), 2);
+        assert_eq!(pending[0].session, bob);
+        assert_eq!(pending[1].body, req_c.body);
+        assert_eq!(pending[0].body, req_b.body);
     }
 }

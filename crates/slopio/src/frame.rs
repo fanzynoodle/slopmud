@@ -6,6 +6,8 @@ use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
 
+use crate::writev::write_all_vectored;
+
 #[derive(Debug)]
 pub struct FrameReader<R> {
     inner: R,
@@ -101,13 +103,16 @@ impl<W: AsyncWrite + Unpin> FrameWriter<W> {
             .try_into()
             .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "frame too big"))?;
 
-        self.inner.write_all(&len_u32.to_be_bytes()).await?;
-        for p in parts {
-            if !p.is_empty() {
-                self.inner.write_all(p).await?;
-            }
-        }
-        Ok(())
+        let header = len_u32.to_be_bytes();
+        let mut chunks = Vec::with_capacity(parts.len() + 1);
+        chunks.push(header.as_slice());
+        chunks.extend(parts.iter().copied().filter(|p| !p.is_empty()));
+        write_all_vectored(&mut self.inner, &chunks).await
+    }
+
+    pub async fn write_frame_bytes(&mut self, parts: &[Bytes]) -> std::io::Result<()> {
+        let refs = parts.iter().map(|b| b.as_ref()).collect::<Vec<_>>();
+        self.write_frame_parts(&refs).await
     }
 
     pub async fn flush(&mut self) -> std::io::Result<()> {
@@ -143,5 +148,18 @@ mod tests {
         let mut fr = FrameReader::new(&mut b);
         let f = fr.read_frame().await.unwrap().unwrap();
         assert_eq!(&f[..], b"hello");
+    }
+
+    #[tokio::test]
+    async fn writes_bytes_parts_without_concat() {
+        let (a, mut b) = tokio::io::duplex(64);
+        let mut fw = FrameWriter::new(a);
+        let parts = [Bytes::from_static(b"ze"), Bytes::from_static(b"ro")];
+        fw.write_frame_bytes(&parts).await.unwrap();
+        fw.flush().await.unwrap();
+
+        let mut fr = FrameReader::new(&mut b);
+        let f = fr.read_frame().await.unwrap().unwrap();
+        assert_eq!(&f[..], b"zero");
     }
 }

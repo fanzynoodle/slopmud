@@ -10,6 +10,13 @@ fn git(args: &[&str]) -> Option<String> {
     Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
+fn env_nonempty(key: &str) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
 fn main() {
     // Capture build timestamp (UTC) and git metadata for `buildinfo`.
     let now = SystemTime::now()
@@ -34,25 +41,37 @@ fn main() {
         }
     }
 
-    if let Some(sha) = git(&["rev-parse", "--short", "HEAD"]) {
+    let sha = env_nonempty("SLOPMUD_GIT_SHA")
+        .or_else(|| env_nonempty("GITHUB_SHA"))
+        .map(|s| s.chars().take(12).collect::<String>())
+        .or_else(|| git(&["rev-parse", "--short", "HEAD"]));
+    if let Some(sha) = sha {
         println!("cargo:rustc-env=SLOPMUD_GIT_SHA={sha}");
     }
 
     // Dirty if `git diff` or `git diff --cached` reports changes.
-    let dirty = Command::new("git")
-        .args(["diff", "--quiet"])
-        .status()
-        .map(|s| !s.success())
-        .unwrap_or(false)
-        || Command::new("git")
-            .args(["diff", "--cached", "--quiet"])
-            .status()
-            .map(|s| !s.success())
-            .unwrap_or(false);
+    let dirty = env_nonempty("SLOPMUD_GIT_DIRTY")
+        .map(|v| matches!(v.as_str(), "1" | "true" | "yes"))
+        .unwrap_or_else(|| {
+            Command::new("git")
+                .args(["diff", "--quiet"])
+                .status()
+                .map(|s| !s.success())
+                .unwrap_or(false)
+                || Command::new("git")
+                    .args(["diff", "--cached", "--quiet"])
+                    .status()
+                    .map(|s| !s.success())
+                    .unwrap_or(false)
+        });
     println!(
         "cargo:rustc-env=SLOPMUD_GIT_DIRTY={}",
         if dirty { "1" } else { "0" }
     );
+
+    println!("cargo:rerun-if-env-changed=SLOPMUD_GIT_SHA");
+    println!("cargo:rerun-if-env-changed=SLOPMUD_GIT_DIRTY");
+    println!("cargo:rerun-if-env-changed=GITHUB_SHA");
 
     // Ensure rebuild when HEAD changes.
     println!("cargo:rerun-if-changed=.git/HEAD");

@@ -102,7 +102,12 @@ def connect_and_create(name, is_bot=False, host="127.0.0.1", port=54012):
         )
     if b"set password" in out or b"password (never logged/echoed)" in out:
         send_line(s, pw)
-    c.read_until("type: human | bot", timeout_s=12.0)
+    out = c.read_until(
+        ["type: human | bot", "hi ", "(type: help", "=="], timeout_s=12.0
+    )
+    if b"type: human | bot" not in out:
+        c.read_until(">", timeout_s=15.0)
+        return c
     send_line(s, "bot" if is_bot else "human")
     c.read_until("type: agree")
     send_line(s, "agree")

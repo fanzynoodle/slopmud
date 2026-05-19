@@ -58,38 +58,32 @@ just hot-deploy-slopmud prd
 This relies on `scripts/cicd/slopmud-shuttle-assets`, which installs the new broker binary and restarts the
 systemd unit without overwriting an existing unit file by default.
 
-## Asset Build And Deploy Flow
+## Low-Cost Single-AZ Raft Topology
 
-The important split is:
+The economical split-prod shape lives in `infra/terraform/single-az-raft-us-east-1`:
 
-- cloud-init user data re-registers DNS after spot instance replacement
-- CI and local deploy flows both build the same artifact shape
-- on-host install/redeploy is handled by `slopmud-shuttle-assets`
+- one tiny on-demand public gateway for telnet, web, websocket, and the broker
+- three tiny private Spot shard/Raft nodes in the same subnet/AZ
+- no public IPv4 on Raft nodes
+- broker-to-shard and Raft replication traffic stays on private VPC addresses
 
-```mermaid
-flowchart TD
-  A[Feature worktree<br/>/tmp/slopmud-wt-...] --> B[Local build or just hot-deploy-slopmud]
-  A --> C[Push branch]
-  C --> D[GitHub Actions enterprise-cicd.yml]
-  D --> E[Build artifact.tgz]
-  E --> F[S3 assets bucket]
+After applying Terraform, combine `terraform output recommended_env` with the usual secret/env values and deploy the private Raft nodes through the gateway:
 
-  G[Terraform mudbox stack] --> H[Launch template + ASG]
-  H --> I[EC2 instance boot]
-  I --> J[cloud-init per-boot DNS script]
-  J --> K[Route53 updates apex A and mud/www CNAMEs]
-
-  L[scripts/cicd/bootstrap_runner.sh] --> M[/usr/local/bin/slopmud-shuttle-assets]
-  F --> M
-  B --> N[scripts/cicd/hot_deploy_slopmud.sh]
-  N --> M
-  M --> O[/opt/slopmud/assets/<env>/<sha>/]
-  M --> P[/opt/slopmud/bin/slopmud-<env> and shard-01-<env>]
-  P --> Q[systemd restart]
-  Q --> R[Broker + shard + web serve new assets]
+```bash
+just render-single-az-raft-env /tmp/slopmud-prd-split-az1.env /home/rob/slopmud/env/prd.env
+just ensure-data-volumes /tmp/slopmud-prd-split-az1.env all
+just deploy-split-raft-trio prd-split
+just deploy-slopmud prd-split
+just deploy-web-sso prd-split-oauth
 ```
 
-For prod recovery after instance replacement, Terraform/cloud-init handles DNS reachability and the instance role handles S3/SSM reads. The actual app bits still need either CI deploy promotion or a local `just hot-deploy-slopmud prd` style redeploy to install the artifact on the replacement host.
+The current one-box host can remain the build/deploy runner. The split deploy script reaches private Raft nodes through SSH ProxyJump via the gateway, so the Raft nodes do not need public IPs or a NAT gateway.
+
+The Terraform stack attaches tiny encrypted data EBS volumes and the render helper points gateway accounts, nearline state, OAuth handoff state, and Raft logs at `/opt/slopmud/state`. Re-run `just ensure-data-volumes /tmp/slopmud-prd-split-az1.env all` after a rebuild or Spot replacement before deploying services.
+
+For the smallest gateway shape, set `SLOPMUD_SBC_ENABLED=0` unless the SBC sidecar services are also deployed. The render helper sets that by default, which keeps the broker from repeatedly trying to subscribe to a local SBC event socket that intentionally does not exist on the tiny gateway.
+
+Fresh gateways can restore cached cert material with `scripts/tls_cache_restore.sh /path/to/env.env` when the env defines `TLS_CACHE_FULLCHAIN_SSM` and `TLS_CACHE_PRIVKEY_SSM`. That gives the rebuilt gateway valid TLS before DNS is moved; verify with `curl --resolve mud.slopmud.com:4242:<gateway-ip> https://mud.slopmud.com:4242/healthz`.
 
 ## How to verify a `dev` push reaches mud.slopmud.com
 

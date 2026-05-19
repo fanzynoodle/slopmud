@@ -82,6 +82,9 @@ EOF
 
 # Broker -> shard wiring.
 # Prefer explicit SHARD_ADDR, otherwise fall back to SHARD_BIND if present in the env file.
+if [[ -n "${SHARD_ADDRS:-}" ]]; then
+  echo "Environment=SHARD_ADDRS=${SHARD_ADDRS}" >>"$tmp_unit"
+fi
 if [[ -n "${SHARD_ADDR:-}" ]]; then
   echo "Environment=SHARD_ADDR=${SHARD_ADDR}" >>"$tmp_unit"
 elif [[ -n "${SHARD_BIND:-}" ]]; then
@@ -133,6 +136,15 @@ if [[ -n "${SLOPMUD_ADMIN_BIND:-}" ]]; then
 fi
 if [[ -n "${SLOPMUD_BANS_PATH:-}" ]]; then
   echo "Environment=SLOPMUD_BANS_PATH=${SLOPMUD_BANS_PATH}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_SBC_ENABLED:-}" ]]; then
+  echo "Environment=SLOPMUD_SBC_ENABLED=${SLOPMUD_SBC_ENABLED}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_NEARLINE_DIR:-}" ]]; then
+  echo "Environment=SLOPMUD_NEARLINE_DIR=${SLOPMUD_NEARLINE_DIR}" >>"$tmp_unit"
+fi
+if [[ -n "${SLOPMUD_BLOB_SPOOL_DIR:-}" ]]; then
+  echo "Environment=SLOPMUD_BLOB_SPOOL_DIR=${SLOPMUD_BLOB_SPOOL_DIR}" >>"$tmp_unit"
 fi
 
 # Optional: eventlog archival (spool-to-disk + S3 upload).

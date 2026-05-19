@@ -12,6 +12,7 @@ members = [
   "apps/sbc_deciderd",
   "apps/ws_gateway",
   "apps/bot_party",
+  "apps/e2e_shard_raft_trio",
   "crates/compliance",
   "crates/fanzylog",
   "crates/mudproto",

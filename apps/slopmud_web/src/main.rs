@@ -8,7 +8,7 @@ use axum::{
     Router,
     extract::{ConnectInfo, Host, Query, State, ws},
     http::{StatusCode, Uri, header},
-    response::{Html, IntoResponse, Redirect, Response},
+    response::{Html, IntoResponse, Redirect},
     routing::{get, post},
 };
 use axum_server::tls_rustls::RustlsConfig;
@@ -54,30 +54,6 @@ ENV:
 "
     );
     std::process::exit(2);
-}
-
-async fn serve_static_no_cache(path: PathBuf, content_type: &'static str) -> Response {
-    match tokio::fs::read(&path).await {
-        Ok(body) => {
-            let mut resp = Response::new(axum::body::Body::from(body));
-            let headers = resp.headers_mut();
-            headers.insert(
-                header::CONTENT_TYPE,
-                header::HeaderValue::from_static(content_type),
-            );
-            headers.insert(
-                header::CACHE_CONTROL,
-                header::HeaderValue::from_static("no-cache, no-store, must-revalidate"),
-            );
-            headers.insert(header::PRAGMA, header::HeaderValue::from_static("no-cache"));
-            headers.insert(header::EXPIRES, header::HeaderValue::from_static("0"));
-            resp
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            StatusCode::NOT_FOUND.into_response()
-        }
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -218,12 +194,21 @@ async fn ws_session(
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     State(state): State<AppState>,
 ) -> axum::response::Response {
-    ws.on_upgrade(move |socket| async move { ws_session_task(socket, state, peer, q.resume).await })
+    let replay_history = q.replay.as_deref().is_some_and(|v| {
+        matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "history"
+        )
+    });
+    ws.on_upgrade(move |socket| async move {
+        ws_session_task(socket, state, peer, q.resume, replay_history).await
+    })
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]
 struct WsSessionQuery {
     resume: Option<String>,
+    replay: Option<String>,
 }
 
 #[derive(Clone)]
@@ -446,16 +431,6 @@ async fn api_oauth_start(
             m.insert(state_code.clone(), pending);
         }
         "oidc" => {
-            let path = web_pending_path(&state.oauth.dir, "oidc", &state_code);
-            if let Err(e) = write_web_pending(&path, &pending) {
-                warn!(err = %e, path=%path.display(), "failed to persist oidc web pending");
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    axum::Json(OAuthStartResp::Err {
-                        message: "failed to persist oauth state".to_string(),
-                    }),
-                );
-            }
             let mut m = state.oauth.web_pending_oidc.lock().await;
             m.insert(state_code.clone(), pending);
         }
@@ -735,7 +710,7 @@ struct GoogleOAuthPending {
     error: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 struct WebOAuthPending {
     resume: String,
     verifier: String,
@@ -758,27 +733,6 @@ fn pending_path(dir: &Path, code: &str) -> PathBuf {
     let mut p = dir.to_path_buf();
     p.push(format!("{}.json", code));
     p
-}
-
-fn web_pending_path(dir: &Path, provider: &str, code: &str) -> PathBuf {
-    let mut p = dir.to_path_buf();
-    p.push(format!("web-{provider}-{code}.json"));
-    p
-}
-
-fn write_web_pending(path: &Path, pending: &WebOAuthPending) -> anyhow::Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, serde_json::to_string_pretty(pending)?)?;
-    std::fs::rename(&tmp, path)?;
-    Ok(())
-}
-
-fn read_web_pending(path: &Path) -> anyhow::Result<WebOAuthPending> {
-    let s = std::fs::read_to_string(path)?;
-    Ok(serde_json::from_str(&s)?)
 }
 
 fn base64url_sha256(s: &str) -> String {
@@ -965,7 +919,13 @@ async fn google_auth_callback(
             file_pending = Some(pending);
         }
         Err(_) => {
-            web_pending = st.oauth.web_pending_google.lock().await.get(state_code).cloned();
+            web_pending = st
+                .oauth
+                .web_pending_google
+                .lock()
+                .await
+                .get(state_code)
+                .cloned();
             if web_pending.is_none() {
                 return (
                     axum::http::StatusCode::NOT_FOUND,
@@ -1260,9 +1220,8 @@ async fn oidc_auth_start(
         .unwrap_or_default()
         .as_secs();
 
-    let path = web_pending_path(&st.oauth.dir, "oidc", code);
     let pending = { st.oauth.web_pending_oidc.lock().await.get(code).cloned() };
-    let Some(p) = pending.or_else(|| read_web_pending(&path).ok()) else {
+    let Some(p) = pending else {
         return (
             axum::http::StatusCode::NOT_FOUND,
             "unknown code
@@ -1273,7 +1232,6 @@ async fn oidc_auth_start(
     if now_unix.saturating_sub(p.created_unix) > 15 * 60 {
         let mut m = st.oauth.web_pending_oidc.lock().await;
         m.remove(code);
-        let _ = std::fs::remove_file(&path);
         return (
             axum::http::StatusCode::BAD_REQUEST,
             "oauth expired
@@ -1308,9 +1266,14 @@ async fn oidc_auth_callback(
             .into_response();
     };
 
-    let path = web_pending_path(&st.oauth.dir, "oidc", state_code);
-    let pending = st.oauth.web_pending_oidc.lock().await.get(state_code).cloned();
-    let Some(pending) = pending.or_else(|| read_web_pending(&path).ok()) else {
+    let pending = st
+        .oauth
+        .web_pending_oidc
+        .lock()
+        .await
+        .get(state_code)
+        .cloned();
+    let Some(pending) = pending else {
         return (
             axum::http::StatusCode::NOT_FOUND,
             "unknown state
@@ -1435,7 +1398,6 @@ async fn oidc_auth_callback(
     }
     // Consume the one-time web state after successful completion.
     st.oauth.web_pending_oidc.lock().await.remove(state_code);
-    let _ = std::fs::remove_file(&path);
 
     oauth_popup(true, "ok")
 }
@@ -1561,6 +1523,9 @@ fn oauth_popup_html(provider: &str, ok: bool, msg: &str, return_to: &str) -> Htm
 const WEB_SESSION_IDLE_TTL_DEFAULT: Duration = Duration::from_secs(10 * 60);
 const WEB_SESSION_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
 const WEB_SESSION_BUFFER_MAX_BYTES: usize = 64 * 1024;
+const WEB_SESSION_REPLAY_MAX_BYTES: usize = 64 * 1024;
+const WEB_SESSION_REPLAY_MAX_LINES: usize = 200;
+const WEB_SESSION_ANSI_PREFIX_MAX_BYTES: usize = 4096;
 
 fn web_session_idle_ttl_from_env() -> Duration {
     // Keep sessions alive across page reloads / short disconnects, but don't leave
@@ -1773,6 +1738,9 @@ struct WebSessionState {
     last_detached: Instant,
     buffer: VecDeque<Vec<u8>>,
     buffer_bytes: usize,
+    replay: VecDeque<ReplaySegment>,
+    replay_bytes: usize,
+    ansi: AnsiReplayContext,
     tcp_alive: bool,
 }
 
@@ -1782,7 +1750,118 @@ struct AttachedWs {
     cancel: CancellationToken,
 }
 
+#[derive(Clone, Debug)]
+struct ReplaySegment {
+    bytes: Vec<u8>,
+    ansi_prefix: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct AnsiReplayContext {
+    sgr_prefix: Vec<u8>,
+    parse: AnsiParseState,
+}
+
+#[derive(Clone, Debug, Default)]
+enum AnsiParseState {
+    #[default]
+    Ground,
+    Escape,
+    Csi(Vec<u8>),
+}
+
+impl AnsiReplayContext {
+    fn prefix(&self) -> Vec<u8> {
+        self.sgr_prefix.clone()
+    }
+
+    fn observe(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.observe_byte(b);
+        }
+    }
+
+    fn observe_byte(&mut self, b: u8) {
+        match &mut self.parse {
+            AnsiParseState::Ground => {
+                if b == 0x1b {
+                    self.parse = AnsiParseState::Escape;
+                }
+            }
+            AnsiParseState::Escape => {
+                if b == b'[' {
+                    self.parse = AnsiParseState::Csi(vec![0x1b, b'[']);
+                } else if b == 0x1b {
+                    self.parse = AnsiParseState::Escape;
+                } else {
+                    self.parse = AnsiParseState::Ground;
+                }
+            }
+            AnsiParseState::Csi(seq) => {
+                if b == 0x1b {
+                    self.parse = AnsiParseState::Escape;
+                    return;
+                }
+                seq.push(b);
+                if seq.len() > 128 {
+                    self.parse = AnsiParseState::Ground;
+                    return;
+                }
+                if (0x40..=0x7e).contains(&b) {
+                    if b == b'm' {
+                        let seq = seq.clone();
+                        self.observe_sgr(&seq);
+                    }
+                    self.parse = AnsiParseState::Ground;
+                }
+            }
+        }
+    }
+
+    fn observe_sgr(&mut self, seq: &[u8]) {
+        if seq.len() < 3 {
+            return;
+        }
+        let body = &seq[2..seq.len().saturating_sub(1)];
+        let mut saw_reset = body.is_empty();
+        let mut saw_non_reset = false;
+        for part in body.split(|b| *b == b';' || *b == b':') {
+            if part.is_empty() || part == b"0" {
+                saw_reset = true;
+            } else {
+                saw_non_reset = true;
+            }
+        }
+
+        if saw_reset {
+            self.sgr_prefix.clear();
+        }
+        if !saw_non_reset {
+            return;
+        }
+
+        if self.sgr_prefix.len().saturating_add(seq.len()) > WEB_SESSION_ANSI_PREFIX_MAX_BYTES {
+            self.sgr_prefix.clear();
+        }
+        self.sgr_prefix.extend_from_slice(seq);
+    }
+}
+
 impl WebSessionState {
+    fn new() -> Self {
+        Self {
+            attached: None,
+            attach_seq: 0,
+            last_detached: Instant::now(),
+            buffer: VecDeque::new(),
+            buffer_bytes: 0,
+            replay: VecDeque::new(),
+            replay_bytes: 0,
+            ansi: AnsiReplayContext::default(),
+            tcp_alive: true,
+        }
+    }
+
     fn buffer_push(&mut self, mut b: Vec<u8>) {
         if b.is_empty() {
             return;
@@ -1805,8 +1884,106 @@ impl WebSessionState {
         }
     }
 
-    fn buffer_snapshot(&self) -> Vec<Vec<u8>> {
-        self.buffer.iter().cloned().collect()
+    fn buffer_take_all(&mut self) -> Vec<Vec<u8>> {
+        let mut out = Vec::new();
+        while let Some(b) = self.buffer.pop_front() {
+            out.push(b);
+        }
+        self.buffer_bytes = 0;
+        out
+    }
+
+    fn replay_push(&mut self, b: &[u8]) {
+        if b.is_empty() {
+            return;
+        }
+
+        let mut start = 0;
+        for (idx, byte) in b.iter().enumerate() {
+            if *byte == b'\n' {
+                self.replay_push_segment(&b[start..=idx]);
+                start = idx + 1;
+            }
+        }
+        if start < b.len() {
+            self.replay_push_segment(&b[start..]);
+        }
+        self.replay_trim();
+    }
+
+    fn replay_push_segment(&mut self, segment: &[u8]) {
+        if segment.is_empty() {
+            return;
+        }
+
+        if let Some(back) = self.replay.back_mut()
+            && !back.bytes.ends_with(b"\n")
+        {
+            self.ansi.observe(segment);
+            back.bytes.extend_from_slice(segment);
+            self.replay_bytes = self.replay_bytes.saturating_add(segment.len());
+            return;
+        }
+
+        let ansi_prefix = self.ansi.prefix();
+        self.ansi.observe(segment);
+        self.replay_bytes = self.replay_bytes.saturating_add(segment.len());
+        self.replay.push_back(ReplaySegment {
+            bytes: segment.to_vec(),
+            ansi_prefix,
+        });
+    }
+
+    fn replay_trim(&mut self) {
+        while self.replay.len() > WEB_SESSION_REPLAY_MAX_LINES
+            || self.replay_bytes > WEB_SESSION_REPLAY_MAX_BYTES
+        {
+            if self.replay.len() <= 1 {
+                break;
+            }
+            let Some(front) = self.replay.pop_front() else {
+                self.replay_bytes = 0;
+                return;
+            };
+            self.replay_bytes = self.replay_bytes.saturating_sub(front.bytes.len());
+        }
+
+        while self.replay_bytes > WEB_SESSION_REPLAY_MAX_BYTES {
+            let Some(front) = self.replay.front_mut() else {
+                self.replay_bytes = 0;
+                return;
+            };
+            let drop_bytes =
+                (self.replay_bytes - WEB_SESSION_REPLAY_MAX_BYTES).min(front.bytes.len());
+            front.bytes.drain(..drop_bytes);
+            self.replay_bytes = self.replay_bytes.saturating_sub(drop_bytes);
+            if front.bytes.is_empty() {
+                self.replay.pop_front();
+            }
+        }
+    }
+
+    fn replay_snapshot(&self) -> Vec<Vec<u8>> {
+        let mut out = Vec::new();
+        let Some(first) = self.replay.front() else {
+            return out;
+        };
+        if !first.ansi_prefix.is_empty() {
+            out.push(first.ansi_prefix.clone());
+        }
+        out.extend(self.replay.iter().map(|seg| seg.bytes.clone()));
+        out
+    }
+
+    fn prepare_attach_output(&mut self, replay_history: bool) -> Vec<Vec<u8>> {
+        let pending = self.buffer_take_all();
+        if replay_history && self.attach_seq > 0 {
+            let replay = self.replay_snapshot();
+            if !replay.is_empty() {
+                return replay;
+            }
+        }
+        pending
     }
 }
 
@@ -1825,14 +2002,7 @@ impl WebSession {
         let sess = Arc::new(Self {
             tcp_tx: tcp_tx.clone(),
             shutdown_tx: shutdown_tx.clone(),
-            state: tokio::sync::Mutex::new(WebSessionState {
-                attached: None,
-                attach_seq: 0,
-                last_detached: Instant::now(),
-                buffer: VecDeque::new(),
-                buffer_bytes: 0,
-                tcp_alive: true,
-            }),
+            state: tokio::sync::Mutex::new(WebSessionState::new()),
         });
 
         // TCP writer.
@@ -1937,12 +2107,15 @@ impl WebSession {
     async fn deliver_output(&self, data: Vec<u8>) {
         let ws_tx = {
             let mut st = self.state.lock().await;
-            st.buffer_push(data.clone());
-            st.attached.as_ref().map(|att| att.ws_tx.clone())
+            st.replay_push(&data);
+            if let Some(att) = st.attached.as_ref() {
+                att.ws_tx.clone()
+            } else {
+                st.buffer_push(data);
+                return;
+            }
         };
-        if let Some(ws_tx) = ws_tx {
-            let _ = ws_tx.send(ws::Message::Binary(data)).await;
-        }
+        let _ = ws_tx.send(ws::Message::Binary(data)).await;
     }
 
     async fn detach_ws(&self, attach_id: u64) {
@@ -1953,7 +2126,7 @@ impl WebSession {
         }
     }
 
-    async fn attach(self: Arc<Self>, socket: ws::WebSocket) {
+    async fn attach(self: Arc<Self>, socket: ws::WebSocket, replay_history: bool) {
         if !self.is_alive().await {
             // Should be rare; usually the manager will replace dead sessions on connect.
             let mut socket = socket;
@@ -1972,9 +2145,9 @@ impl WebSession {
         let (attach_id, prev_cancel, buffered) = {
             let mut st = self.state.lock().await;
             let prev_cancel = st.attached.take().map(|a| a.cancel);
+            let buffered = st.prepare_attach_output(replay_history);
             st.attach_seq = st.attach_seq.saturating_add(1);
             let attach_id = st.attach_seq;
-            let buffered = st.buffer_snapshot();
             st.attached = Some(AttachedWs {
                 id: attach_id,
                 ws_tx: ws_tx.clone(),
@@ -2059,6 +2232,7 @@ async fn ws_session_task(
     state: AppState,
     peer: SocketAddr,
     resume: Option<String>,
+    replay_history: bool,
 ) {
     let token = resume
         .as_deref()
@@ -2073,7 +2247,7 @@ async fn ws_session_task(
             .await
         {
             Ok(sess) => {
-                sess.attach(socket).await;
+                sess.attach(socket, replay_history).await;
             }
             Err(e) => {
                 let _ = socket
@@ -2180,6 +2354,95 @@ async fn ws_session_task_ephemeral(mut socket: ws::WebSocket, state: AppState, p
     let _ = ws_writer.await;
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn join(chunks: Vec<Vec<u8>>) -> Vec<u8> {
+        chunks.into_iter().flatten().collect()
+    }
+
+    #[test]
+    fn replay_preserves_ansi_context_when_earlier_colored_lines_are_trimmed() {
+        let mut st = WebSessionState::new();
+
+        st.replay_push(b"\x1b[32mgreen header\r\n");
+        for i in 0..(WEB_SESSION_REPLAY_MAX_LINES + 5) {
+            st.replay_push(format!("visible line {i}\r\n").as_bytes());
+        }
+
+        let replay = join(st.replay_snapshot());
+        let replay_s = String::from_utf8_lossy(&replay);
+
+        assert!(
+            replay.starts_with(b"\x1b[32m"),
+            "replay must restore SGR state before retained lines: {replay:?}"
+        );
+        assert!(
+            !replay_s.contains("green header"),
+            "old line should be outside the replay line window"
+        );
+        assert!(replay_s.contains("visible line 5"));
+        assert!(replay_s.contains(&format!(
+            "visible line {}",
+            WEB_SESSION_REPLAY_MAX_LINES + 4
+        )));
+    }
+
+    #[test]
+    fn replay_uses_context_from_first_retained_line_not_final_terminal_state() {
+        let mut st = WebSessionState::new();
+
+        st.replay_push(b"\x1b[31mred line kept red\r\n");
+        st.replay_push(b"plain after reset \x1b[0m\r\n");
+
+        while st.replay.len() > 1 {
+            let front = st.replay.pop_front().unwrap();
+            st.replay_bytes = st.replay_bytes.saturating_sub(front.bytes.len());
+        }
+
+        let replay = join(st.replay_snapshot());
+        assert!(
+            replay.starts_with(b"\x1b[31m"),
+            "first retained line needs the SGR state active at its start"
+        );
+        assert!(
+            replay.ends_with(b"\x1b[0m\r\n"),
+            "reset inside retained replay must remain in-band"
+        );
+    }
+
+    #[test]
+    fn replay_request_returns_history_and_clears_pending_without_duplicate_missed_lines() {
+        let mut st = WebSessionState::new();
+
+        st.attach_seq = 1;
+        st.replay_push(b"already seen\r\n");
+        st.replay_push(b"missed while detached\r\n");
+        st.buffer_push(b"missed while detached\r\n".to_vec());
+
+        let replay = join(st.prepare_attach_output(true));
+        let replay_s = String::from_utf8_lossy(&replay);
+        assert!(replay_s.contains("already seen"));
+        assert_eq!(replay_s.matches("missed while detached").count(), 1);
+        assert!(st.buffer.is_empty());
+        assert_eq!(st.buffer_bytes, 0);
+    }
+
+    #[test]
+    fn first_attach_only_sends_pending_output_not_full_history() {
+        let mut st = WebSessionState::new();
+
+        st.replay_push(b"pre-existing history\r\n");
+        st.buffer_push(b"initial prompt\r\n".to_vec());
+
+        let first = join(st.prepare_attach_output(true));
+        let first_s = String::from_utf8_lossy(&first);
+        assert!(!first_s.contains("pre-existing history"));
+        assert!(first_s.contains("initial prompt"));
+    }
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
@@ -2238,28 +2501,12 @@ async fn main() {
     tokio::spawn(state.web_sessions.clone().sweep_loop());
 
     let service = ServeDir::new(&cfg.static_dir);
-    let play_html_path = cfg.static_dir.join("play.html");
-    let play_js_path = cfg.static_dir.join("play.js");
     let app_https = Router::new()
         .route(
             "/healthz",
             get(|| async {
                 "ok
 "
-            }),
-        )
-        .route(
-            "/play.html",
-            get({
-                let path = play_html_path.clone();
-                move || serve_static_no_cache(path.clone(), "text/html; charset=utf-8")
-            }),
-        )
-        .route(
-            "/play.js",
-            get({
-                let path = play_js_path.clone();
-                move || serve_static_no_cache(path.clone(), "text/javascript; charset=utf-8")
             }),
         )
         .route("/api/online", get(api_online))
