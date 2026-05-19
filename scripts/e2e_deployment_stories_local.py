@@ -451,6 +451,18 @@ def test_deployment_dag_promotion_contracts() -> None:
         raise AssertionError("prod promotion must not be driven by the dev branch")
 
 
+def test_cicd_runner_inventory_fallback_does_not_skip_deploy() -> None:
+    workflow = (REPO / ".github/workflows/enterprise-cicd.yml").read_text(encoding="utf-8")
+    if "runner_count=1" not in workflow:
+        raise AssertionError("CI runner inventory fallback must not make build/deploy jobs skip")
+    if "allowing self-hosted scheduling to proceed" not in workflow:
+        raise AssertionError("CI runner inventory fallback should explain that scheduling is deferred")
+    if "fromJSON(needs.runner_check.outputs.runner_count) > 0" not in workflow:
+        raise AssertionError("CI build job must remain gated on a positive runner count")
+    if "runner_count=0" in workflow.partition("gh api repos/")[2].partition("exit 0")[0]:
+        raise AssertionError("CI runner inventory API failure path still emits runner_count=0")
+
+
 def test_rapid_split_raft_live_upgrade() -> None:
     with tempfile.TemporaryDirectory(prefix="slopmud_deploy_story_") as d:
         tmp = Path(d)
@@ -644,6 +656,7 @@ TESTS = [
     ("deployment DAG workflow coverage", test_deployment_dag_workflow_coverage),
     ("deployment DAG quorum contract", test_deployment_dag_quorum_contract),
     ("deployment DAG promotion contracts", test_deployment_dag_promotion_contracts),
+    ("CI/CD runner inventory fallback", test_cicd_runner_inventory_fallback_does_not_skip_deploy),
     ("rapid split Raft live upgrade", test_rapid_split_raft_live_upgrade),
     ("current public one-box shard deploy", test_current_public_onebox_shard_deploy),
     ("split Raft S3 fanout upgrade", test_split_raft_s3_fanout_upgrade),
