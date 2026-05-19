@@ -35,6 +35,7 @@ pub struct ConsensusConfig {
     pub peers: Vec<ConsensusPeer>,
     pub election_timeout_ms: u64,
     pub heartbeat_ms: u64,
+    pub application_max_format: u32,
 }
 
 impl ConsensusConfig {
@@ -45,6 +46,7 @@ impl ConsensusConfig {
             peers: Vec::new(),
             election_timeout_ms: 0,
             heartbeat_ms: 0,
+            application_max_format: 1,
         }
     }
 
@@ -55,6 +57,22 @@ impl ConsensusConfig {
     fn majority(&self) -> usize {
         ((self.peers.len() + 1) / 2) + 1
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ApplicationFormatVoter {
+    pub node_id: String,
+    pub max_format: u32,
+    pub reachable: bool,
+    pub term: Option<u64>,
+    pub role: Option<String>,
+    pub leader_id: Option<String>,
+    pub commit_index: Option<u64>,
+    pub last_index: Option<u64>,
+    pub last_log_term: Option<u64>,
+    pub quorum_recent: Option<bool>,
+    pub latency_ms: Option<u64>,
+    pub error: Option<String>,
 }
 
 #[derive(Clone)]
@@ -257,6 +275,8 @@ enum RaftRpc<E> {
         last_index: u64,
         last_log_term: u64,
         quorum_recent: bool,
+        #[serde(default = "default_application_max_format")]
+        application_max_format: u32,
     },
     TransferLeaderReq {
         target_id: Option<String>,
@@ -278,6 +298,10 @@ enum RaftRpc<E> {
         leader_id: Option<String>,
         reason: String,
     },
+}
+
+fn default_application_max_format() -> u32 {
+    1
 }
 
 impl<E> RaftLog<E>
@@ -362,6 +386,10 @@ where
         if let Some(c) = &self.consensus {
             let rt = c.runtime.lock().expect("raft runtime mutex poisoned");
             out.push(format!(" - node_id: {}", c.cfg.node_id));
+            out.push(format!(
+                " - application_max_format: {}",
+                c.cfg.application_max_format
+            ));
             if let Some(bind) = c.cfg.bind {
                 out.push(format!(" - rpc_bind: {bind}"));
             }
@@ -392,6 +420,148 @@ where
             out.push(" - mode: single-node".to_string());
         }
         out
+    }
+
+    pub fn application_format_voters(
+        &self,
+        single_node_id: &str,
+        single_node_max_format: u32,
+        timeout: Duration,
+    ) -> Vec<ApplicationFormatVoter> {
+        let Some(c) = &self.consensus else {
+            return vec![ApplicationFormatVoter {
+                node_id: single_node_id.to_string(),
+                max_format: single_node_max_format,
+                reachable: true,
+                term: Some(0),
+                role: Some("Single".to_string()),
+                leader_id: Some(single_node_id.to_string()),
+                commit_index: None,
+                last_index: None,
+                last_log_term: None,
+                quorum_recent: Some(true),
+                latency_ms: Some(0),
+                error: None,
+            }];
+        };
+
+        let mut voters = Vec::with_capacity(c.cfg.peers.len() + 1);
+        match c.handle_status() {
+            RaftRpc::StatusResp {
+                term,
+                node_id,
+                role,
+                leader_id,
+                commit_index,
+                last_index,
+                last_log_term,
+                quorum_recent,
+                application_max_format,
+            } => voters.push(ApplicationFormatVoter {
+                node_id,
+                max_format: application_max_format,
+                reachable: true,
+                term: Some(term),
+                role: Some(role),
+                leader_id,
+                commit_index: Some(commit_index),
+                last_index: Some(last_index),
+                last_log_term: Some(last_log_term),
+                quorum_recent: Some(quorum_recent),
+                latency_ms: Some(0),
+                error: None,
+            }),
+            _ => voters.push(ApplicationFormatVoter {
+                node_id: c.cfg.node_id.clone(),
+                max_format: c.cfg.application_max_format,
+                reachable: true,
+                term: None,
+                role: None,
+                leader_id: None,
+                commit_index: None,
+                last_index: None,
+                last_log_term: None,
+                quorum_recent: None,
+                latency_ms: Some(0),
+                error: Some("unexpected local status response".to_string()),
+            }),
+        }
+
+        for peer in &c.cfg.peers {
+            let req = RaftRpc::<E>::StatusReq;
+            let started = Instant::now();
+            match send_rpc(peer.addr, &req, timeout) {
+                Ok(RaftRpc::StatusResp {
+                    term,
+                    node_id,
+                    role,
+                    leader_id,
+                    commit_index,
+                    last_index,
+                    last_log_term,
+                    quorum_recent,
+                    application_max_format,
+                }) => {
+                    voters.push(ApplicationFormatVoter {
+                        node_id,
+                        max_format: application_max_format,
+                        reachable: true,
+                        term: Some(term),
+                        role: Some(role),
+                        leader_id,
+                        commit_index: Some(commit_index),
+                        last_index: Some(last_index),
+                        last_log_term: Some(last_log_term),
+                        quorum_recent: Some(quorum_recent),
+                        latency_ms: Some(
+                            started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64
+                        ),
+                        error: None,
+                    })
+                }
+                Ok(other) => {
+                    voters.push(ApplicationFormatVoter {
+                        node_id: peer.node_id.clone(),
+                        max_format: 0,
+                        reachable: false,
+                        term: None,
+                        role: None,
+                        leader_id: None,
+                        commit_index: None,
+                        last_index: None,
+                        last_log_term: None,
+                        quorum_recent: None,
+                        latency_ms: Some(
+                            started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64
+                        ),
+                        error: Some(format!(
+                            "unexpected status response: {}",
+                            raft_rpc_kind(&other)
+                        )),
+                    })
+                }
+                Err(err) => {
+                    voters.push(ApplicationFormatVoter {
+                        node_id: peer.node_id.clone(),
+                        max_format: 0,
+                        reachable: false,
+                        term: None,
+                        role: None,
+                        leader_id: None,
+                        commit_index: None,
+                        last_index: None,
+                        last_log_term: None,
+                        quorum_recent: None,
+                        latency_ms: Some(
+                            started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64
+                        ),
+                        error: Some(err.to_string()),
+                    })
+                }
+            }
+        }
+
+        voters
     }
 
     pub fn recent_lines(&self, n: usize) -> Vec<String> {
@@ -1000,6 +1170,7 @@ where
             last_index,
             last_log_term,
             quorum_recent,
+            application_max_format: self.cfg.application_max_format,
         }
     }
 
@@ -1489,9 +1660,41 @@ where
     Ok(serde_json::from_str(line.trim())?)
 }
 
+fn raft_rpc_kind<E>(rpc: &RaftRpc<E>) -> &'static str {
+    match rpc {
+        RaftRpc::RequestVote { .. } => "RequestVote",
+        RaftRpc::VoteResp { .. } => "VoteResp",
+        RaftRpc::AppendEntries { .. } => "AppendEntries",
+        RaftRpc::AppendResp { .. } => "AppendResp",
+        RaftRpc::StatusReq => "StatusReq",
+        RaftRpc::StatusResp { .. } => "StatusResp",
+        RaftRpc::TransferLeaderReq { .. } => "TransferLeaderReq",
+        RaftRpc::TransferLeaderResp { .. } => "TransferLeaderResp",
+        RaftRpc::TimeoutNow { .. } => "TimeoutNow",
+        RaftRpc::TimeoutNowResp { .. } => "TimeoutNowResp",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn raft_envelope_tolerates_legacy_and_future_metadata() {
+        let legacy_missing_term = r#"{"index":3,"ms":99,"entry":"legacy"}"#;
+        let env: RaftEnvelope<String> = serde_json::from_str(legacy_missing_term).unwrap();
+        assert_eq!(env.index, 3);
+        assert_eq!(env.term, 0);
+        assert_eq!(env.ms, 99);
+        assert_eq!(env.entry, "legacy");
+
+        let future_metadata =
+            r#"{"index":4,"term":2,"ms":100,"entry":"newer","writer_version":"2.0.0","format":2}"#;
+        let env: RaftEnvelope<String> = serde_json::from_str(future_metadata).unwrap();
+        assert_eq!(env.index, 4);
+        assert_eq!(env.term, 2);
+        assert_eq!(env.entry, "newer");
+    }
 
     #[test]
     fn replicated_append_rejects_gaps_and_overwrites_conflicts() {
@@ -1559,6 +1762,7 @@ mod tests {
                 }],
                 election_timeout_ms: 5_000,
                 heartbeat_ms: 500,
+                application_max_format: 1,
             },
             inner: Arc::new(Mutex::new(inner)),
             runtime: Mutex::new(RuntimeState {
@@ -1577,7 +1781,7 @@ mod tests {
         assert_eq!(inner.commit_index, 0);
         drop(inner);
 
-        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(state_path);
     }
 
@@ -1620,6 +1824,7 @@ mod tests {
                 peers: Vec::new(),
                 election_timeout_ms: 5_000,
                 heartbeat_ms: 500,
+                application_max_format: 1,
             },
             inner: Arc::new(Mutex::new(inner)),
             runtime: Mutex::new(RuntimeState {
@@ -1691,6 +1896,7 @@ mod tests {
                 peers: Vec::new(),
                 election_timeout_ms: 5_000,
                 heartbeat_ms: 500,
+                application_max_format: 1,
             },
             inner: Arc::new(Mutex::new(inner)),
             runtime: Mutex::new(RuntimeState {
@@ -1796,6 +2002,7 @@ mod tests {
             }],
             election_timeout_ms: 60_000,
             heartbeat_ms: 60_000,
+            application_max_format: 1,
         };
         let (_log, replay) = RaftLog::<String>::open_with_consensus(path.clone(), cfg).unwrap();
         assert_eq!(replay.len(), 1);
@@ -1837,6 +2044,7 @@ mod tests {
                 peers: Vec::new(),
                 election_timeout_ms: 5_000,
                 heartbeat_ms: 500,
+                application_max_format: 1,
             },
             inner: Arc::new(Mutex::new(inner)),
             runtime: Mutex::new(RuntimeState {
@@ -1888,6 +2096,38 @@ mod tests {
     }
 
     #[test]
+    fn application_format_voters_report_single_node_support() {
+        let path = std::env::temp_dir().join(format!(
+            "slopmud_raftlog_app_voters_test_{}.jsonl",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let (log, _) = RaftLog::<String>::open(path.clone()).unwrap();
+        let voters = log.application_format_voters("solo", 2, Duration::from_millis(1));
+        assert_eq!(
+            voters,
+            vec![ApplicationFormatVoter {
+                node_id: "solo".to_string(),
+                max_format: 2,
+                reachable: true,
+                term: Some(0),
+                role: Some("Single".to_string()),
+                leader_id: Some("solo".to_string()),
+                commit_index: None,
+                last_index: None,
+                last_log_term: None,
+                quorum_recent: Some(true),
+                latency_ms: Some(0),
+                error: None,
+            }]
+        );
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(PathBuf::from(format!("{}.state.json", path.display())));
+    }
+
+    #[test]
     fn raft_control_status_reports_runtime_state() {
         let path = std::env::temp_dir().join(format!(
             "slopmud_raftlog_status_test_{}.jsonl",
@@ -1922,6 +2162,7 @@ mod tests {
                 }],
                 election_timeout_ms: 5_000,
                 heartbeat_ms: 500,
+                application_max_format: 2,
             },
             inner: Arc::new(Mutex::new(inner)),
             runtime: Mutex::new(RuntimeState {
@@ -1943,6 +2184,7 @@ mod tests {
                 last_index,
                 last_log_term,
                 quorum_recent,
+                application_max_format,
             } => {
                 assert_eq!(term, 7);
                 assert_eq!(node_id, "n0");
@@ -1952,12 +2194,42 @@ mod tests {
                 assert_eq!(last_index, 1);
                 assert_eq!(last_log_term, 7);
                 assert!(quorum_recent);
+                assert_eq!(application_max_format, 2);
             }
             _ => panic!("unexpected raft rpc response"),
         }
 
         let _ = std::fs::remove_file(path);
         let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn raft_status_response_defaults_legacy_application_format() {
+        let raw = r#"{
+            "t":"StatusResp",
+            "term":7,
+            "node_id":"n0",
+            "role":"Leader",
+            "leader_id":"n0",
+            "commit_index":4,
+            "last_index":5,
+            "last_log_term":6,
+            "quorum_recent":true,
+            "future_optional_field":42
+        }"#;
+        match serde_json::from_str::<RaftRpc<String>>(raw).unwrap() {
+            RaftRpc::StatusResp {
+                application_max_format,
+                term,
+                node_id,
+                ..
+            } => {
+                assert_eq!(term, 7);
+                assert_eq!(node_id, "n0");
+                assert_eq!(application_max_format, 1);
+            }
+            _ => panic!("unexpected raft rpc response"),
+        }
     }
 
     #[test]
@@ -1983,6 +2255,7 @@ mod tests {
                 peers: Vec::new(),
                 election_timeout_ms: 5_000,
                 heartbeat_ms: 500,
+                application_max_format: 1,
             },
             inner: Arc::new(Mutex::new(inner)),
             runtime: Mutex::new(RuntimeState {
@@ -2047,6 +2320,7 @@ mod tests {
                 }],
                 election_timeout_ms: 5_000,
                 heartbeat_ms: 500,
+                application_max_format: 1,
             },
             inner: Arc::new(Mutex::new(inner)),
             runtime: Mutex::new(RuntimeState {

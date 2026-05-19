@@ -1,7 +1,13 @@
 (() => {
   const GAME_ORIGIN = "https://mud.slopmud.com:4242";
-  // Ensure the web client always runs from the OAuth/game web origin.
-  if (location.origin !== GAME_ORIGIN) {
+  function isLocalDevOrigin() {
+    const h = location.hostname;
+    return h === "localhost" || h === "127.0.0.1" || h === "::1";
+  }
+
+  // Ensure public web clients run from the OAuth/game web origin, while local
+  // test servers can exercise the real browser client without touching prod.
+  if (!isLocalDevOrigin() && location.origin !== GAME_ORIGIN) {
     const to = `${GAME_ORIGIN}${location.pathname}${location.search}${location.hash}`;
     location.replace(to);
     return;

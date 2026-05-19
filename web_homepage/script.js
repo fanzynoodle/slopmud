@@ -1,10 +1,15 @@
 (() => {
   const GAME_ORIGIN = "https://mud.slopmud.com:4242";
+  function isLocalDevOrigin() {
+    const h = location.hostname;
+    return h === "localhost" || h === "127.0.0.1" || h === "::1";
+  }
+
   // Keep landing and game web lifecycles split: selected pages must always run from the game origin.
   const p = String(location.pathname || "");
   const mustUseGameOrigin =
     p === "/connect.html" || p === "/play.html" || p === "/auth.html" || p === "/protocol.html";
-  if (mustUseGameOrigin && location.origin !== GAME_ORIGIN) {
+  if (mustUseGameOrigin && !isLocalDevOrigin() && location.origin !== GAME_ORIGIN) {
     const to = `${GAME_ORIGIN}${p}${location.search}${location.hash}`;
     location.replace(to);
     return;

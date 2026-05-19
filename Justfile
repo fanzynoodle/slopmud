@@ -436,8 +436,17 @@ e2e-fast:
   just e2e-local-fast
   just e2e-party-fast
 
+e2e-shard-raft-trio:
+  cargo run -q -p e2e_shard_raft_trio
+
+e2e-shard-raft-trio-fast:
+  cargo run -q -p e2e_shard_raft_trio -- --skip-build
+
 e2e-web-local:
   python3 scripts/e2e_web_selenium_local.py
+
+e2e-web-live-upgrade-local:
+  python3 scripts/e2e_web_selenium.py
 
 e2e-web-sso-rbac-local:
   python3 scripts/e2e_web_sso_rbac_selenium_local.py

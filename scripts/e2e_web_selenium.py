@@ -39,6 +39,21 @@ def wait_http_ok(url: str, timeout_s: float = 12.0) -> None:
     raise RuntimeError(f"timeout waiting for {url}: {last_err}")
 
 
+def wait_tcp_open(addr: str, timeout_s: float = 12.0) -> None:
+    host, port_s = addr.rsplit(":", 1)
+    port = int(port_s)
+    deadline = time.time() + timeout_s
+    last_err = None
+    while time.time() < deadline:
+        try:
+            with socket.create_connection((host, port), timeout=0.5):
+                return
+        except OSError as e:
+            last_err = e
+            time.sleep(0.1)
+    raise RuntimeError(f"timeout waiting for tcp {addr}: {last_err}")
+
+
 def kill_proc_tree(p: subprocess.Popen, name: str) -> None:
     if p is None:
         return
@@ -63,9 +78,39 @@ def wait_for_term_contains(driver, term_el, needle: str, timeout_s: float = 15.0
     return term_el.get_attribute("textContent") or ""
 
 
+def wait_for_new_term_contains(
+    driver, term_el, start_len: int, needle: str, timeout_s: float = 15.0
+) -> str:
+    def _has_new_text(_):
+        try:
+            s = term_el.get_attribute("textContent") or ""
+        except Exception:
+            return False
+        return len(s) > start_len and needle in s[start_len:]
+
+    WebDriverWait(driver, timeout_s).until(_has_new_text)
+    return term_el.get_attribute("textContent") or ""
+
+
 def send_line(line_el, s: str) -> None:
+    line_el.click()
+    line_el.clear()
     line_el.send_keys(s)
     line_el.send_keys(Keys.ENTER)
+
+
+def send_line_and_wait(
+    driver, term_el, line_el, line: str, needle: str, timeout_s: float = 15.0
+) -> str:
+    before = len(term_el.get_attribute("textContent") or "")
+    send_line(line_el, line)
+    try:
+        return wait_for_new_term_contains(driver, term_el, before, needle, timeout_s=timeout_s)
+    except Exception as e:
+        tail = (term_el.get_attribute("textContent") or "")[-2000:]
+        raise RuntimeError(
+            f"timed out waiting for {needle!r} after sending {line!r}; terminal tail:\n{tail}"
+        ) from e
 
 
 def main() -> int:
@@ -149,6 +194,7 @@ def main() -> int:
         opts.add_argument("--no-sandbox")
         opts.add_argument("--disable-dev-shm-usage")
         opts.add_argument("--window-size=1200,900")
+        opts.add_argument(f"--user-data-dir=/tmp/slopmud_web_e2e_chrome_{run_id}")
 
         opts.binary_location = os.environ.get("CHROME_BIN", "/usr/bin/chromium")
         service = ChromeService(executable_path=os.environ.get("CHROMEDRIVER", "/usr/bin/chromedriver"))
@@ -157,13 +203,32 @@ def main() -> int:
         driver.set_page_load_timeout(20)
 
         url = f"http://{web_bind}/play.html"
+        local_ws_url = f"ws://{web_bind}/ws"
         driver.get(url)
+        driver.execute_script(
+            """
+            localStorage.removeItem('slopmud_resume_token');
+            localStorage.setItem('slopmud_ws_url', arguments[0]);
+            """,
+            local_ws_url,
+        )
+        driver.get(url)
+        WebDriverWait(driver, 10).until(
+            lambda d: d.execute_script(
+                "return document.getElementById('ws-url')?.value || ''"
+            )
+            == local_ws_url
+        )
 
         term = driver.find_element(By.ID, "term")
         line = driver.find_element(By.ID, "line")
 
         # Full creation flow via web UI.
-        wait_for_term_contains(driver, term, "name:", timeout_s=20.0)
+        try:
+            wait_for_term_contains(driver, term, "name:", timeout_s=2.0)
+        except Exception:
+            driver.find_element(By.ID, "btn-gate-password").click()
+            wait_for_term_contains(driver, term, "name:", timeout_s=20.0)
 
         # Name must be <= 20 chars and only letters/numbers/_/-.
         name = ("Sel" + run_id[-17:])[:20]
@@ -197,10 +262,70 @@ def main() -> int:
 
         wait_for_term_contains(driver, term, f"hi {name}", timeout_s=30.0)
 
-        send_line(line, "who")
-        out = wait_for_term_contains(driver, term, "online (players):", timeout_s=20.0)
+        out = send_line_and_wait(driver, term, line, "who", "who:", timeout_s=20.0)
         if name not in out:
             raise RuntimeError("did not see our name in who output")
+
+        # Live-upgrade regression: a shard-only restart must not strand an attached web session.
+        # The browser, slopmud_web, and broker stay up; only the shard process is replaced.
+        send_line_and_wait(
+            driver, term, line, "sigh", f"* {name} sighs", timeout_s=20.0
+        )
+
+        disconnects_before_restart = (term.get_attribute("textContent") or "").count(
+            "# disconnected:"
+        )
+        restart_started = time.monotonic()
+        kill_proc_tree(shard, "shard")
+        try:
+            shard.wait(timeout=5.0)
+        except Exception:
+            try:
+                os.killpg(shard.pid, signal.SIGKILL)
+            except Exception:
+                pass
+            shard.wait(timeout=5.0)
+
+        shard = subprocess.Popen(
+            ["target/debug/shard_01"],
+            env=env,
+            stdout=shard_f,
+            stderr=shard_f,
+            start_new_session=True,
+        )
+        wait_tcp_open(shard_bind, timeout_s=20.0)
+        shard_listen_ms = int((time.monotonic() - restart_started) * 1000)
+
+        # Broker reconnect is async. Keep the same web page and prove a new command reaches
+        # the restarted shard without user re-auth or page reload.
+        live_deadline = time.time() + 25.0
+        last = ""
+        live_recovery_ms = None
+        while time.time() < live_deadline:
+            before_retry = len(term.get_attribute("textContent") or "")
+            send_line(line, "sigh")
+            try:
+                last = wait_for_new_term_contains(
+                    driver, term, before_retry, f"* {name} sighs", timeout_s=2.0
+                )
+                live_recovery_ms = int((time.monotonic() - restart_started) * 1000)
+                break
+            except Exception:
+                last = term.get_attribute("textContent") or ""
+                time.sleep(0.5)
+        else:
+            raise RuntimeError(
+                "web session did not survive shard restart; last terminal tail:\n"
+                + last[-2000:]
+            )
+        disconnects_after_restart = (term.get_attribute("textContent") or "").count(
+            "# disconnected:"
+        )
+        if disconnects_after_restart != disconnects_before_restart:
+            raise RuntimeError(
+                "browser websocket disconnected during shard restart; terminal tail:\n"
+                + (term.get_attribute("textContent") or "")[-2000:]
+            )
 
         # Verify session survives a page reload (resume token).
         driver.refresh()
@@ -208,11 +333,16 @@ def main() -> int:
         line = driver.find_element(By.ID, "line")
 
         wait_for_term_contains(driver, term, "# connected:", timeout_s=20.0)
-        send_line(line, "who")
-        out2 = wait_for_term_contains(driver, term, "online (players):", timeout_s=20.0)
+        out2 = send_line_and_wait(driver, term, line, "who", "who:", timeout_s=20.0)
         if name not in out2:
             raise RuntimeError("after reload, did not see our name in who output (session not resumed?)")
 
+        print(
+            "e2e web live-upgrade ok "
+            f"({web_bind} -> {broker_bind} -> {shard_bind}); "
+            f"shard_listen_ms={shard_listen_ms} "
+            f"command_recovery_ms={live_recovery_ms}"
+        )
         return 0
 
     except Exception as e:

@@ -114,7 +114,18 @@ and follow with your normal web smoke when needed:
 
 ```bash
 just e2e-web-local  # selenium: web client creates account + logs in again
+just e2e-web-live-upgrade-local  # selenium: web session survives a shard restart
 ```
+
+Raft mixed-version and failover smoke:
+
+```bash
+just e2e-shard-raft-trio-fast
+```
+
+That trio run covers the `AAA -> AAB -> ABB -> BBB -> activate` world-log
+format migration, unreachable voter rejection, replay of the active format after
+restart, and leader loss while a player remains connected.
 
 ## Local Admin Recovery (Passwords / Admin Caps)
 
@@ -176,6 +187,7 @@ Or run the selenium check (starts its own stack on a free 49xx port block):
 
 ```bash
 just e2e-web-local
+just e2e-web-live-upgrade-local
 ```
 
 ## Secrets

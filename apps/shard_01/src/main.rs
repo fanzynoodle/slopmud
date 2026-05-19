@@ -680,6 +680,13 @@ fn render_equipment(c: &Character) -> String {
                         size
                     ));
                 }
+                items::ItemKind::Accessory(a) => {
+                    s.push_str(&format!(
+                        " - {label}: {} [accessory slot={}]\r\n",
+                        def.name,
+                        a.slot.as_str()
+                    ));
+                }
                 items::ItemKind::Consumable(_) | items::ItemKind::Misc => {
                     s.push_str(&format!(" - {label}: {}\r\n", def.name));
                 }
@@ -714,6 +721,10 @@ fn render_item_details(def: &items::ItemDef) -> String {
             s.push_str(&format!("slot: {}\r\n", a.slot.as_str()));
             s.push_str(&format!("armor class: {}\r\n", a.class.as_str()));
             s.push_str(&format!("armor value: {}\r\n", a.armor_value));
+        }
+        items::ItemKind::Accessory(a) => {
+            s.push_str("type: accessory\r\n");
+            s.push_str(&format!("slot: {}\r\n", a.slot.as_str()));
         }
         items::ItemKind::Consumable(c) => {
             s.push_str("type: consumable\r\n");
@@ -984,7 +995,7 @@ fn usage_and_exit() -> ! {
     eprintln!(
         "shard_01\n\n\
 USAGE:\n  shard_01 [--bind HOST:PORT]\n\n\
-ENV:\n  SHARD_BIND                  default 127.0.0.1:5000\n  WORLD_SEED                  default 1 (deterministic; replace with raft time/seed later)\n  WORLD_TICK_MS               default 1000\n  WORLD_TIME_SCALE_PPM        default 1000000 (1000000 = real time, 500000 = half speed)\n  BARTENDER_EMOTE_MS          default 30000\n  MOB_WANDER_MS               default 15000\n  SHARD_RAFT_LOG              default var/shard_01_raft.jsonl\n  SHARD_RAFT_NODE_ID          default NODE_ID or SHARD_BIND\n  SHARD_RAFT_BIND             optional raft RPC bind address\n  SHARD_RAFT_PEERS            optional comma-separated node@host:port peers\n  SHARD_RAFT_ELECTION_MS      optional; default 450+jitter\n  SHARD_RAFT_HEARTBEAT_MS     optional; default 120\n  SHARD_BOOTSTRAP_ADMINS      comma-separated acct names added to admin group (genesis only)\n  SHARD_BOOTSTRAP_ADMIN_SSO   comma-separated principals added to admin group (genesis only)\n                             ex: google_email:rob@caskey.org,google_sub:123,acct:rob\n"
+ENV:\n  SHARD_BIND                  default 127.0.0.1:5000\n  WORLD_SEED                  default 1 (deterministic; replace with raft time/seed later)\n  WORLD_TICK_MS               default 1000\n  WORLD_TIME_SCALE_PPM        default 1000000 (1000000 = real time, 500000 = half speed)\n  BARTENDER_EMOTE_MS          default 30000\n  MOB_WANDER_MS               default 15000\n  SHARD_RAFT_LOG              default var/shard_01_raft.jsonl\n  SHARD_RAFT_NODE_ID          default NODE_ID or SHARD_BIND\n  SHARD_RAFT_BIND             optional raft RPC bind address\n  SHARD_RAFT_PEERS            optional comma-separated node@host:port peers\n  SHARD_RAFT_ELECTION_MS      optional; default 450+jitter\n  SHARD_RAFT_HEARTBEAT_MS     optional; default 120\n  SHARD_RAFT_APPLICATION_MAX_FORMAT optional; default current binary max\n  SHARD_BOOTSTRAP_ADMINS      comma-separated acct names added to admin group (genesis only)\n  SHARD_BOOTSTRAP_ADMIN_SSO   comma-separated principals added to admin group (genesis only)\n                             ex: google_email:rob@caskey.org,google_sub:123,acct:rob\n"
     );
     std::process::exit(2);
 }
@@ -1056,12 +1067,18 @@ fn parse_args() -> Config {
         .and_then(|v| v.parse().ok())
         .unwrap_or(120)
         .max(25);
+    let raft_application_max_format = std::env::var("SHARD_RAFT_APPLICATION_MAX_FORMAT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(worldlog::WORLD_LOG_MAX_SUPPORTED_FORMAT)
+        .clamp(1, worldlog::WORLD_LOG_MAX_SUPPORTED_FORMAT);
     let raft_consensus = raftlog::ConsensusConfig {
         node_id: raft_node_id,
         bind: raft_bind,
         peers: raft_peers,
         election_timeout_ms: raft_election_timeout_ms,
         heartbeat_ms: raft_heartbeat_ms,
+        application_max_format: raft_application_max_format,
     };
     let bootstrap_admins: Vec<String> = std::env::var("SHARD_BOOTSTRAP_ADMINS")
         .ok()
@@ -1233,27 +1250,121 @@ struct ClientCommandKey {
 }
 
 #[derive(Debug, Clone)]
+struct VersionedDict<K, V> {
+    known: HashMap<K, V>,
+    unknown: BTreeMap<String, V>,
+}
+
+trait VersionedDictKey: Copy + Eq + std::hash::Hash {
+    fn parse_persisted_key(token: &str) -> Option<Self>;
+    fn persisted_key(self) -> &'static str;
+}
+
+impl VersionedDictKey for items::EquipSlot {
+    fn parse_persisted_key(token: &str) -> Option<Self> {
+        items::EquipSlot::parse(token)
+    }
+
+    fn persisted_key(self) -> &'static str {
+        self.as_str()
+    }
+}
+
+impl<K, V> VersionedDict<K, V>
+where
+    K: VersionedDictKey,
+    V: Clone,
+{
+    fn new() -> Self {
+        Self {
+            known: HashMap::new(),
+            unknown: BTreeMap::new(),
+        }
+    }
+
+    fn from_snapshot(snapshot: &BTreeMap<String, V>) -> Self {
+        let mut out = Self::new();
+        for (key, value) in snapshot {
+            if let Some(known) = K::parse_persisted_key(key) {
+                out.known.insert(known, value.clone());
+            } else if !key.trim().is_empty() {
+                out.unknown.insert(key.clone(), value.clone());
+            }
+        }
+        out
+    }
+
+    fn get_known(&self, key: K) -> Option<&V> {
+        self.known.get(&key)
+    }
+
+    fn set_known(&mut self, key: K, value: V) {
+        self.known.insert(key, value);
+    }
+
+    fn clear_known(&mut self, key: K) -> Option<V> {
+        self.known.remove(&key)
+    }
+
+    fn known_entries(&self) -> impl Iterator<Item = (K, &V)> {
+        self.known.iter().map(|(key, value)| (*key, value))
+    }
+
+    fn unknown_entries(&self) -> impl Iterator<Item = (&str, &V)> {
+        self.unknown
+            .iter()
+            .map(|(key, value)| (key.as_str(), value))
+    }
+
+    fn snapshot_map(&self) -> BTreeMap<String, V> {
+        let mut out = self.unknown.clone();
+        for (key, value) in &self.known {
+            out.insert(key.persisted_key().to_string(), value.clone());
+        }
+        out
+    }
+}
+
+#[derive(Debug, Clone)]
 struct Equipment {
-    slots: HashMap<items::EquipSlot, String>,
+    entries: VersionedDict<items::EquipSlot, String>,
 }
 
 impl Equipment {
     fn new() -> Self {
         Self {
-            slots: HashMap::new(),
+            entries: VersionedDict::new(),
+        }
+    }
+
+    fn from_snapshot(snapshot: &BTreeMap<String, String>) -> Self {
+        Self {
+            entries: VersionedDict::from_snapshot(snapshot),
         }
     }
 
     fn get(&self, slot: items::EquipSlot) -> Option<&String> {
-        self.slots.get(&slot)
+        self.entries.get_known(slot)
     }
 
     fn set(&mut self, slot: items::EquipSlot, item: String) {
-        self.slots.insert(slot, item);
+        self.entries.set_known(slot, item);
     }
 
     fn clear(&mut self, slot: items::EquipSlot) -> Option<String> {
-        self.slots.remove(&slot)
+        self.entries.clear_known(slot)
+    }
+
+    fn known_entries(&self) -> impl Iterator<Item = (items::EquipSlot, &String)> {
+        self.entries.known_entries()
+    }
+
+    fn unknown_entries(&self) -> impl Iterator<Item = (&str, &String)> {
+        self.entries.unknown_entries()
+    }
+
+    fn snapshot_map(&self) -> BTreeMap<String, String> {
+        self.entries.snapshot_map()
     }
 }
 
@@ -2501,6 +2612,14 @@ struct World {
     raft_watch: HashSet<CharacterId>,
     seen_commands: HashSet<ClientCommandKey>,
     groups: groups::GroupStore,
+    cluster_features: worldlog::ClusterFeatureState,
+    cluster_metadata: BTreeMap<String, String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WorldAppendMode {
+    Normal,
+    ClusterFeatureActivation,
 }
 
 impl World {
@@ -2550,6 +2669,8 @@ impl World {
             raft_watch: HashSet::new(),
             seen_commands: HashSet::new(),
             groups: groups::GroupStore::default(),
+            cluster_features: worldlog::ClusterFeatureState::default(),
+            cluster_metadata: BTreeMap::new(),
         };
 
         for env in replay {
@@ -2573,6 +2694,114 @@ impl World {
         s.push_str(&format!(" - shard_uptime_s: {up}\r\n"));
         s.push_str(&format!(" - world_time_ms: {}\r\n", self.now_ms));
         s
+    }
+
+    fn cluster_feature_status_lines(&self) -> Vec<String> {
+        let mut lines = vec![
+            format!(
+                " - world_log_format_active: {}",
+                self.cluster_features.active_world_log_format
+            ),
+            format!(
+                " - world_log_format_supported: {}",
+                worldlog::WORLD_LOG_MAX_SUPPORTED_FORMAT
+            ),
+            format!(
+                " - snapshot_format_active: {}",
+                self.cluster_features.snapshot_format
+            ),
+            format!(
+                " - min_reader_world_log_format: {}",
+                self.cluster_features.min_reader_world_log_format
+            ),
+            format!(" - cluster_metadata_count: {}", self.cluster_metadata.len()),
+        ];
+        let voters = self.world_log_format_voters(Duration::from_millis(500));
+        lines.push(" - world_log_format_voters:".to_string());
+        for voter in voters {
+            lines.push(format!(
+                "   - voter {}: reachable={} max_format={} term={} role={} leader={} commit={} last={} last_term={} quorum_recent={} latency_ms={}{}",
+                voter.node_id,
+                voter.reachable,
+                voter.max_format,
+                voter
+                    .term
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "-".to_string()),
+                voter.role.as_deref().unwrap_or("-"),
+                voter.leader_id.as_deref().unwrap_or("-"),
+                voter
+                    .commit_index
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "-".to_string()),
+                voter
+                    .last_index
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "-".to_string()),
+                voter
+                    .last_log_term
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "-".to_string()),
+                voter
+                    .quorum_recent
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "-".to_string()),
+                voter
+                    .latency_ms
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "-".to_string()),
+                voter
+                    .error
+                    .as_ref()
+                    .map(|err| format!(" error={err}"))
+                    .unwrap_or_default(),
+            ));
+        }
+        lines
+    }
+
+    fn world_log_format_voters(
+        &self,
+        timeout: std::time::Duration,
+    ) -> Vec<raftlog::ApplicationFormatVoter> {
+        self.raft.application_format_voters(
+            "single",
+            worldlog::WORLD_LOG_MAX_SUPPORTED_FORMAT,
+            timeout,
+        )
+    }
+
+    fn ensure_persistence_format_write_allowed(
+        &self,
+        artifact: worldlog::PersistenceArtifactKind,
+        requested_format: u32,
+    ) -> anyhow::Result<()> {
+        match worldlog::evaluate_persistence_format_write(
+            &self.cluster_features,
+            artifact,
+            requested_format,
+        ) {
+            worldlog::PersistenceFormatDecision::Allowed => Ok(()),
+            worldlog::PersistenceFormatDecision::Rejected {
+                reason,
+                active_snapshot_format,
+                min_reader_world_log_format,
+                ..
+            } => anyhow::bail!(
+                "persistence format {requested_format} rejected for {artifact:?}: {reason}; active_snapshot_format={active_snapshot_format} min_reader_world_log_format={min_reader_world_log_format}"
+            ),
+        }
+    }
+
+    fn ensure_equip_slot_write_allowed(&self, slot: items::EquipSlot) -> anyhow::Result<()> {
+        let min_format = slot.min_world_log_format();
+        let active = self.cluster_features.active_world_log_format;
+        anyhow::ensure!(
+            active >= min_format,
+            "equipment slot {} requires active world log format {min_format}; active format is {active}",
+            slot.as_str()
+        );
+        Ok(())
     }
 
     fn ensure_genesis_groups(
@@ -2679,17 +2908,85 @@ impl World {
         Ok(env)
     }
 
-    fn raft_append_world(
+    fn ensure_world_event_append_allowed(
+        &self,
+        event: &worldlog::WorldEvent,
+        mode: WorldAppendMode,
+    ) -> anyhow::Result<()> {
+        match worldlog::world_event_write_gate(event) {
+            worldlog::WorldEventWriteGate::RollingSafe => {
+                anyhow::ensure!(
+                    mode == WorldAppendMode::Normal,
+                    "cluster feature activation append expects ClusterFeatureSet"
+                );
+                Ok(())
+            }
+            worldlog::WorldEventWriteGate::RequiresActiveWorldLogFormat {
+                feature,
+                min_format,
+            } => {
+                anyhow::ensure!(
+                    mode == WorldAppendMode::Normal,
+                    "cluster feature activation append expects ClusterFeatureSet"
+                );
+                let active = self.cluster_features.active_world_log_format;
+                anyhow::ensure!(
+                    active >= min_format,
+                    "world log feature {feature} requires active format {min_format}; active format is {active}"
+                );
+                Ok(())
+            }
+            worldlog::WorldEventWriteGate::ClusterFeatureActivation { target_format } => {
+                anyhow::ensure!(
+                    mode == WorldAppendMode::ClusterFeatureActivation,
+                    "cluster feature activation must use raft feature worldlog"
+                );
+                let active = self.cluster_features.active_world_log_format;
+                anyhow::ensure!(
+                    target_format > active,
+                    "world log format {target_format} is not newer than active format {active}"
+                );
+                anyhow::ensure!(
+                    target_format <= worldlog::WORLD_LOG_MAX_SUPPORTED_FORMAT,
+                    "world log format {target_format} exceeds this binary's supported format {}",
+                    worldlog::WORLD_LOG_MAX_SUPPORTED_FORMAT
+                );
+                Ok(())
+            }
+        }
+    }
+
+    fn raft_append_world_with_mode(
         &mut self,
         event: worldlog::WorldEvent,
+        mode: WorldAppendMode,
     ) -> anyhow::Result<raftlog::RaftEnvelope<worldlog::WorldLogEntry>> {
+        self.ensure_world_event_append_allowed(&event, mode)?;
         let entry = worldlog::WorldLogEntry::World(event);
         let env = self.raft.append(self.now_ms(), entry.clone())?;
         self.apply_log_entry(&entry);
         Ok(env)
     }
 
+    fn raft_append_world(
+        &mut self,
+        event: worldlog::WorldEvent,
+    ) -> anyhow::Result<raftlog::RaftEnvelope<worldlog::WorldLogEntry>> {
+        self.raft_append_world_with_mode(event, WorldAppendMode::Normal)
+    }
+
+    fn raft_append_cluster_feature_activation(
+        &mut self,
+        event: worldlog::WorldEvent,
+    ) -> anyhow::Result<raftlog::RaftEnvelope<worldlog::WorldLogEntry>> {
+        self.raft_append_world_with_mode(event, WorldAppendMode::ClusterFeatureActivation)
+    }
+
     fn project_world(&mut self, event: worldlog::WorldEvent) {
+        if let Err(err) = self.ensure_world_event_append_allowed(&event, WorldAppendMode::Normal) {
+            warn!(err = %err, "world raft append blocked by feature gate");
+            return;
+        }
         if let Err(err) = self.raft_append_world(event.clone()) {
             warn!(err = %err, "world raft append failed; applying projected event locally");
             self.apply_world_event(&event);
@@ -2964,6 +3261,25 @@ impl World {
                     });
                 }
             }
+            worldlog::WorldEvent::ClusterFeatureSet {
+                active_world_log_format,
+                snapshot_format,
+                min_reader_world_log_format,
+                ..
+            } => {
+                self.cluster_features = worldlog::ClusterFeatureState {
+                    active_world_log_format: *active_world_log_format,
+                    snapshot_format: *snapshot_format,
+                    min_reader_world_log_format: *min_reader_world_log_format,
+                };
+            }
+            worldlog::WorldEvent::ClusterMetadataSet { key, value, .. } => {
+                if let Some(value) = value {
+                    self.cluster_metadata.insert(key.clone(), value.clone());
+                } else {
+                    self.cluster_metadata.remove(key);
+                }
+            }
         }
     }
 
@@ -3028,12 +3344,7 @@ impl World {
             last_stamina_regen_ms: c.last_stamina_regen_ms,
             pvp_enabled: c.pvp_enabled,
             stunned_until_ms: c.stunned_until_ms,
-            equip: c
-                .equip
-                .slots
-                .iter()
-                .map(|(slot, item)| (slot.as_str().to_string(), item.clone()))
-                .collect::<BTreeMap<_, _>>(),
+            equip: c.equip.snapshot_map(),
         }
     }
 
@@ -3045,12 +3356,7 @@ impl World {
 
         let sex = sex_from_token(&s.sex);
         let pronouns = pronouns_from_token(&s.pronouns, sex);
-        let mut equip = Equipment::new();
-        for (slot, item) in &s.equip {
-            if let Some(slot) = items::EquipSlot::parse(slot) {
-                equip.set(slot, item.clone());
-            }
-        }
+        let equip = Equipment::from_snapshot(&s.equip);
 
         let auth_caps = s
             .auth_caps
@@ -4098,6 +4404,11 @@ impl World {
         for (item, n) in kit {
             self.inv_add(cid, item, *n);
         }
+        let extras =
+            starter_kit_extras_for_world_log_format(self.cluster_features.active_world_log_format);
+        for (item, n) in extras {
+            self.inv_add(cid, item, *n);
+        }
 
         cid
     }
@@ -4653,6 +4964,18 @@ fn starter_kit_for_size(size: items::Size) -> &'static [(&'static str, u32)] {
         items::Size::Small => &SMALL,
         items::Size::Medium => &MEDIUM,
         items::Size::Large => &LARGE,
+    }
+}
+
+fn starter_kit_extras_for_world_log_format(
+    active_world_log_format: u32,
+) -> &'static [(&'static str, u32)] {
+    static NONE: [(&str, u32); 0] = [];
+    static FORMAT2: [(&str, u32); 1] = [("training charm", 1)];
+    if active_world_log_format >= items::EquipSlot::Neck.min_world_log_format() {
+        &FORMAT2
+    } else {
+        &NONE
     }
 }
 
@@ -6030,7 +6353,7 @@ async fn handle_broker(
                         &mut fw,
                         RESP_OUTPUT,
                         session,
-                        b"huh? (try: raft status | raft tail [n] | raft watch on|off)\r\n",
+                        b"huh? (try: raft status | raft feature worldlog <n> [check] | raft metadata set <key> <value> | raft tail [n] | raft watch on|off)\r\n",
                     )
                     .await?;
                     continue;
@@ -6047,7 +6370,243 @@ async fn handle_broker(
                         s.push_str(&line);
                         s.push_str("\r\n");
                     }
+                    for line in world.cluster_feature_status_lines() {
+                        s.push_str(&line);
+                        s.push_str("\r\n");
+                    }
                     write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
+                    continue;
+                }
+                let words = lc.split_whitespace().collect::<Vec<_>>();
+                if words.first() == Some(&"raft")
+                    && words.get(1) == Some(&"feature")
+                    && words.get(2) == Some(&"worldlog")
+                {
+                    if !world.is_admin(&p) {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"nope: admin.all\r\n")
+                            .await?;
+                        continue;
+                    }
+                    if !(words.len() == 4 || (words.len() == 5 && words.get(4) == Some(&"check")))
+                    {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: raft feature worldlog <n> [check])\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    let dry_run = words.get(4) == Some(&"check");
+                    let Some(target) = words[3].parse::<u32>().ok().filter(|n| *n > 0) else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: raft feature worldlog <n> [check])\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let active = world.cluster_features.active_world_log_format;
+                    if target < active {
+                        let msg =
+                            format!("raft feature: downgrade blocked ({active} -> {target})\r\n");
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                        continue;
+                    }
+                    if target == active {
+                        let prefix = if dry_run {
+                            "raft feature check"
+                        } else {
+                            "raft feature"
+                        };
+                        let msg = format!("{prefix}: worldlog format {target} already active\r\n");
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                        continue;
+                    }
+                    if target > worldlog::WORLD_LOG_MAX_SUPPORTED_FORMAT {
+                        let msg = format!(
+                            "raft feature: this binary supports worldlog format <= {}\r\n",
+                            worldlog::WORLD_LOG_MAX_SUPPORTED_FORMAT
+                        );
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                        continue;
+                    }
+
+                    let voter_infos = world.world_log_format_voters(Duration::from_millis(500));
+                    let voters = voter_infos
+                        .iter()
+                        .map(|v| worldlog::ClusterFormatVoter {
+                            node_id: v.node_id.as_str(),
+                            max_world_log_format: v.max_format,
+                        })
+                        .collect::<Vec<_>>();
+                    match worldlog::evaluate_world_log_format_activation(target, &voters) {
+                        worldlog::ClusterFormatActivation::Allowed => {
+                            if dry_run {
+                                let msg = format!(
+                                    "raft feature check: worldlog format {target} would activate\r\n"
+                                );
+                                write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes())
+                                    .await?;
+                                continue;
+                            }
+                            let env = match world.raft_append_cluster_feature_activation(
+                                worldlog::WorldEvent::ClusterFeatureSet {
+                                    active_world_log_format: target,
+                                    snapshot_format: target,
+                                    min_reader_world_log_format: target,
+                                    reason: "admin-activate-worldlog".to_string(),
+                                },
+                            ) {
+                                Ok(env) => env,
+                                Err(err) => {
+                                    let msg = format!("raft feature: not activated: {err}\r\n");
+                                    write_resp_async(
+                                        &mut fw,
+                                        RESP_OUTPUT,
+                                        session,
+                                        msg.as_bytes(),
+                                    )
+                                    .await?;
+                                    continue;
+                                }
+                            };
+                            let _ = world
+                                .broadcast_raft(
+                                    &mut fw,
+                                    &format!(
+                                        "raft[{}] {}",
+                                        env.index,
+                                        serde_json::to_string(&env)?
+                                    ),
+                                )
+                                .await;
+                            let msg =
+                                format!("raft feature: worldlog format {target} active\r\n");
+                            write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                        }
+                        worldlog::ClusterFormatActivation::Rejected {
+                            unsupported_voters,
+                            ..
+                        } => {
+                            let unsupported = unsupported_voters
+                                .iter()
+                                .map(|id| {
+                                    voter_infos
+                                        .iter()
+                                        .find(|v| v.node_id == *id)
+                                        .map(|v| match &v.error {
+                                            Some(err) if !v.reachable => {
+                                                format!("{}(unreachable:{err})", v.node_id)
+                                            }
+                                            _ => format!("{}(max={})", v.node_id, v.max_format),
+                                        })
+                                        .unwrap_or_else(|| (*id).to_string())
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            let msg = format!(
+                                "raft feature{}: worldlog format {target} blocked; unsupported voters: {unsupported}\r\n",
+                                if dry_run { " check" } else { "" },
+                            );
+                            write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                        }
+                    }
+                    continue;
+                }
+                if words.first() == Some(&"raft") && words.get(1) == Some(&"metadata") {
+                    if !world.is_admin(&p) {
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, b"nope: admin.all\r\n")
+                            .await?;
+                        continue;
+                    }
+                    let Some(action) = words.get(2).copied() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: raft metadata set <key> <value> | raft metadata del <key>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let Some(key) = words.get(3).copied() else {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"huh? (try: raft metadata set <key> <value> | raft metadata del <key>)\r\n",
+                        )
+                        .await?;
+                        continue;
+                    };
+                    let key_ok = !key.is_empty()
+                        && key.len() <= 64
+                        && key
+                            .bytes()
+                            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'));
+                    if !key_ok {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"raft metadata: bad key\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    let value = match action {
+                        "set" if words.len() >= 5 => Some(words[4..].join(" ")),
+                        "del" if words.len() == 4 => None,
+                        _ => {
+                            write_resp_async(
+                                &mut fw,
+                                RESP_OUTPUT,
+                                session,
+                                b"huh? (try: raft metadata set <key> <value> | raft metadata del <key>)\r\n",
+                            )
+                            .await?;
+                            continue;
+                        }
+                    };
+                    if value.as_ref().is_some_and(|v| v.len() > 256) {
+                        write_resp_async(
+                            &mut fw,
+                            RESP_OUTPUT,
+                            session,
+                            b"raft metadata: value too long\r\n",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    let event = worldlog::WorldEvent::ClusterMetadataSet {
+                        key: key.to_string(),
+                        value: value.clone(),
+                        reason: format!("admin-metadata-{action}"),
+                    };
+                    let env = match world.raft_append_world(event) {
+                        Ok(env) => env,
+                        Err(err) => {
+                            let msg = format!("raft metadata: not {action}: {err}\r\n");
+                            write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes())
+                                .await?;
+                            continue;
+                        }
+                    };
+                    let _ = world
+                        .broadcast_raft(
+                            &mut fw,
+                            &format!("raft[{}] {}", env.index, serde_json::to_string(&env)?),
+                        )
+                        .await;
+                    let msg = match value {
+                        Some(value) => format!("raft metadata: set {key}={value}\r\n"),
+                        None => format!("raft metadata: deleted {key}\r\n"),
+                    };
+                    write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
                     continue;
                 }
                 if let Some(rest) = lc.strip_prefix("raft tail") {
@@ -6533,6 +7092,12 @@ async fn handle_broker(
                     // Give a tiny starter kit sized to the character.
                     let kit = starter_kit_for_size(race.size());
                     for (item, n) in kit {
+                        world.inv_add(cid, item, *n);
+                    }
+                    let extras = starter_kit_extras_for_world_log_format(
+                        world.cluster_features.active_world_log_format,
+                    );
+                    for (item, n) in extras {
                         world.inv_add(cid, item, *n);
                     }
                     world.snapshot_character_projected(cid, "race-choice");
@@ -7206,7 +7771,9 @@ async fn handle_broker(
                             let room_msg = format!("* {} uses {}.", p.name, def.name);
                             let _ = world.broadcast_room(&mut fw, &p.room_id, &room_msg).await;
                         }
-                        items::ItemKind::Weapon(_) | items::ItemKind::Armor(_) => {
+                        items::ItemKind::Weapon(_)
+                        | items::ItemKind::Armor(_)
+                        | items::ItemKind::Accessory(_) => {
                             write_resp_async(
                                 &mut fw,
                                 RESP_OUTPUT,
@@ -7347,7 +7914,8 @@ async fn handle_broker(
                     };
 
                     match (verb, def.kind) {
-                        ("wear", items::ItemKind::Armor(_)) => {}
+                        ("wear", items::ItemKind::Armor(_))
+                        | ("wear", items::ItemKind::Accessory(_)) => {}
                         ("wear", _) => {
                             write_resp_async(
                                 &mut fw,
@@ -7382,6 +7950,12 @@ async fn handle_broker(
                         .await?;
                         continue;
                     };
+
+                    if let Err(err) = world.ensure_equip_slot_write_allowed(slot) {
+                        let msg = format!("huh? ({err})\r\n");
+                        write_resp_async(&mut fw, RESP_OUTPUT, session, msg.as_bytes()).await?;
+                        continue;
+                    }
 
                     // Enforce sizing if the item is sized.
                     if let Some(item_size) = def.size {
@@ -11171,6 +11745,20 @@ mod tests {
         ),
         sf("World", "groups", StateClass::RaftProjected, "group", None),
         sf(
+            "World",
+            "cluster_features",
+            StateClass::RaftProjected,
+            "cluster-feature",
+            None,
+        ),
+        sf(
+            "World",
+            "cluster_metadata",
+            StateClass::RaftProjected,
+            "cluster-feature",
+            None,
+        ),
+        sf(
             "SessionState",
             "controlled",
             StateClass::TransportLocal,
@@ -11644,6 +12232,420 @@ mod tests {
     }
 
     #[test]
+    fn cluster_feature_projection_survives_replay() {
+        let path = std::env::temp_dir().join(format!(
+            "slopmud_cluster_features_{}.jsonl",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let state_path = PathBuf::from(format!("{}.state.json", path.display()));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&state_path);
+
+        let rooms = rooms::Rooms::load().unwrap();
+        let mut world = World::new(
+            rooms,
+            1,
+            30_000,
+            15_000,
+            1_000_000,
+            path.clone(),
+            raftlog::ConsensusConfig::disabled("test".to_string()),
+            vec![],
+            vec![],
+        )
+        .unwrap();
+        assert!(
+            world
+                .ensure_persistence_format_write_allowed(
+                    worldlog::PersistenceArtifactKind::WorldSnapshot,
+                    2,
+                )
+                .is_err(),
+            "format-2 snapshots must be blocked before activation"
+        );
+        world
+            .raft_append_cluster_feature_activation(worldlog::WorldEvent::ClusterFeatureSet {
+                active_world_log_format: 2,
+                snapshot_format: 2,
+                min_reader_world_log_format: 2,
+                reason: "test-activate".to_string(),
+            })
+            .unwrap();
+        world
+            .raft_append_world(worldlog::WorldEvent::ClusterMetadataSet {
+                key: "rollout.probe".to_string(),
+                value: Some("active".to_string()),
+                reason: "test-format2".to_string(),
+            })
+            .unwrap();
+        assert_eq!(world.cluster_features.active_world_log_format, 2);
+        assert_eq!(
+            world
+                .cluster_metadata
+                .get("rollout.probe")
+                .map(String::as_str),
+            Some("active")
+        );
+        world
+            .ensure_persistence_format_write_allowed(
+                worldlog::PersistenceArtifactKind::WorldSnapshot,
+                2,
+            )
+            .unwrap();
+        drop(world);
+
+        let rooms = rooms::Rooms::load().unwrap();
+        let replayed = World::new(
+            rooms,
+            1,
+            30_000,
+            15_000,
+            1_000_000,
+            path.clone(),
+            raftlog::ConsensusConfig::disabled("test".to_string()),
+            vec![],
+            vec![],
+        )
+        .unwrap();
+        assert_eq!(
+            replayed.cluster_features,
+            worldlog::ClusterFeatureState {
+                active_world_log_format: 2,
+                snapshot_format: 2,
+                min_reader_world_log_format: 2,
+            }
+        );
+        assert_eq!(
+            replayed
+                .cluster_metadata
+                .get("rollout.probe")
+                .map(String::as_str),
+            Some("active")
+        );
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn format2_equipment_slot_requires_active_world_log_format() {
+        let path = std::env::temp_dir().join(format!(
+            "slopmud_equipment_slot_gate_{}.jsonl",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let state_path = PathBuf::from(format!("{}.state.json", path.display()));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&state_path);
+
+        let rooms = rooms::Rooms::load().unwrap();
+        let mut world = World::new(
+            rooms,
+            1,
+            30_000,
+            15_000,
+            1_000_000,
+            path.clone(),
+            raftlog::ConsensusConfig::disabled("test".to_string()),
+            vec![],
+            vec![],
+        )
+        .unwrap();
+        world
+            .ensure_equip_slot_write_allowed(items::EquipSlot::Wield)
+            .unwrap();
+        assert!(starter_kit_extras_for_world_log_format(1).is_empty());
+        let err = world
+            .ensure_equip_slot_write_allowed(items::EquipSlot::Neck)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("requires active world log format 2"));
+
+        world
+            .raft_append_cluster_feature_activation(worldlog::WorldEvent::ClusterFeatureSet {
+                active_world_log_format: 2,
+                snapshot_format: 2,
+                min_reader_world_log_format: 2,
+                reason: "test-activate".to_string(),
+            })
+            .unwrap();
+        world
+            .ensure_equip_slot_write_allowed(items::EquipSlot::Neck)
+            .unwrap();
+        assert_eq!(
+            starter_kit_extras_for_world_log_format(2),
+            &[("training charm", 1)]
+        );
+
+        let entry: worldlog::WorldLogEntry = serde_json::from_str(
+            r#"{
+                "t":"CharacterSnapshot",
+                "character":{
+                    "character_id":42,
+                    "name":"Alice",
+                    "room_id":"town.gate",
+                    "equip":{"neck":"training charm"}
+                },
+                "reason":"format2-replay"
+            }"#,
+        )
+        .unwrap();
+        world.apply_log_entry(&entry);
+        let character = world.chars.get(&42).unwrap();
+        assert_eq!(
+            character
+                .equip
+                .get(items::EquipSlot::Neck)
+                .map(String::as_str),
+            Some("training charm")
+        );
+        let snapshot = world.snapshot_for_character(character);
+        assert_eq!(
+            snapshot.equip.get("neck").map(String::as_str),
+            Some("training charm")
+        );
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn versioned_dict_splits_known_and_unknown_entries() {
+        let raw = BTreeMap::from([
+            ("wield".to_string(), "practice sword (medium)".to_string()),
+            ("ring".to_string(), "copper ring".to_string()),
+        ]);
+        let mut dict = VersionedDict::<items::EquipSlot, String>::from_snapshot(&raw);
+
+        assert_eq!(
+            dict.get_known(items::EquipSlot::Wield).map(String::as_str),
+            Some("practice sword (medium)")
+        );
+        assert_eq!(
+            dict.known_entries()
+                .map(|(key, value)| (key.as_str().to_string(), value.clone()))
+                .collect::<BTreeMap<_, _>>(),
+            BTreeMap::from([("wield".to_string(), "practice sword (medium)".to_string())])
+        );
+        assert_eq!(
+            dict.unknown_entries()
+                .map(|(key, value)| (key.to_string(), value.clone()))
+                .collect::<Vec<_>>(),
+            vec![("ring".to_string(), "copper ring".to_string())]
+        );
+
+        dict.set_known(
+            items::EquipSlot::Shield,
+            "wooden buckler (medium)".to_string(),
+        );
+        dict.clear_known(items::EquipSlot::Wield);
+        let snapshot = dict.snapshot_map();
+        assert_eq!(
+            snapshot.get("ring").map(String::as_str),
+            Some("copper ring")
+        );
+        assert_eq!(
+            snapshot.get("shield").map(String::as_str),
+            Some("wooden buckler (medium)")
+        );
+        assert!(!snapshot.contains_key("wield"));
+    }
+
+    #[test]
+    fn future_equipment_slots_are_preserved_but_not_actionable() {
+        let path = std::env::temp_dir().join(format!(
+            "slopmud_future_equipment_preserve_{}.jsonl",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let state_path = PathBuf::from(format!("{}.state.json", path.display()));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&state_path);
+
+        let rooms = rooms::Rooms::load().unwrap();
+        let mut world = World::new(
+            rooms,
+            1,
+            30_000,
+            15_000,
+            1_000_000,
+            path.clone(),
+            raftlog::ConsensusConfig::disabled("test".to_string()),
+            vec![],
+            vec![],
+        )
+        .unwrap();
+        let entry: worldlog::WorldLogEntry = serde_json::from_str(
+            r#"{
+                "t":"CharacterSnapshot",
+                "character":{
+                    "character_id":77,
+                    "name":"Future Alice",
+                    "room_id":"town.gate",
+                    "equip":{
+                        "ring":"copper ring",
+                        "wield":"practice sword (medium)"
+                    }
+                },
+                "reason":"future-slot-replay"
+            }"#,
+        )
+        .unwrap();
+        world.apply_log_entry(&entry);
+
+        let character = world.chars.get_mut(&77).unwrap();
+        assert_eq!(
+            character
+                .equip
+                .get(items::EquipSlot::Wield)
+                .map(String::as_str),
+            Some("practice sword (medium)")
+        );
+        assert!(matches!(
+            find_equipped_slot_by_token(&character.equip, "ring"),
+            SlotMatch::None
+        ));
+        character.gold = 12;
+        world.snapshot_character_projected(77, "future-slot-unrelated-writeback");
+
+        let snapshot = world.snapshot_for_character(world.chars.get(&77).unwrap());
+        assert_eq!(snapshot.gold, 12);
+        assert_eq!(
+            snapshot.equip.get("ring").map(String::as_str),
+            Some("copper ring")
+        );
+        assert_eq!(
+            snapshot.equip.get("wield").map(String::as_str),
+            Some("practice sword (medium)")
+        );
+
+        let removed = world
+            .chars
+            .get_mut(&77)
+            .and_then(|c| c.equip.clear(items::EquipSlot::Wield));
+        assert_eq!(removed.as_deref(), Some("practice sword (medium)"));
+        world.snapshot_character_projected(77, "future-slot-known-clear");
+        let snapshot = world.snapshot_for_character(world.chars.get(&77).unwrap());
+        assert_eq!(
+            snapshot.equip.get("ring").map(String::as_str),
+            Some("copper ring")
+        );
+        assert!(!snapshot.equip.contains_key("wield"));
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn format2_metadata_event_requires_active_world_log_format() {
+        let path = std::env::temp_dir().join(format!(
+            "slopmud_cluster_metadata_gate_{}.jsonl",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let state_path = PathBuf::from(format!("{}.state.json", path.display()));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&state_path);
+
+        let rooms = rooms::Rooms::load().unwrap();
+        let mut world = World::new(
+            rooms,
+            1,
+            30_000,
+            15_000,
+            1_000_000,
+            path.clone(),
+            raftlog::ConsensusConfig::disabled("test".to_string()),
+            vec![],
+            vec![],
+        )
+        .unwrap();
+        let event = worldlog::WorldEvent::ClusterMetadataSet {
+            key: "rollout.probe".to_string(),
+            value: Some("blocked".to_string()),
+            reason: "test-format2".to_string(),
+        };
+        let err = world
+            .raft_append_world(event.clone())
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("requires active format 2"));
+        world.project_world(event);
+        assert!(!world.cluster_metadata.contains_key("rollout.probe"));
+        let log = std::fs::read_to_string(&path).unwrap_or_default();
+        assert!(!log.contains("ClusterMetadataSet"));
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn cluster_feature_activation_cannot_use_normal_append_path() {
+        let path = std::env::temp_dir().join(format!(
+            "slopmud_cluster_feature_gate_{}.jsonl",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let state_path = PathBuf::from(format!("{}.state.json", path.display()));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&state_path);
+
+        let rooms = rooms::Rooms::load().unwrap();
+        let mut world = World::new(
+            rooms,
+            1,
+            30_000,
+            15_000,
+            1_000_000,
+            path.clone(),
+            raftlog::ConsensusConfig::disabled("test".to_string()),
+            vec![],
+            vec![],
+        )
+        .unwrap();
+        let err = world
+            .raft_append_world(worldlog::WorldEvent::ClusterFeatureSet {
+                active_world_log_format: 2,
+                snapshot_format: 2,
+                min_reader_world_log_format: 2,
+                reason: "test-activate".to_string(),
+            })
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("cluster feature activation must use raft feature worldlog"));
+        assert_eq!(
+            world.cluster_features,
+            worldlog::ClusterFeatureState::default()
+        );
+        world.project_world(worldlog::WorldEvent::ClusterFeatureSet {
+            active_world_log_format: 2,
+            snapshot_format: 2,
+            min_reader_world_log_format: 2,
+            reason: "test-project".to_string(),
+        });
+        assert_eq!(
+            world.cluster_features,
+            worldlog::ClusterFeatureState::default()
+        );
+        let log = std::fs::read_to_string(&path).unwrap_or_default();
+        assert!(!log.contains("ClusterFeatureSet"));
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
     fn random_sources_are_seeded_and_declared() {
         let source = include_str!("main.rs");
         let forbidden_sources = [
@@ -11936,6 +12938,53 @@ mod tests {
             assert!(
                 allowed.contains(f.as_str()),
                 "world clock mutation at line {} is outside raft projection apply path: {}",
+                idx + 1,
+                line.trim()
+            );
+        }
+    }
+
+    #[test]
+    fn cluster_feature_mutations_stay_inside_projection_apply_path() {
+        let source = include_str!("main.rs");
+        let lines = source.lines().collect::<Vec<_>>();
+        let allowed = BTreeSet::from(["apply_world_event"]);
+        for (idx, line) in lines.iter().enumerate() {
+            if line.contains("line.contains(") {
+                continue;
+            }
+            let mutates_cluster_features = line.contains(".cluster_features = ");
+            if !mutates_cluster_features {
+                continue;
+            }
+            let f = enclosing_fn_for_line(lines[..=idx].iter().copied());
+            assert!(
+                allowed.contains(f.as_str()),
+                "cluster feature mutation at line {} is outside raft projection apply path: {}",
+                idx + 1,
+                line.trim()
+            );
+        }
+    }
+
+    #[test]
+    fn cluster_metadata_mutations_stay_inside_projection_apply_path() {
+        let source = include_str!("main.rs");
+        let lines = source.lines().collect::<Vec<_>>();
+        let allowed = BTreeSet::from(["apply_world_event"]);
+        for (idx, line) in lines.iter().enumerate() {
+            if line.contains("line.contains(") {
+                continue;
+            }
+            let mutates_cluster_metadata = line.contains(".cluster_metadata.insert(")
+                || line.contains(".cluster_metadata.remove(");
+            if !mutates_cluster_metadata {
+                continue;
+            }
+            let f = enclosing_fn_for_line(lines[..=idx].iter().copied());
+            assert!(
+                allowed.contains(f.as_str()),
+                "cluster metadata mutation at line {} is outside raft projection apply path: {}",
                 idx + 1,
                 line.trim()
             );

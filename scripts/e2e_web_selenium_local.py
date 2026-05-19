@@ -88,7 +88,6 @@ def run_create_flow(driver, name: str, password: str):
     # Pick auth method before the terminal connects, then connect and use the in-terminal flow.
     # (static_web doesn't serve /api/webauth; only slopmud_web does.)
     _click_id(driver, "btn-gate-password", timeout_s=12.0)
-    _click_id(driver, "btn-connect", timeout_s=12.0)
 
     _wait_term(driver, "name:", timeout_s=20.0)
     _send_line(driver, name)
@@ -120,7 +119,6 @@ def run_create_flow(driver, name: str, password: str):
 
 def run_password_login_flow(driver, name: str, password: str):
     _click_id(driver, "btn-gate-password", timeout_s=12.0)
-    _click_id(driver, "btn-connect", timeout_s=12.0)
 
     _wait_term(driver, "name:", timeout_s=20.0)
     _send_line(driver, name)
@@ -128,20 +126,12 @@ def run_password_login_flow(driver, name: str, password: str):
     _send_line(driver, "password")
     _wait_term(driver, "password", timeout_s=20.0)  # should be login prompt now
     _send_line(driver, password)
-    _wait_term(driver, "type: human | bot", timeout_s=20.0)
-    _send_line(driver, "human")
-    _wait_term(driver, "type: agree", timeout_s=20.0)
-    _send_line(driver, "agree")
-    _wait_term(driver, "code of conduct:", timeout_s=20.0)
-    _wait_term(driver, "type: agree", timeout_s=20.0)
-    _send_line(driver, "agree")
-    _wait_term(driver, "choose race", timeout_s=20.0)
-    _send_line(driver, "race human")
-    _wait_term(driver, "choose class", timeout_s=20.0)
-    _send_line(driver, "class fighter")
-    _wait_term(driver, "sex:", timeout_s=20.0)
-    _send_line(driver, "none")
+    _wait_term(driver, f"hi {name}", timeout_s=20.0)
     _wait_term(driver, "Orientation Wing", timeout_s=20.0)
+    t = _term_text(driver)
+    for stale_prompt in ["type: human | bot", "code of conduct:", "choose race:", "choose class:"]:
+        if stale_prompt in t:
+            raise RuntimeError(f"login repeated onboarding prompt {stale_prompt!r}:\n{t[-2000:]}")
 
 
 def new_chrome(user_data_dir: Path):

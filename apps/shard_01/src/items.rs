@@ -22,6 +22,7 @@ pub enum EquipSlot {
     Wield,
     Shield,
     Head,
+    Neck,
     Body,
     Legs,
     Feet,
@@ -35,6 +36,7 @@ impl EquipSlot {
             EquipSlot::Wield,
             EquipSlot::Shield,
             EquipSlot::Head,
+            EquipSlot::Neck,
             EquipSlot::Body,
             EquipSlot::Arms,
             EquipSlot::Hands,
@@ -48,6 +50,7 @@ impl EquipSlot {
             EquipSlot::Wield => "wield",
             EquipSlot::Shield => "shield",
             EquipSlot::Head => "head",
+            EquipSlot::Neck => "neck",
             EquipSlot::Body => "body",
             EquipSlot::Legs => "legs",
             EquipSlot::Feet => "feet",
@@ -61,12 +64,20 @@ impl EquipSlot {
             "wield" | "weapon" | "mainhand" | "main-hand" => Some(EquipSlot::Wield),
             "shield" | "offhand" | "off-hand" => Some(EquipSlot::Shield),
             "head" | "helm" | "helmet" => Some(EquipSlot::Head),
+            "neck" | "amulet" | "necklace" | "pendant" | "charm" => Some(EquipSlot::Neck),
             "body" | "torso" | "chest" | "armor" | "armour" => Some(EquipSlot::Body),
             "legs" | "pants" | "trousers" => Some(EquipSlot::Legs),
             "feet" | "boots" | "shoes" => Some(EquipSlot::Feet),
             "hands" | "hand" | "gloves" | "gauntlets" => Some(EquipSlot::Hands),
             "arms" | "sleeves" => Some(EquipSlot::Arms),
             _ => None,
+        }
+    }
+
+    pub fn min_world_log_format(self) -> u32 {
+        match self {
+            EquipSlot::Neck => 2,
+            _ => 1,
         }
     }
 }
@@ -106,6 +117,11 @@ pub struct ArmorDef {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct AccessoryDef {
+    pub slot: EquipSlot,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct ConsumableDef {
     pub heal: i32,
 }
@@ -114,6 +130,7 @@ pub struct ConsumableDef {
 pub enum ItemKind {
     Weapon(WeaponDef),
     Armor(ArmorDef),
+    Accessory(AccessoryDef),
     Consumable(ConsumableDef),
     Misc,
 }
@@ -144,12 +161,13 @@ impl ItemDef {
         match self.kind {
             ItemKind::Weapon(_) => Some(EquipSlot::Wield),
             ItemKind::Armor(a) => Some(a.slot),
+            ItemKind::Accessory(a) => Some(a.slot),
             ItemKind::Consumable(_) | ItemKind::Misc => None,
         }
     }
 }
 
-static ITEMS: [ItemDef; 11] = [
+static ITEMS: [ItemDef; 12] = [
     ItemDef {
         name: "stenchpouch",
         aliases: &["stench", "pouch", "stench pouch"],
@@ -163,6 +181,15 @@ static ITEMS: [ItemDef; 11] = [
         size: None,
         kind: ItemKind::Consumable(ConsumableDef { heal: 6 }),
         description: "a disposable field bandage.\n\nyou can `use` it.\n",
+    },
+    ItemDef {
+        name: "training charm",
+        aliases: &["charm", "amulet", "necklace", "pendant"],
+        size: None,
+        kind: ItemKind::Accessory(AccessoryDef {
+            slot: EquipSlot::Neck,
+        }),
+        description: "a cord charm issued when the guilds start tracking neck gear.\n",
     },
     ItemDef {
         name: "practice sword (small)",
@@ -273,4 +300,22 @@ pub fn find_item_def(name: &str) -> Option<&'static ItemDef> {
 
 pub fn all_item_defs() -> &'static [ItemDef] {
     &ITEMS
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn neck_slot_is_format2_accessory() {
+        assert_eq!(EquipSlot::parse("neck"), Some(EquipSlot::Neck));
+        assert_eq!(EquipSlot::parse("amulet"), Some(EquipSlot::Neck));
+        assert_eq!(EquipSlot::Neck.as_str(), "neck");
+        assert_eq!(EquipSlot::Neck.min_world_log_format(), 2);
+        assert_eq!(EquipSlot::Wield.min_world_log_format(), 1);
+
+        let charm = find_item_def("training charm").unwrap();
+        assert_eq!(charm.equip_slot(), Some(EquipSlot::Neck));
+        assert!(matches!(charm.kind, ItemKind::Accessory(_)));
+    }
 }
