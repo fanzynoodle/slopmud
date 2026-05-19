@@ -127,6 +127,24 @@ That trio run covers the `AAA -> AAB -> ABB -> BBB -> activate` world-log
 format migration, unreachable voter rejection, replay of the active format after
 restart, and leader loss while a player remains connected.
 
+For the split production-style stack, shard-only zero-downtime upgrades should
+use the live upgrade target rather than restarting the gateway:
+
+```bash
+just live-upgrade-split-raft-trio /tmp/slopmud-prd-split-az1.env
+just live-upgrade-split-raft-trio-fast /tmp/slopmud-prd-split-az1.env  # reuse target/release/shard_01
+just live-upgrade-split-raft-trio-s3 /tmp/slopmud-prd-split-az1.env
+just live-upgrade-split-raft-trio-s3-fast /tmp/slopmud-prd-split-az1.env  # S3 fan-out + reused binary
+```
+
+The S3 forms upload the shard binary once to the assets bucket, have all Raft
+nodes pull and checksum it concurrently, then activate through the same rolling
+path. New Raft builds also expose a leader-owned restart lease; deploy scripts
+can run in `auto`, `required`, or `off` mode with
+`SLOPMUD_RAFT_RESTART_LEASE`. The lease makes racing/k8s-style activators
+coordinate through the Raft leader so only one voter is allowed to restart while
+the other two maintain quorum.
+
 ## Local Admin Recovery (Passwords / Admin Caps)
 
 The broker (`apps/slopmud`) exposes a local-only admin JSON listener:

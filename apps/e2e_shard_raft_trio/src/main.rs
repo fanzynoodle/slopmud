@@ -4,6 +4,7 @@ use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
+use std::sync::{Arc, Barrier};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
@@ -638,6 +639,87 @@ fn run() -> anyhow::Result<()> {
     anyhow::ensure!(
         text.contains("world_log_format_active: 2"),
         "active format did not survive restart/replay:\n{text}"
+    );
+
+    let leader = current_leader_index(&mut alice)?;
+    let lease_target = (leader + 1) % 3;
+    let contenders = 24usize;
+    let barrier = Arc::new(Barrier::new(contenders));
+    let mut handles = Vec::new();
+    for i in 0..contenders {
+        let b = barrier.clone();
+        let addr = h.raft_addrs[leader];
+        handles.push(std::thread::spawn(
+            move || -> anyhow::Result<(String, bool)> {
+                let token = format!("e2e-race-{i}");
+                b.wait();
+                let resp = raft_rpc(
+                    addr,
+                    json!({
+                        "t": "RestartLeaseReq",
+                        "node_id": format!("n{lease_target}"),
+                        "token": token,
+                        "ttl_ms": 30_000,
+                    }),
+                    Duration::from_secs(4),
+                )?;
+                anyhow::ensure!(
+                    resp.get("t").and_then(|v| v.as_str()) == Some("RestartLeaseResp"),
+                    "unexpected restart lease response: {resp}"
+                );
+                Ok((
+                    resp.get("token")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    resp.get("accepted").and_then(|v| v.as_bool()) == Some(true),
+                ))
+            },
+        ));
+    }
+    let mut winning_tokens = Vec::new();
+    for handle in handles {
+        let (token, accepted) = handle
+            .join()
+            .map_err(|_| anyhow::anyhow!("restart lease race thread panicked"))??;
+        if accepted {
+            winning_tokens.push(token);
+        }
+    }
+    anyhow::ensure!(
+        winning_tokens.len() == 1,
+        "expected exactly one restart lease winner, got {winning_tokens:?}"
+    );
+    let transfer_while_leased = raft_rpc(
+        h.raft_addrs[leader],
+        json!({"t":"TransferLeaderReq","target_id":format!("n{lease_target}")}),
+        Duration::from_secs(4),
+    )?;
+    anyhow::ensure!(
+        transfer_while_leased.get("t").and_then(|v| v.as_str()) == Some("TransferLeaderResp")
+            && transfer_while_leased
+                .get("accepted")
+                .and_then(|v| v.as_bool())
+                == Some(false)
+            && transfer_while_leased
+                .get("reason")
+                .and_then(|v| v.as_str())
+                .is_some_and(|s| s.contains("restart lease active")),
+        "leader transfer should be blocked while restart lease is active: {transfer_while_leased}"
+    );
+    let release = raft_rpc(
+        h.raft_addrs[leader],
+        json!({
+            "t": "RestartLeaseReleaseReq",
+            "node_id": format!("n{lease_target}"),
+            "token": winning_tokens[0].clone(),
+        }),
+        Duration::from_secs(4),
+    )?;
+    anyhow::ensure!(
+        release.get("t").and_then(|v| v.as_str()) == Some("RestartLeaseReleaseResp")
+            && release.get("accepted").and_then(|v| v.as_bool()) == Some(true),
+        "restart lease release failed: {release}"
     );
 
     let leader = current_leader_index(&mut alice)?;

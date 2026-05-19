@@ -34,6 +34,14 @@ output "raft_data_volume_ids" {
   value = [for v in aws_ebs_volume.raft_data : v.id]
 }
 
+output "assets_bucket_name" {
+  value = local.assets_bucket_name
+}
+
+output "s3_gateway_endpoint_id" {
+  value = var.s3_gateway_endpoint_enabled ? aws_vpc_endpoint.s3[0].id : ""
+}
+
 output "shard_addrs" {
   value = join(",", [for i in aws_instance.raft : "${i.private_ip}:${var.shard_port}"])
 }
@@ -66,6 +74,7 @@ output "recommended_env" {
     SINGLE_AZ_RAFT_SUBNET   = local.subnet_id
     SINGLE_AZ_RAFT_AZ       = var.availability_zone
     SINGLE_AZ_RAFT_BACKHAUL = "private-vpc"
+    ASSETS_BUCKET           = local.assets_bucket_name
   }
 }
 

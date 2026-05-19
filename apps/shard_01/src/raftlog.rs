@@ -129,6 +129,21 @@ struct RuntimeState {
     last_leader_seen: Instant,
     last_quorum_at: Option<Instant>,
     replication_latency: ReplicationLatencyStats,
+    restart_lease: Option<RestartLease>,
+}
+
+#[derive(Clone, Debug)]
+struct RestartLease {
+    node_id: String,
+    token: String,
+    expires_at: Instant,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct RestartLeaseStatus {
+    node_id: String,
+    token: String,
+    expires_in_ms: u64,
 }
 
 const REPL_LATENCY_BUCKETS_MS: [u64; 11] = [1, 5, 10, 25, 50, 100, 250, 500, 1_000, 2_000, 5_000];
@@ -277,6 +292,8 @@ enum RaftRpc<E> {
         quorum_recent: bool,
         #[serde(default = "default_application_max_format")]
         application_max_format: u32,
+        #[serde(default)]
+        restart_lease: Option<RestartLeaseStatus>,
     },
     TransferLeaderReq {
         target_id: Option<String>,
@@ -286,6 +303,30 @@ enum RaftRpc<E> {
         accepted: bool,
         leader_id: Option<String>,
         target_id: Option<String>,
+        reason: String,
+    },
+    RestartLeaseReq {
+        node_id: String,
+        token: String,
+        ttl_ms: u64,
+    },
+    RestartLeaseResp {
+        term: u64,
+        accepted: bool,
+        leader_id: Option<String>,
+        node_id: Option<String>,
+        token: Option<String>,
+        expires_in_ms: u64,
+        reason: String,
+    },
+    RestartLeaseReleaseReq {
+        node_id: String,
+        token: String,
+    },
+    RestartLeaseReleaseResp {
+        term: u64,
+        accepted: bool,
+        leader_id: Option<String>,
         reason: String,
     },
     TimeoutNow {
@@ -415,6 +456,23 @@ where
                             c.cfg.election_timeout_ms.saturating_mul(3).max(1)
                         ))
             ));
+            if let Some(lease) = rt
+                .restart_lease
+                .as_ref()
+                .filter(|l| l.expires_at > Instant::now())
+            {
+                out.push(format!(
+                    " - restart_lease: node={} token={} expires_in_ms={}",
+                    lease.node_id,
+                    lease.token,
+                    lease
+                        .expires_at
+                        .saturating_duration_since(Instant::now())
+                        .as_millis()
+                ));
+            } else {
+                out.push(" - restart_lease: -".to_string());
+            }
             out.extend(rt.replication_latency.status_lines());
         } else {
             out.push(" - mode: single-node".to_string());
@@ -457,6 +515,7 @@ where
                 last_log_term,
                 quorum_recent,
                 application_max_format,
+                restart_lease: _,
             } => voters.push(ApplicationFormatVoter {
                 node_id,
                 max_format: application_max_format,
@@ -501,6 +560,7 @@ where
                     last_log_term,
                     quorum_recent,
                     application_max_format,
+                    restart_lease: _,
                 }) => {
                     voters.push(ApplicationFormatVoter {
                         node_id,
@@ -901,6 +961,7 @@ where
                 last_leader_seen: now,
                 last_quorum_at: None,
                 replication_latency: ReplicationLatencyStats::default(),
+                restart_lease: None,
             }),
         });
 
@@ -1020,11 +1081,21 @@ where
             ),
             RaftRpc::StatusReq => self.handle_status(),
             RaftRpc::TransferLeaderReq { target_id } => self.handle_transfer_leader(target_id),
+            RaftRpc::RestartLeaseReq {
+                node_id,
+                token,
+                ttl_ms,
+            } => self.handle_restart_lease(node_id, token, ttl_ms),
+            RaftRpc::RestartLeaseReleaseReq { node_id, token } => {
+                self.handle_restart_lease_release(node_id, token)
+            }
             RaftRpc::TimeoutNow { term, leader_id } => self.handle_timeout_now(term, leader_id),
             RaftRpc::VoteResp { .. }
             | RaftRpc::AppendResp { .. }
             | RaftRpc::StatusResp { .. }
             | RaftRpc::TransferLeaderResp { .. }
+            | RaftRpc::RestartLeaseResp { .. }
+            | RaftRpc::RestartLeaseReleaseResp { .. }
             | RaftRpc::TimeoutNowResp { .. } => {
                 return Err(anyhow::anyhow!("unexpected raft rpc response"));
             }
@@ -1155,12 +1226,22 @@ where
                 inner.last_term(),
             )
         };
-        let rt = self.runtime.lock().expect("raft runtime mutex poisoned");
+        let mut rt = self.runtime.lock().expect("raft runtime mutex poisoned");
+        Self::expire_restart_lease_locked(&mut rt);
         let quorum_recent = rt.role == Role::Leader
             && rt.last_quorum_at.is_some_and(|t| {
                 t.elapsed()
                     <= Duration::from_millis(self.cfg.election_timeout_ms.saturating_mul(3).max(1))
             });
+        let restart_lease = rt.restart_lease.as_ref().map(|lease| RestartLeaseStatus {
+            node_id: lease.node_id.clone(),
+            token: lease.token.clone(),
+            expires_in_ms: lease
+                .expires_at
+                .saturating_duration_since(Instant::now())
+                .as_millis()
+                .min(u128::from(u64::MAX)) as u64,
+        });
         RaftRpc::StatusResp {
             term,
             node_id: self.cfg.node_id.clone(),
@@ -1171,6 +1252,256 @@ where
             last_log_term,
             quorum_recent,
             application_max_format: self.cfg.application_max_format,
+            restart_lease,
+        }
+    }
+
+    fn expire_restart_lease_locked(rt: &mut RuntimeState) {
+        if rt
+            .restart_lease
+            .as_ref()
+            .is_some_and(|lease| lease.expires_at <= Instant::now())
+        {
+            rt.restart_lease = None;
+        }
+    }
+
+    fn known_voter_node(&self, node_id: &str) -> bool {
+        node_id == self.cfg.node_id || self.cfg.peers.iter().any(|p| p.node_id == node_id)
+    }
+
+    fn remaining_voters_ready_for_restart(&self, target_node_id: &str) -> Result<(), String> {
+        if target_node_id == self.cfg.node_id {
+            return Err("target is current leader; transfer leadership first".to_string());
+        }
+
+        let mut remaining = 1usize;
+        for peer in self
+            .cfg
+            .peers
+            .iter()
+            .filter(|p| p.node_id != target_node_id)
+        {
+            let req = RaftRpc::<E>::StatusReq;
+            match send_rpc(
+                peer.addr,
+                &req,
+                Duration::from_millis(self.cfg.heartbeat_ms.max(250)),
+            ) {
+                Ok(RaftRpc::StatusResp { node_id, .. }) if node_id == peer.node_id => {
+                    remaining += 1;
+                }
+                Ok(RaftRpc::StatusResp { node_id, .. }) => {
+                    return Err(format!(
+                        "remaining voter identity mismatch: expected {}, got {}",
+                        peer.node_id, node_id
+                    ));
+                }
+                Ok(other) => {
+                    return Err(format!(
+                        "remaining voter {} returned unexpected {}",
+                        peer.node_id,
+                        raft_rpc_kind(&other)
+                    ));
+                }
+                Err(err) => {
+                    return Err(format!(
+                        "remaining voter {} unreachable: {}",
+                        peer.node_id, err
+                    ));
+                }
+            }
+        }
+
+        if remaining >= self.cfg.majority() {
+            Ok(())
+        } else {
+            Err(format!(
+                "only {remaining}/{} remaining voters reachable",
+                self.cfg.majority()
+            ))
+        }
+    }
+
+    fn handle_restart_lease(&self, node_id: String, token: String, ttl_ms: u64) -> RaftRpc<E> {
+        let term = {
+            let inner = self.inner.lock().expect("raft log mutex poisoned");
+            inner.current_term
+        };
+        let ttl = Duration::from_millis(ttl_ms.max(1).min(120_000));
+        if node_id.trim().is_empty() || token.trim().is_empty() {
+            let leader_id = self
+                .runtime
+                .lock()
+                .expect("raft runtime mutex poisoned")
+                .leader_id
+                .clone();
+            return RaftRpc::RestartLeaseResp {
+                term,
+                accepted: false,
+                leader_id,
+                node_id: None,
+                token: None,
+                expires_in_ms: 0,
+                reason: "node_id and token are required".to_string(),
+            };
+        }
+        if !self.known_voter_node(&node_id) {
+            let leader_id = self
+                .runtime
+                .lock()
+                .expect("raft runtime mutex poisoned")
+                .leader_id
+                .clone();
+            return RaftRpc::RestartLeaseResp {
+                term,
+                accepted: false,
+                leader_id,
+                node_id: Some(node_id),
+                token: Some(token),
+                expires_in_ms: 0,
+                reason: "target is not a configured voter".to_string(),
+            };
+        }
+
+        {
+            let mut rt = self.runtime.lock().expect("raft runtime mutex poisoned");
+            Self::expire_restart_lease_locked(&mut rt);
+            if rt.role != Role::Leader {
+                return RaftRpc::RestartLeaseResp {
+                    term,
+                    accepted: false,
+                    leader_id: rt.leader_id.clone(),
+                    node_id: Some(node_id),
+                    token: Some(token),
+                    expires_in_ms: 0,
+                    reason: "node is not leader".to_string(),
+                };
+            }
+            if let Some(lease) = rt.restart_lease.as_mut() {
+                let expires_in_ms = lease
+                    .expires_at
+                    .saturating_duration_since(Instant::now())
+                    .as_millis()
+                    .min(u128::from(u64::MAX)) as u64;
+                if lease.node_id == node_id && lease.token == token {
+                    lease.expires_at = Instant::now() + ttl;
+                    return RaftRpc::RestartLeaseResp {
+                        term,
+                        accepted: true,
+                        leader_id: Some(self.cfg.node_id.clone()),
+                        node_id: Some(lease.node_id.clone()),
+                        token: Some(lease.token.clone()),
+                        expires_in_ms: ttl.as_millis().min(u128::from(u64::MAX)) as u64,
+                        reason: "lease renewed".to_string(),
+                    };
+                }
+                return RaftRpc::RestartLeaseResp {
+                    term,
+                    accepted: false,
+                    leader_id: Some(self.cfg.node_id.clone()),
+                    node_id: Some(lease.node_id.clone()),
+                    token: Some(lease.token.clone()),
+                    expires_in_ms,
+                    reason: "another restart lease is active".to_string(),
+                };
+            }
+        }
+
+        if let Err(reason) = self.remaining_voters_ready_for_restart(&node_id) {
+            return RaftRpc::RestartLeaseResp {
+                term,
+                accepted: false,
+                leader_id: Some(self.cfg.node_id.clone()),
+                node_id: Some(node_id),
+                token: Some(token),
+                expires_in_ms: 0,
+                reason,
+            };
+        }
+
+        let mut rt = self.runtime.lock().expect("raft runtime mutex poisoned");
+        Self::expire_restart_lease_locked(&mut rt);
+        if rt.role != Role::Leader {
+            return RaftRpc::RestartLeaseResp {
+                term,
+                accepted: false,
+                leader_id: rt.leader_id.clone(),
+                node_id: Some(node_id),
+                token: Some(token),
+                expires_in_ms: 0,
+                reason: "node is no longer leader".to_string(),
+            };
+        }
+        if let Some(lease) = rt.restart_lease.as_ref() {
+            return RaftRpc::RestartLeaseResp {
+                term,
+                accepted: false,
+                leader_id: Some(self.cfg.node_id.clone()),
+                node_id: Some(lease.node_id.clone()),
+                token: Some(lease.token.clone()),
+                expires_in_ms: lease
+                    .expires_at
+                    .saturating_duration_since(Instant::now())
+                    .as_millis()
+                    .min(u128::from(u64::MAX)) as u64,
+                reason: "another restart lease won the race".to_string(),
+            };
+        }
+
+        rt.restart_lease = Some(RestartLease {
+            node_id: node_id.clone(),
+            token: token.clone(),
+            expires_at: Instant::now() + ttl,
+        });
+        RaftRpc::RestartLeaseResp {
+            term,
+            accepted: true,
+            leader_id: Some(self.cfg.node_id.clone()),
+            node_id: Some(node_id),
+            token: Some(token),
+            expires_in_ms: ttl.as_millis().min(u128::from(u64::MAX)) as u64,
+            reason: "lease granted".to_string(),
+        }
+    }
+
+    fn handle_restart_lease_release(&self, node_id: String, token: String) -> RaftRpc<E> {
+        let term = {
+            let inner = self.inner.lock().expect("raft log mutex poisoned");
+            inner.current_term
+        };
+        let mut rt = self.runtime.lock().expect("raft runtime mutex poisoned");
+        Self::expire_restart_lease_locked(&mut rt);
+        if rt.role != Role::Leader {
+            return RaftRpc::RestartLeaseReleaseResp {
+                term,
+                accepted: false,
+                leader_id: rt.leader_id.clone(),
+                reason: "node is not leader".to_string(),
+            };
+        }
+        match rt.restart_lease.as_ref() {
+            Some(lease) if lease.node_id == node_id && lease.token == token => {
+                rt.restart_lease = None;
+                RaftRpc::RestartLeaseReleaseResp {
+                    term,
+                    accepted: true,
+                    leader_id: Some(self.cfg.node_id.clone()),
+                    reason: "lease released".to_string(),
+                }
+            }
+            Some(_) => RaftRpc::RestartLeaseReleaseResp {
+                term,
+                accepted: false,
+                leader_id: Some(self.cfg.node_id.clone()),
+                reason: "restart lease token mismatch".to_string(),
+            },
+            None => RaftRpc::RestartLeaseReleaseResp {
+                term,
+                accepted: true,
+                leader_id: Some(self.cfg.node_id.clone()),
+                reason: "no active restart lease".to_string(),
+            },
         }
     }
 
@@ -1180,7 +1511,8 @@ where
             inner.current_term
         };
         let current_leader = {
-            let rt = self.runtime.lock().expect("raft runtime mutex poisoned");
+            let mut rt = self.runtime.lock().expect("raft runtime mutex poisoned");
+            Self::expire_restart_lease_locked(&mut rt);
             if rt.role != Role::Leader {
                 return RaftRpc::TransferLeaderResp {
                     term,
@@ -1188,6 +1520,18 @@ where
                     leader_id: rt.leader_id.clone(),
                     target_id,
                     reason: "node is not leader".to_string(),
+                };
+            }
+            if let Some(lease) = rt.restart_lease.as_ref() {
+                return RaftRpc::TransferLeaderResp {
+                    term,
+                    accepted: false,
+                    leader_id: rt.leader_id.clone(),
+                    target_id,
+                    reason: format!(
+                        "restart lease active for {} until release or expiry",
+                        lease.node_id
+                    ),
                 };
             }
             rt.leader_id.clone()
@@ -1277,6 +1621,18 @@ where
                     RaftRpc::StatusReq => "unexpected transfer response: StatusReq",
                     RaftRpc::TransferLeaderReq { .. } => {
                         "unexpected transfer response: TransferLeaderReq"
+                    }
+                    RaftRpc::RestartLeaseReq { .. } => {
+                        "unexpected transfer response: RestartLeaseReq"
+                    }
+                    RaftRpc::RestartLeaseResp { .. } => {
+                        "unexpected transfer response: RestartLeaseResp"
+                    }
+                    RaftRpc::RestartLeaseReleaseReq { .. } => {
+                        "unexpected transfer response: RestartLeaseReleaseReq"
+                    }
+                    RaftRpc::RestartLeaseReleaseResp { .. } => {
+                        "unexpected transfer response: RestartLeaseReleaseResp"
                     }
                     RaftRpc::TimeoutNow { .. } => "unexpected transfer response: TimeoutNow",
                     RaftRpc::TimeoutNowResp { .. } => {
@@ -1670,6 +2026,10 @@ fn raft_rpc_kind<E>(rpc: &RaftRpc<E>) -> &'static str {
         RaftRpc::StatusResp { .. } => "StatusResp",
         RaftRpc::TransferLeaderReq { .. } => "TransferLeaderReq",
         RaftRpc::TransferLeaderResp { .. } => "TransferLeaderResp",
+        RaftRpc::RestartLeaseReq { .. } => "RestartLeaseReq",
+        RaftRpc::RestartLeaseResp { .. } => "RestartLeaseResp",
+        RaftRpc::RestartLeaseReleaseReq { .. } => "RestartLeaseReleaseReq",
+        RaftRpc::RestartLeaseReleaseResp { .. } => "RestartLeaseReleaseResp",
         RaftRpc::TimeoutNow { .. } => "TimeoutNow",
         RaftRpc::TimeoutNowResp { .. } => "TimeoutNowResp",
     }
@@ -1678,6 +2038,101 @@ fn raft_rpc_kind<E>(rpc: &RaftRpc<E>) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Barrier;
+
+    fn temp_raft_path(label: &str) -> (PathBuf, PathBuf) {
+        let path = std::env::temp_dir().join(format!(
+            "slopmud_raftlog_{label}_{}.jsonl",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let state_path = PathBuf::from(format!("{}.state.json", path.display()));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&state_path);
+        (path, state_path)
+    }
+
+    fn status_server(node_id: &'static str, leader_id: &'static str) -> SocketAddr {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        thread::Builder::new()
+            .name(format!("raft-test-status-{node_id}"))
+            .spawn(move || {
+                for stream in listener.incoming() {
+                    let Ok(mut stream) = stream else { continue };
+                    let Ok(reader_stream) = stream.try_clone() else {
+                        continue;
+                    };
+                    let mut rd = BufReader::new(reader_stream);
+                    let mut line = String::new();
+                    if rd.read_line(&mut line).is_err() {
+                        continue;
+                    }
+                    let Ok(req) = serde_json::from_str::<RaftRpc<String>>(line.trim()) else {
+                        continue;
+                    };
+                    if matches!(req, RaftRpc::StatusReq) {
+                        let resp = RaftRpc::<String>::StatusResp {
+                            term: 7,
+                            node_id: node_id.to_string(),
+                            role: "Follower".to_string(),
+                            leader_id: Some(leader_id.to_string()),
+                            commit_index: 1,
+                            last_index: 1,
+                            last_log_term: 7,
+                            quorum_recent: false,
+                            application_max_format: 1,
+                            restart_lease: None,
+                        };
+                        let _ = serde_json::to_writer(&mut stream, &resp);
+                        let _ = stream.write_all(b"\n");
+                        let _ = stream.flush();
+                    }
+                }
+            })
+            .unwrap();
+        addr
+    }
+
+    fn leader_consensus_with_peers(
+        label: &str,
+        peers: Vec<ConsensusPeer>,
+    ) -> (Consensus<String>, PathBuf, PathBuf) {
+        let (path, state_path) = temp_raft_path(label);
+        let mut inner = RaftLogInner::<String>::new(path.clone());
+        inner.set_term_vote(7, Some("n0".to_string())).unwrap();
+        inner
+            .append_replicated(RaftEnvelope {
+                index: 1,
+                term: 7,
+                ms: 0,
+                entry: "seed".to_string(),
+            })
+            .unwrap();
+        inner.set_commit_index(1).unwrap();
+        let consensus = Consensus {
+            cfg: ConsensusConfig {
+                node_id: "n0".to_string(),
+                bind: None,
+                peers,
+                election_timeout_ms: 5_000,
+                heartbeat_ms: 500,
+                application_max_format: 1,
+            },
+            inner: Arc::new(Mutex::new(inner)),
+            runtime: Mutex::new(RuntimeState {
+                role: Role::Leader,
+                leader_id: Some("n0".to_string()),
+                last_leader_seen: Instant::now(),
+                last_quorum_at: Some(Instant::now()),
+                replication_latency: ReplicationLatencyStats::default(),
+                restart_lease: None,
+            }),
+        };
+        (consensus, path, state_path)
+    }
 
     #[test]
     fn raft_envelope_tolerates_legacy_and_future_metadata() {
@@ -1771,6 +2226,7 @@ mod tests {
                 last_leader_seen: Instant::now(),
                 last_quorum_at: Some(Instant::now()),
                 replication_latency: ReplicationLatencyStats::default(),
+                restart_lease: None,
             }),
         };
 
@@ -1833,6 +2289,7 @@ mod tests {
                 last_leader_seen: Instant::now(),
                 last_quorum_at: None,
                 replication_latency: ReplicationLatencyStats::default(),
+                restart_lease: None,
             }),
         };
 
@@ -1905,6 +2362,7 @@ mod tests {
                 last_leader_seen: Instant::now(),
                 last_quorum_at: None,
                 replication_latency: ReplicationLatencyStats::default(),
+                restart_lease: None,
             }),
         };
 
@@ -2053,6 +2511,7 @@ mod tests {
                 last_leader_seen,
                 last_quorum_at: Some(last_leader_seen),
                 replication_latency: ReplicationLatencyStats::default(),
+                restart_lease: None,
             }),
         };
 
@@ -2171,6 +2630,7 @@ mod tests {
                 last_leader_seen: Instant::now(),
                 last_quorum_at: Some(Instant::now()),
                 replication_latency: ReplicationLatencyStats::default(),
+                restart_lease: None,
             }),
         };
 
@@ -2185,6 +2645,7 @@ mod tests {
                 last_log_term,
                 quorum_recent,
                 application_max_format,
+                restart_lease,
             } => {
                 assert_eq!(term, 7);
                 assert_eq!(node_id, "n0");
@@ -2195,6 +2656,7 @@ mod tests {
                 assert_eq!(last_log_term, 7);
                 assert!(quorum_recent);
                 assert_eq!(application_max_format, 2);
+                assert_eq!(restart_lease, None);
             }
             _ => panic!("unexpected raft rpc response"),
         }
@@ -2233,6 +2695,415 @@ mod tests {
     }
 
     #[test]
+    fn restart_lease_grants_when_remaining_voters_keep_quorum() {
+        let n2_addr = status_server("n2", "n0");
+        let (consensus, path, state_path) = leader_consensus_with_peers(
+            "restart_lease_grant",
+            vec![
+                ConsensusPeer {
+                    node_id: "n1".to_string(),
+                    addr: "127.0.0.1:9".parse().unwrap(),
+                },
+                ConsensusPeer {
+                    node_id: "n2".to_string(),
+                    addr: n2_addr,
+                },
+            ],
+        );
+
+        match consensus.handle_restart_lease("n1".to_string(), "tok-a".to_string(), 30_000) {
+            RaftRpc::RestartLeaseResp {
+                accepted,
+                leader_id,
+                node_id,
+                token,
+                expires_in_ms,
+                reason,
+                ..
+            } => {
+                assert!(accepted, "{reason}");
+                assert_eq!(leader_id.as_deref(), Some("n0"));
+                assert_eq!(node_id.as_deref(), Some("n1"));
+                assert_eq!(token.as_deref(), Some("tok-a"));
+                assert!(expires_in_ms > 0);
+            }
+            _ => panic!("unexpected raft rpc response"),
+        }
+
+        match consensus.handle_status() {
+            RaftRpc::StatusResp { restart_lease, .. } => {
+                let lease = restart_lease.expect("expected active restart lease");
+                assert_eq!(lease.node_id, "n1");
+                assert_eq!(lease.token, "tok-a");
+                assert!(lease.expires_in_ms > 0);
+            }
+            _ => panic!("unexpected raft rpc response"),
+        }
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn restart_lease_race_allows_exactly_one_winner() {
+        let n2_addr = status_server("n2", "n0");
+        let (consensus, path, state_path) = leader_consensus_with_peers(
+            "restart_lease_race",
+            vec![
+                ConsensusPeer {
+                    node_id: "n1".to_string(),
+                    addr: "127.0.0.1:9".parse().unwrap(),
+                },
+                ConsensusPeer {
+                    node_id: "n2".to_string(),
+                    addr: n2_addr,
+                },
+            ],
+        );
+        let consensus = Arc::new(consensus);
+        let contenders = 32usize;
+        let barrier = Arc::new(Barrier::new(contenders));
+        let mut handles = Vec::new();
+        for i in 0..contenders {
+            let c = consensus.clone();
+            let b = barrier.clone();
+            handles.push(thread::spawn(move || {
+                b.wait();
+                match c.handle_restart_lease("n1".to_string(), format!("tok-{i}"), 30_000) {
+                    RaftRpc::RestartLeaseResp { accepted, .. } => accepted,
+                    _ => panic!("unexpected raft rpc response"),
+                }
+            }));
+        }
+        let accepted = handles
+            .into_iter()
+            .map(|h| h.join().unwrap())
+            .filter(|accepted| *accepted)
+            .count();
+        assert_eq!(accepted, 1);
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn restart_lease_release_is_token_checked_and_allows_next_holder() {
+        let n2_addr = status_server("n2", "n0");
+        let (consensus, path, state_path) = leader_consensus_with_peers(
+            "restart_lease_release",
+            vec![
+                ConsensusPeer {
+                    node_id: "n1".to_string(),
+                    addr: "127.0.0.1:9".parse().unwrap(),
+                },
+                ConsensusPeer {
+                    node_id: "n2".to_string(),
+                    addr: n2_addr,
+                },
+            ],
+        );
+        assert!(matches!(
+            consensus.handle_restart_lease("n1".to_string(), "tok-a".to_string(), 30_000),
+            RaftRpc::RestartLeaseResp { accepted: true, .. }
+        ));
+        assert!(matches!(
+            consensus.handle_restart_lease_release("n1".to_string(), "wrong".to_string()),
+            RaftRpc::RestartLeaseReleaseResp {
+                accepted: false,
+                ..
+            }
+        ));
+        assert!(matches!(
+            consensus.handle_restart_lease("n1".to_string(), "tok-b".to_string(), 30_000),
+            RaftRpc::RestartLeaseResp {
+                accepted: false,
+                ..
+            }
+        ));
+        assert!(matches!(
+            consensus.handle_restart_lease_release("n1".to_string(), "tok-a".to_string()),
+            RaftRpc::RestartLeaseReleaseResp { accepted: true, .. }
+        ));
+        assert!(matches!(
+            consensus.handle_restart_lease("n1".to_string(), "tok-b".to_string(), 30_000),
+            RaftRpc::RestartLeaseResp { accepted: true, .. }
+        ));
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn restart_lease_is_idempotent_for_same_token() {
+        let n2_addr = status_server("n2", "n0");
+        let (consensus, path, state_path) = leader_consensus_with_peers(
+            "restart_lease_idempotent",
+            vec![
+                ConsensusPeer {
+                    node_id: "n1".to_string(),
+                    addr: "127.0.0.1:9".parse().unwrap(),
+                },
+                ConsensusPeer {
+                    node_id: "n2".to_string(),
+                    addr: n2_addr,
+                },
+            ],
+        );
+        assert!(matches!(
+            consensus.handle_restart_lease("n1".to_string(), "tok-a".to_string(), 30_000),
+            RaftRpc::RestartLeaseResp {
+                accepted: true,
+                reason,
+                ..
+            } if reason == "lease granted"
+        ));
+        assert!(matches!(
+            consensus.handle_restart_lease("n1".to_string(), "tok-a".to_string(), 30_000),
+            RaftRpc::RestartLeaseResp {
+                accepted: true,
+                reason,
+                ..
+            } if reason == "lease renewed"
+        ));
+        assert!(matches!(
+            consensus.handle_restart_lease("n1".to_string(), "tok-b".to_string(), 30_000),
+            RaftRpc::RestartLeaseResp {
+                accepted: false,
+                reason,
+                ..
+            } if reason == "another restart lease is active"
+        ));
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn restart_lease_rejects_without_remaining_quorum() {
+        let (consensus, path, state_path) = leader_consensus_with_peers(
+            "restart_lease_no_quorum",
+            vec![
+                ConsensusPeer {
+                    node_id: "n1".to_string(),
+                    addr: "127.0.0.1:9".parse().unwrap(),
+                },
+                ConsensusPeer {
+                    node_id: "n2".to_string(),
+                    addr: "127.0.0.1:9".parse().unwrap(),
+                },
+            ],
+        );
+        match consensus.handle_restart_lease("n1".to_string(), "tok-a".to_string(), 30_000) {
+            RaftRpc::RestartLeaseResp {
+                accepted, reason, ..
+            } => {
+                assert!(!accepted);
+                assert!(
+                    reason.contains("remaining voter n2 unreachable"),
+                    "{reason}"
+                );
+            }
+            _ => panic!("unexpected raft rpc response"),
+        }
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn restart_lease_rejects_unknown_voter() {
+        let n2_addr = status_server("n2", "n0");
+        let (consensus, path, state_path) = leader_consensus_with_peers(
+            "restart_lease_unknown",
+            vec![
+                ConsensusPeer {
+                    node_id: "n1".to_string(),
+                    addr: "127.0.0.1:9".parse().unwrap(),
+                },
+                ConsensusPeer {
+                    node_id: "n2".to_string(),
+                    addr: n2_addr,
+                },
+            ],
+        );
+        match consensus.handle_restart_lease("n9".to_string(), "tok-a".to_string(), 30_000) {
+            RaftRpc::RestartLeaseResp {
+                accepted, reason, ..
+            } => {
+                assert!(!accepted);
+                assert_eq!(reason, "target is not a configured voter");
+            }
+            _ => panic!("unexpected raft rpc response"),
+        }
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn restart_lease_non_leader_reports_current_leader() {
+        let (path, state_path) = temp_raft_path("restart_lease_non_leader");
+        let mut inner = RaftLogInner::<String>::new(path.clone());
+        inner.set_term_vote(7, None).unwrap();
+        let consensus = Consensus {
+            cfg: ConsensusConfig {
+                node_id: "n1".to_string(),
+                bind: None,
+                peers: vec![ConsensusPeer {
+                    node_id: "n0".to_string(),
+                    addr: "127.0.0.1:9".parse().unwrap(),
+                }],
+                election_timeout_ms: 5_000,
+                heartbeat_ms: 500,
+                application_max_format: 1,
+            },
+            inner: Arc::new(Mutex::new(inner)),
+            runtime: Mutex::new(RuntimeState {
+                role: Role::Follower,
+                leader_id: Some("n0".to_string()),
+                last_leader_seen: Instant::now(),
+                last_quorum_at: None,
+                replication_latency: ReplicationLatencyStats::default(),
+                restart_lease: None,
+            }),
+        };
+        match consensus.handle_restart_lease("n1".to_string(), "tok-a".to_string(), 30_000) {
+            RaftRpc::RestartLeaseResp {
+                accepted,
+                leader_id,
+                reason,
+                ..
+            } => {
+                assert!(!accepted);
+                assert_eq!(leader_id.as_deref(), Some("n0"));
+                assert_eq!(reason, "node is not leader");
+            }
+            _ => panic!("unexpected raft rpc response"),
+        }
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn restart_lease_rpc_json_round_trips_for_deploy_hooks() {
+        let raw = r#"{"t":"RestartLeaseReq","node_id":"n1","token":"deploy-123","ttl_ms":60000}"#;
+        match serde_json::from_str::<RaftRpc<String>>(raw).unwrap() {
+            RaftRpc::RestartLeaseReq {
+                node_id,
+                token,
+                ttl_ms,
+            } => {
+                assert_eq!(node_id, "n1");
+                assert_eq!(token, "deploy-123");
+                assert_eq!(ttl_ms, 60_000);
+            }
+            _ => panic!("unexpected raft rpc request"),
+        }
+
+        let resp = RaftRpc::<String>::RestartLeaseResp {
+            term: 7,
+            accepted: true,
+            leader_id: Some("n0".to_string()),
+            node_id: Some("n1".to_string()),
+            token: Some("deploy-123".to_string()),
+            expires_in_ms: 60_000,
+            reason: "lease granted".to_string(),
+        };
+        let encoded = serde_json::to_string(&resp).unwrap();
+        assert!(encoded.contains(r#""t":"RestartLeaseResp""#));
+        assert!(encoded.contains(r#""accepted":true"#));
+    }
+
+    #[test]
+    fn restart_lease_rejects_leader_until_leadership_transfers() {
+        let (consensus, path, state_path) = leader_consensus_with_peers(
+            "restart_lease_leader_reject",
+            vec![ConsensusPeer {
+                node_id: "n1".to_string(),
+                addr: "127.0.0.1:9".parse().unwrap(),
+            }],
+        );
+        match consensus.handle_restart_lease("n0".to_string(), "tok".to_string(), 30_000) {
+            RaftRpc::RestartLeaseResp {
+                accepted, reason, ..
+            } => {
+                assert!(!accepted);
+                assert_eq!(
+                    reason,
+                    "target is current leader; transfer leadership first"
+                );
+            }
+            _ => panic!("unexpected raft rpc response"),
+        }
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn restart_lease_expiry_allows_a_new_holder() {
+        let n2_addr = status_server("n2", "n0");
+        let (consensus, path, state_path) = leader_consensus_with_peers(
+            "restart_lease_expiry",
+            vec![
+                ConsensusPeer {
+                    node_id: "n1".to_string(),
+                    addr: "127.0.0.1:9".parse().unwrap(),
+                },
+                ConsensusPeer {
+                    node_id: "n2".to_string(),
+                    addr: n2_addr,
+                },
+            ],
+        );
+        assert!(matches!(
+            consensus.handle_restart_lease("n1".to_string(), "tok-a".to_string(), 1),
+            RaftRpc::RestartLeaseResp { accepted: true, .. }
+        ));
+        thread::sleep(Duration::from_millis(10));
+        assert!(matches!(
+            consensus.handle_restart_lease("n1".to_string(), "tok-b".to_string(), 30_000),
+            RaftRpc::RestartLeaseResp { accepted: true, .. }
+        ));
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn transfer_leader_rejects_while_restart_lease_is_active() {
+        let (consensus, path, state_path) = leader_consensus_with_peers(
+            "restart_lease_blocks_transfer",
+            vec![ConsensusPeer {
+                node_id: "n1".to_string(),
+                addr: "127.0.0.1:9".parse().unwrap(),
+            }],
+        );
+        {
+            let mut rt = consensus.runtime.lock().unwrap();
+            rt.restart_lease = Some(RestartLease {
+                node_id: "n1".to_string(),
+                token: "tok-a".to_string(),
+                expires_at: Instant::now() + Duration::from_secs(30),
+            });
+        }
+
+        match consensus.handle_transfer_leader(Some("n1".to_string())) {
+            RaftRpc::TransferLeaderResp {
+                accepted, reason, ..
+            } => {
+                assert!(!accepted);
+                assert!(reason.contains("restart lease active for n1"));
+            }
+            _ => panic!("unexpected raft rpc response"),
+        }
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
     fn timeout_now_starts_immediate_election() {
         let path = std::env::temp_dir().join(format!(
             "slopmud_raftlog_timeout_now_test_{}.jsonl",
@@ -2264,6 +3135,7 @@ mod tests {
                 last_leader_seen: Instant::now(),
                 last_quorum_at: None,
                 replication_latency: ReplicationLatencyStats::default(),
+                restart_lease: None,
             }),
         };
 
@@ -2329,6 +3201,7 @@ mod tests {
                 last_leader_seen: Instant::now(),
                 last_quorum_at: None,
                 replication_latency: ReplicationLatencyStats::default(),
+                restart_lease: None,
             }),
         };
 

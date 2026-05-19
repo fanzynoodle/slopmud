@@ -40,6 +40,10 @@ data "aws_subnet" "selected" {
   id = local.subnet_id
 }
 
+data "aws_route_tables" "vpc" {
+  vpc_id = local.vpc_id
+}
+
 data "aws_ami" "debian12" {
   most_recent = true
   owners      = ["136693071363"] # Debian
@@ -228,6 +232,11 @@ resource "aws_iam_role_policy_attachment" "gateway_assets" {
   policy_arn = aws_iam_policy.gateway_assets.arn
 }
 
+resource "aws_iam_role_policy_attachment" "raft_assets" {
+  role       = aws_iam_role.raft.name
+  policy_arn = aws_iam_policy.gateway_assets.arn
+}
+
 data "aws_iam_policy_document" "gateway_ssm_read" {
   count = length(var.ssm_read_parameter_names) > 0 ? 1 : 0
 
@@ -345,6 +354,20 @@ resource "aws_iam_instance_profile" "raft" {
   tags        = local.tags
 }
 
+resource "aws_vpc_endpoint" "s3" {
+  count = var.s3_gateway_endpoint_enabled ? 1 : 0
+
+  vpc_id            = local.vpc_id
+  service_name      = "com.amazonaws.${var.region}.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = data.aws_route_tables.vpc.ids
+
+  tags = merge(local.tags, {
+    Name = "${var.name_prefix}-s3-gateway"
+    Role = "release-artifact-fetch"
+  })
+}
+
 locals {
   dns_record_words  = join(" ", var.dns_record_names)
   gateway_user_data = <<-EOT
@@ -392,6 +415,12 @@ locals {
   raft_user_data = <<-EOT
     #!/usr/bin/env bash
     set -euxo pipefail
+
+    if command -v apt-get >/dev/null 2>&1; then
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -y
+      apt-get install -y ca-certificates awscli
+    fi
 
     if ! id -u slopmud >/dev/null 2>&1; then
       useradd --system --home /opt/slopmud --create-home --shell /usr/sbin/nologin slopmud

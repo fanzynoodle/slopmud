@@ -74,6 +74,9 @@ def main() -> int:
     missing = [k for k in required if not env.get(k)]
     if missing:
         raise SystemExit(f"missing Terraform env keys: {', '.join(missing)}")
+    optional = [
+        "ASSETS_BUCKET",
+    ]
 
     lines = [
         f"source {shlex.quote(str(base_env))}",
@@ -81,6 +84,9 @@ def main() -> int:
     ]
     for key in required:
         lines.append(f"{key}={shlex.quote(env[key])}")
+    for key in optional:
+        if env.get(key):
+            lines.append(f"{key}={shlex.quote(env[key])}")
     lines.extend(
         [
             f"SHARD_BIND=0.0.0.0:{shlex.quote(env['SHARD_PORT'])}",

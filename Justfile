@@ -695,6 +695,76 @@ deploy-split-raft-trio env="prd-split":
     ./scripts/deploy_split_raft_trio.sh "env/{{env}}.env"; \
   '
 
+live-upgrade-split-raft-trio env="prd-split":
+  bash -ceu ' \
+    set -o pipefail; \
+    env_file="{{env}}"; \
+    env_default="env/{{env}}.env"; \
+    case "$env_file" in */*) env_default="";; esac; \
+    if [ -f "$env_file" ]; then :; elif [ -n "$env_default" ] && [ -f "$env_default" ]; then env_file="$env_default"; else echo "env file not found: {{env}}${env_default:+ or $env_default}" >&2; exit 2; fi; \
+    set -a; source "$env_file"; set +a; \
+    if [ "${ENABLED:-1}" != "1" ]; then echo "{{env}} disabled (ENABLED=${ENABLED:-})"; exit 0; fi; \
+    SLOPMUD_ROLLING_TRANSFER_LEADER=1 \
+    SLOPMUD_ALLOW_UNGRACEFUL_LEADER_RESTART=0 \
+    SLOPMUD_ATOMIC_BIN_SWAP=1 \
+    SLOPMUD_STRICT_LIVE_UPGRADE=1 \
+      ./scripts/deploy_split_raft_trio.sh "$env_file"; \
+  '
+
+live-upgrade-split-raft-trio-fast env="prd-split":
+  bash -ceu ' \
+    set -o pipefail; \
+    env_file="{{env}}"; \
+    env_default="env/{{env}}.env"; \
+    case "$env_file" in */*) env_default="";; esac; \
+    if [ -f "$env_file" ]; then :; elif [ -n "$env_default" ] && [ -f "$env_default" ]; then env_file="$env_default"; else echo "env file not found: {{env}}${env_default:+ or $env_default}" >&2; exit 2; fi; \
+    set -a; source "$env_file"; set +a; \
+    if [ "${ENABLED:-1}" != "1" ]; then echo "{{env}} disabled (ENABLED=${ENABLED:-})"; exit 0; fi; \
+    SLOPMUD_SKIP_BUILD=1 \
+    SLOPMUD_ROLLING_TRANSFER_LEADER=1 \
+    SLOPMUD_ALLOW_UNGRACEFUL_LEADER_RESTART=0 \
+    SLOPMUD_ATOMIC_BIN_SWAP=1 \
+    SLOPMUD_STRICT_LIVE_UPGRADE=1 \
+      ./scripts/deploy_split_raft_trio.sh "$env_file"; \
+  '
+
+live-upgrade-split-raft-trio-s3 env="prd-split":
+  bash -ceu ' \
+    set -o pipefail; \
+    env_file="{{env}}"; \
+    env_default="env/{{env}}.env"; \
+    case "$env_file" in */*) env_default="";; esac; \
+    if [ -f "$env_file" ]; then :; elif [ -n "$env_default" ] && [ -f "$env_default" ]; then env_file="$env_default"; else echo "env file not found: {{env}}${env_default:+ or $env_default}" >&2; exit 2; fi; \
+    set -a; source "$env_file"; set +a; \
+    if [ "${ENABLED:-1}" != "1" ]; then echo "{{env}} disabled (ENABLED=${ENABLED:-})"; exit 0; fi; \
+    SLOPMUD_DEPLOY_FROM_S3=1 \
+    SLOPMUD_ROLLING_TRANSFER_LEADER=1 \
+    SLOPMUD_ALLOW_UNGRACEFUL_LEADER_RESTART=0 \
+    SLOPMUD_ATOMIC_BIN_SWAP=1 \
+    SLOPMUD_STRICT_LIVE_UPGRADE=1 \
+    SLOPMUD_QUORUM_RESTART_GUARD=1 \
+      ./scripts/deploy_split_raft_trio.sh "$env_file"; \
+  '
+
+live-upgrade-split-raft-trio-s3-fast env="prd-split":
+  bash -ceu ' \
+    set -o pipefail; \
+    env_file="{{env}}"; \
+    env_default="env/{{env}}.env"; \
+    case "$env_file" in */*) env_default="";; esac; \
+    if [ -f "$env_file" ]; then :; elif [ -n "$env_default" ] && [ -f "$env_default" ]; then env_file="$env_default"; else echo "env file not found: {{env}}${env_default:+ or $env_default}" >&2; exit 2; fi; \
+    set -a; source "$env_file"; set +a; \
+    if [ "${ENABLED:-1}" != "1" ]; then echo "{{env}} disabled (ENABLED=${ENABLED:-})"; exit 0; fi; \
+    SLOPMUD_SKIP_BUILD=1 \
+    SLOPMUD_DEPLOY_FROM_S3=1 \
+    SLOPMUD_ROLLING_TRANSFER_LEADER=1 \
+    SLOPMUD_ALLOW_UNGRACEFUL_LEADER_RESTART=0 \
+    SLOPMUD_ATOMIC_BIN_SWAP=1 \
+    SLOPMUD_STRICT_LIVE_UPGRADE=1 \
+    SLOPMUD_QUORUM_RESTART_GUARD=1 \
+      ./scripts/deploy_split_raft_trio.sh "$env_file"; \
+  '
+
 render-single-az-raft-env out="/tmp/slopmud-prd-split-az1.env" base="/home/rob/slopmud/env/prd.env" tfdir="infra/terraform/single-az-raft-us-east-1" env_name="prd-split-az1":
   python3 scripts/render_single_az_raft_env.py --terraform-dir "{{tfdir}}" --base-env "{{base}}" --out "{{out}}" --env-name "{{env_name}}"
 

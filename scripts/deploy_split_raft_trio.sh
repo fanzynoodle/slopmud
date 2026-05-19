@@ -24,6 +24,18 @@ Optional env:
   SHARD_PORT            default 5000
   SHARD_RAFT_PORT       default 5100
   SHARD_RAFT_LOG        default REMOTE_ROOT/var/shard_01_groups_raft.jsonl
+  SLOPMUD_SKIP_BUILD    default 0; set 1 to reuse target/release/shard_01
+  SLOPMUD_BIN_SRC       default target/release/shard_01
+  SLOPMUD_RELEASE_ID    default current git sha or timestamp
+  SLOPMUD_DEPLOY_FROM_S3 default 0; set 1 to upload once and have nodes pull concurrently
+  SLOPMUD_RELEASE_S3_URI optional full s3:// URI for the shard_01 binary object
+  SLOPMUD_RELEASE_S3_BUCKET default SLOPMUD_RELEASE_S3_BUCKET, ASSETS_BUCKET, or derived slopmud-assets bucket
+  SLOPMUD_RELEASE_S3_PREFIX default split-raft/<ENV_NAME>/<release_id>
+  SLOPMUD_ATOMIC_BIN_SWAP default 1; install versioned binary and atomically swap symlink
+  SLOPMUD_STRICT_LIVE_UPGRADE default 0; set 1 to require visible leader/healthy gateway after each restart
+  SLOPMUD_QUORUM_RESTART_GUARD default 1; require the other two voters before each restart
+  SLOPMUD_RAFT_RESTART_LEASE default auto; auto|required|off cluster-owned restart lease
+  SLOPMUD_RAFT_RESTART_LEASE_TTL_MS default 60000
   SLOPMUD_ROLLING_TRANSFER_LEADER default 1
   SLOPMUD_ALLOW_UNGRACEFUL_LEADER_RESTART default 1
 EOF
@@ -264,7 +276,7 @@ wait_cluster_ready() {
     if [[ -n "$active_host" ]]; then
       active_i="$(node_index_for_host "$active_host" 2>/dev/null || true)"
     fi
-    if [[ -n "$active_i" && -z "$leader" && "$status_seen" -lt 3 ]]; then
+    if [[ "${SLOPMUD_STRICT_LIVE_UPGRADE:-0}" != "1" && -n "$active_i" && -z "$leader" && "$status_seen" -lt 3 ]]; then
       echo "Gateway is connected to ${node_ids[$active_i]} (${node_hosts[$active_i]}); leader status unavailable"
       return 0
     fi
@@ -316,6 +328,145 @@ try_transfer_leader() {
   return 1
 }
 
+restart_lease_tokens=("" "" "")
+
+acquire_restart_lease() {
+  local i="$1"
+  local mode="${SLOPMUD_RAFT_RESTART_LEASE:-auto}"
+  local ttl_ms="${SLOPMUD_RAFT_RESTART_LEASE_TTL_MS:-60000}"
+  local token deadline leader_i resp kind accepted reason holder holder_token expires
+  case "$mode" in
+    off|0|false|no) return 0 ;;
+    auto|required) ;;
+    *)
+      echo "ERROR: SLOPMUD_RAFT_RESTART_LEASE must be auto, required, or off" >&2
+      exit 2
+      ;;
+  esac
+  if ! [[ "$ttl_ms" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: SLOPMUD_RAFT_RESTART_LEASE_TTL_MS must be an integer" >&2
+    exit 2
+  fi
+
+  token="${release_id}-${node_ids[$i]}-$$-${RANDOM}-${RANDOM}"
+  deadline=$((SECONDS + 90))
+  while (( SECONDS < deadline )); do
+    leader_i="$(current_leader_index || true)"
+    if [[ -z "$leader_i" ]]; then
+      sleep 0.5
+      continue
+    fi
+    resp="$(raft_rpc_node "$leader_i" "{\"t\":\"RestartLeaseReq\",\"node_id\":\"${node_ids[$i]}\",\"token\":\"${token}\",\"ttl_ms\":${ttl_ms}}" 2>/dev/null || true)"
+    kind="$(json_field "$resp" t 2>/dev/null || true)"
+    accepted="$(json_field "$resp" accepted 2>/dev/null || true)"
+    reason="$(json_field "$resp" reason 2>/dev/null || true)"
+    holder="$(json_field "$resp" node_id 2>/dev/null || true)"
+    holder_token="$(json_field "$resp" token 2>/dev/null || true)"
+    expires="$(json_field "$resp" expires_in_ms 2>/dev/null || true)"
+    if [[ "$kind" == "RestartLeaseResp" && "$accepted" == "true" ]]; then
+      restart_lease_tokens[$i]="$token"
+      echo "Raft restart lease acquired for ${node_ids[$i]} via ${node_ids[$leader_i]} token=${token}"
+      return 0
+    fi
+    if [[ "$kind" != "RestartLeaseResp" ]]; then
+      if [[ "$mode" == "auto" ]]; then
+        echo "WARN: Raft restart lease unsupported by current leader; falling back to local quorum guard"
+        return 0
+      fi
+      echo "ERROR: Raft restart lease required but unavailable from ${node_ids[$leader_i]}: ${resp:-no response}" >&2
+      exit 1
+    fi
+    case "$reason" in
+      "another restart lease is active"|"another restart lease won the race")
+        echo "Waiting for active restart lease holder=${holder:-unknown} expires_in_ms=${expires:-unknown}"
+        sleep 0.5
+        ;;
+      *)
+        echo "ERROR: restart lease rejected for ${node_ids[$i]}: ${reason:-unknown} holder=${holder:-} token=${holder_token:-}" >&2
+        exit 1
+        ;;
+    esac
+  done
+
+  echo "ERROR: timed out acquiring restart lease for ${node_ids[$i]}" >&2
+  exit 1
+}
+
+release_restart_lease() {
+  local i="$1"
+  local token="${restart_lease_tokens[$i]:-}"
+  local leader_i resp kind accepted reason
+  if [[ -z "$token" ]]; then
+    return 0
+  fi
+  leader_i="$(current_leader_index || true)"
+  if [[ -z "$leader_i" ]]; then
+    echo "WARN: no leader visible while releasing restart lease for ${node_ids[$i]}; lease will expire" >&2
+    return 0
+  fi
+  resp="$(raft_rpc_node "$leader_i" "{\"t\":\"RestartLeaseReleaseReq\",\"node_id\":\"${node_ids[$i]}\",\"token\":\"${token}\"}" 2>/dev/null || true)"
+  kind="$(json_field "$resp" t 2>/dev/null || true)"
+  accepted="$(json_field "$resp" accepted 2>/dev/null || true)"
+  reason="$(json_field "$resp" reason 2>/dev/null || true)"
+  restart_lease_tokens[$i]=""
+  if [[ "$kind" == "RestartLeaseReleaseResp" && "$accepted" == "true" ]]; then
+    echo "Raft restart lease released for ${node_ids[$i]}"
+    return 0
+  fi
+  echo "WARN: restart lease release for ${node_ids[$i]} was not accepted: ${reason:-${resp:-no response}}" >&2
+}
+
+guard_quorum_before_restart() {
+  local candidate_i="$1"
+  local status_seen other_seen leader i resp kind role
+  status_seen=0
+  other_seen=0
+  leader=""
+  for i in 0 1 2; do
+    resp="$(raft_status_node "$i" 2>/dev/null || true)"
+    kind="$(json_field "$resp" t 2>/dev/null || true)"
+    role="$(json_field "$resp" role 2>/dev/null || true)"
+    if [[ "$kind" == "StatusResp" ]]; then
+      status_seen=$((status_seen + 1))
+      if [[ "$i" != "$candidate_i" ]]; then
+        other_seen=$((other_seen + 1))
+      fi
+      if [[ "$role" == "Leader" ]]; then
+        leader="$i"
+      fi
+    fi
+  done
+  if (( other_seen < 2 )); then
+    echo "ERROR: refusing to restart ${node_ids[$candidate_i]}: only ${other_seen}/2 remaining voters answered Raft status" >&2
+    return 1
+  fi
+  if [[ -z "$leader" ]]; then
+    echo "ERROR: refusing to restart ${node_ids[$candidate_i]}: no visible Raft leader" >&2
+    return 1
+  fi
+  if [[ "$leader" == "$candidate_i" ]]; then
+    echo "ERROR: refusing to restart ${node_ids[$candidate_i]}: it is still the Raft leader" >&2
+    return 1
+  fi
+  echo "Quorum guard: ${node_ids[$candidate_i]} can restart; ${other_seen}/2 remaining voters visible, leader=${node_ids[$leader]}"
+}
+
+wait_jobs() {
+  local label="$1"
+  shift
+  local pid rc
+  rc=0
+  for pid in "$@"; do
+    if ! wait "$pid"; then
+      rc=1
+    fi
+  done
+  if [[ "$rc" != "0" ]]; then
+    echo "ERROR: ${label} failed" >&2
+    exit 1
+  fi
+}
+
 proxy_jump="${SSH_USER}@${gateway_host}"
 if [[ "$SSH_PORT" != "22" ]]; then
   proxy_jump="${proxy_jump}:${SSH_PORT}"
@@ -326,11 +477,30 @@ scp_opts=(-o StrictHostKeyChecking=accept-new -o "ProxyJump=${proxy_jump}" -P "$
 gateway_ssh_opts=(-o StrictHostKeyChecking=accept-new -p "$SSH_PORT")
 
 remote_bin_dir="$(dirname "$SHARD_REMOTE_BIN")"
+release_id="${SLOPMUD_RELEASE_ID:-$(git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)}"
+if ! [[ "$release_id" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "ERROR: SLOPMUD_RELEASE_ID must contain only letters, numbers, dot, underscore, or dash: ${release_id}" >&2
+  exit 2
+fi
+release_dir="${SLOPMUD_VERSIONED_BIN_DIR:-${remote_bin_dir}/releases}"
+remote_release_bin="${release_dir}/shard_01-${release_id}"
+bin_src="${SLOPMUD_BIN_SRC:-target/release/shard_01}"
+case "${SLOPMUD_DEPLOY_FROM_S3:-0}" in
+  1|true|yes|on) deploy_from_s3=1 ;;
+  0|false|no|off|"") deploy_from_s3=0 ;;
+  *)
+    echo "ERROR: SLOPMUD_DEPLOY_FROM_S3 must be 0/1, true/false, yes/no, or on/off" >&2
+    exit 2
+    ;;
+esac
 
-echo "Building shard_01 (release)"
-./scripts/build_bookworm_release.sh shard_01
+if [[ "${SLOPMUD_SKIP_BUILD:-0}" == "1" ]]; then
+  echo "Skipping build; using ${bin_src}"
+else
+  echo "Building shard_01 (release)"
+  ./scripts/build_bookworm_release.sh shard_01
+fi
 
-bin_src="target/release/shard_01"
 if [[ ! -x "$bin_src" ]]; then
   echo "ERROR: expected binary at $bin_src" >&2
   exit 2
@@ -338,6 +508,92 @@ fi
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
+
+release_sha256="$(sha256sum "$bin_src" | awk '{print $1}')"
+aws_region="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
+release_s3_uri="${SLOPMUD_RELEASE_S3_URI:-}"
+
+stage_release_from_s3_node() {
+  local i="$1"
+  local host="${node_hosts[$i]}"
+  local node_id="${node_ids[$i]}"
+  local target="${raft_ssh_user}@${host}"
+  local uri_b64
+  uri_b64="$(printf '%s' "$release_s3_uri" | base64 | tr -d '\n')"
+  echo "Pulling shard_01 from S3 on ${node_id} (${host}) -> ${remote_release_bin}"
+  ssh "${ssh_opts[@]}" "$target" "\
+    set -euo pipefail; \
+    release_uri=\$(printf %s '${uri_b64}' | base64 -d); \
+    if ! id -u slopmud >/dev/null 2>&1; then sudo useradd --system --home '${REMOTE_ROOT}' --create-home --shell /usr/sbin/nologin slopmud; fi; \
+    sudo mkdir -p '${REMOTE_ROOT}' '${remote_bin_dir}' '${release_dir}' '${REMOTE_ROOT}/var'; \
+    sudo chown -R slopmud:slopmud '${REMOTE_ROOT}'; \
+    if ! command -v aws >/dev/null 2>&1; then \
+      if command -v apt-get >/dev/null 2>&1; then \
+        sudo DEBIAN_FRONTEND=noninteractive apt-get update -y >/dev/null; \
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates awscli >/dev/null; \
+      elif command -v dnf >/dev/null 2>&1; then \
+        sudo dnf -y install ca-certificates awscli >/dev/null; \
+      else \
+        echo 'aws CLI is required for S3 deploys' >&2; \
+        exit 1; \
+      fi; \
+    fi; \
+    tmp='/tmp/shard_01.${release_id}'; \
+    AWS_REGION='${aws_region}' AWS_DEFAULT_REGION='${aws_region}' aws s3 cp \"\$release_uri\" \"\$tmp\" --only-show-errors; \
+    actual=\$(sha256sum \"\$tmp\" | awk '{print \$1}'); \
+    if [ \"\$actual\" != '${release_sha256}' ]; then \
+      echo \"checksum mismatch for \$release_uri: expected ${release_sha256}, got \$actual\" >&2; \
+      rm -f \"\$tmp\"; \
+      exit 1; \
+    fi; \
+    sudo install -m 0755 -o root -g root \"\$tmp\" '${remote_release_bin}'; \
+    sudo ln -sfn '${remote_release_bin}' '${SHARD_REMOTE_BIN}.next'; \
+    sudo mv -Tf '${SHARD_REMOTE_BIN}.next' '${SHARD_REMOTE_BIN}'; \
+    rm -f \"\$tmp\" \
+  "
+}
+
+if [[ "$deploy_from_s3" == "1" ]]; then
+  if ! command -v aws >/dev/null 2>&1; then
+    echo "ERROR: aws CLI is required locally for SLOPMUD_DEPLOY_FROM_S3=1" >&2
+    exit 2
+  fi
+  if [[ -z "$release_s3_uri" ]]; then
+    if [[ -n "${SLOPMUD_RELEASE_S3_BUCKET:-}" ]]; then
+      release_s3_bucket="$SLOPMUD_RELEASE_S3_BUCKET"
+    elif [[ -n "${ASSETS_BUCKET:-}" ]]; then
+      release_s3_bucket="$ASSETS_BUCKET"
+    else
+      account_id="$(aws sts get-caller-identity --query Account --output text)"
+      release_s3_bucket="slopmud-assets-${account_id}-${aws_region}"
+    fi
+    release_track="${SLOPMUD_RELEASE_TRACK:-${ENV_NAME:-split-raft}}"
+    release_s3_prefix="${SLOPMUD_RELEASE_S3_PREFIX:-split-raft/${release_track}/${release_id}}"
+    release_s3_prefix="${release_s3_prefix#/}"
+    release_s3_prefix="${release_s3_prefix%/}"
+    if ! [[ "$release_s3_prefix" =~ ^[A-Za-z0-9._=/-]+$ ]]; then
+      echo "ERROR: SLOPMUD_RELEASE_S3_PREFIX contains unsupported characters: ${release_s3_prefix}" >&2
+      exit 2
+    fi
+    release_s3_uri="s3://${release_s3_bucket}/${release_s3_prefix}/shard_01"
+  fi
+  if ! [[ "$release_s3_uri" =~ ^s3://[A-Za-z0-9._=/-]+$ ]]; then
+    echo "ERROR: SLOPMUD_RELEASE_S3_URI contains unsupported characters: ${release_s3_uri}" >&2
+    exit 2
+  fi
+  echo "Uploading release artifact -> ${release_s3_uri}"
+  aws s3 cp "$bin_src" "$release_s3_uri" --only-show-errors
+  printf '%s  shard_01\n' "$release_sha256" >"${tmp_dir}/shard_01.sha256"
+  aws s3 cp "${tmp_dir}/shard_01.sha256" "${release_s3_uri}.sha256" --only-show-errors
+
+  echo "Prefetching release from S3 on all Raft nodes"
+  pids=()
+  for i in 0 1 2; do
+    stage_release_from_s3_node "$i" &
+    pids+=("$!")
+  done
+  wait_jobs "S3 release prefetch" "${pids[@]}"
+fi
 
 for i in 0 1 2; do
   host="${node_hosts[$i]}"
@@ -381,6 +637,9 @@ EOF
   if [[ -n "${SHARD_RAFT_HEARTBEAT_MS:-}" ]]; then
     echo "Environment=SHARD_RAFT_HEARTBEAT_MS=${SHARD_RAFT_HEARTBEAT_MS}" >>"$tmp_unit"
   fi
+  if [[ -n "${SHARD_RAFT_APPLICATION_MAX_FORMAT:-}" ]]; then
+    echo "Environment=SHARD_RAFT_APPLICATION_MAX_FORMAT=${SHARD_RAFT_APPLICATION_MAX_FORMAT}" >>"$tmp_unit"
+  fi
   if [[ -n "${WORLD_TICK_MS:-}" ]]; then
     echo "Environment=WORLD_TICK_MS=${WORLD_TICK_MS}" >>"$tmp_unit"
   fi
@@ -423,17 +682,31 @@ EOF
   ssh "${ssh_opts[@]}" "$target" "\
     set -euo pipefail; \
     if ! id -u slopmud >/dev/null 2>&1; then sudo useradd --system --home '${REMOTE_ROOT}' --create-home --shell /usr/sbin/nologin slopmud; fi; \
-    sudo mkdir -p '${REMOTE_ROOT}' '${remote_bin_dir}' '${REMOTE_ROOT}/var'; \
+    sudo mkdir -p '${REMOTE_ROOT}' '${remote_bin_dir}' '${release_dir}' '${REMOTE_ROOT}/var'; \
     sudo chown -R slopmud:slopmud '${REMOTE_ROOT}' \
   "
 
-  echo "Uploading shard_01 -> ${target}:${SHARD_REMOTE_BIN}"
-  scp "${scp_opts[@]}" "$bin_src" "${target}:/tmp/shard_01"
-  ssh "${ssh_opts[@]}" "$target" "\
-    set -euo pipefail; \
-    sudo install -m 0755 -o root -g root /tmp/shard_01 '${SHARD_REMOTE_BIN}'; \
-    sudo rm -f /tmp/shard_01 \
-  "
+  if [[ "$deploy_from_s3" == "1" ]]; then
+    echo "Using S3-prefetched shard_01 on ${node_id} (${host}) at ${remote_release_bin}"
+  elif [[ "${SLOPMUD_ATOMIC_BIN_SWAP:-1}" == "1" ]]; then
+    echo "Uploading shard_01 -> ${target}:${remote_release_bin}"
+    scp "${scp_opts[@]}" "$bin_src" "${target}:/tmp/shard_01.${release_id}"
+    ssh "${ssh_opts[@]}" "$target" "\
+      set -euo pipefail; \
+      sudo install -m 0755 -o root -g root '/tmp/shard_01.${release_id}' '${remote_release_bin}'; \
+      sudo ln -sfn '${remote_release_bin}' '${SHARD_REMOTE_BIN}.next'; \
+      sudo mv -Tf '${SHARD_REMOTE_BIN}.next' '${SHARD_REMOTE_BIN}'; \
+      sudo rm -f '/tmp/shard_01.${release_id}' \
+    "
+  else
+    echo "Uploading shard_01 -> ${target}:${SHARD_REMOTE_BIN}"
+    scp "${scp_opts[@]}" "$bin_src" "${target}:/tmp/shard_01"
+    ssh "${ssh_opts[@]}" "$target" "\
+      set -euo pipefail; \
+      sudo install -m 0755 -o root -g root /tmp/shard_01 '${SHARD_REMOTE_BIN}'; \
+      sudo rm -f /tmp/shard_01 \
+    "
+  fi
 
   echo "Installing ${unit_name}.service"
   scp "${scp_opts[@]}" "$tmp_unit" "${target}:/tmp/${unit_name}.service"
@@ -490,6 +763,14 @@ for i in "${restart_order[@]}"; do
         wait_for_leader ""
         current_i="$(current_leader_index || true)"
       fi
+      if [[ -z "$current_i" && "${SLOPMUD_STRICT_LIVE_UPGRADE:-0}" == "1" ]]; then
+        wait_for_leader ""
+        current_i="$(current_leader_index || true)"
+      fi
+      if [[ -z "$current_i" && "${SLOPMUD_STRICT_LIVE_UPGRADE:-0}" == "1" ]]; then
+        echo "ERROR: refusing live upgrade restart without visible Raft leader" >&2
+        exit 1
+      fi
   fi
   if [[ "$current_i" == "$i" ]]; then
       target_i=$(((i + 1) % 3))
@@ -509,8 +790,22 @@ for i in "${restart_order[@]}"; do
   elif [[ "$i" == "$active_i" ]]; then
       echo "WARN: no Raft leader visible before gateway-connected node restart" >&2
   fi
-  restart_node "$i"
-  wait_cluster_ready
+  acquire_restart_lease "$i"
+  if [[ "${SLOPMUD_QUORUM_RESTART_GUARD:-1}" == "1" ]]; then
+    if ! guard_quorum_before_restart "$i"; then
+      release_restart_lease "$i"
+      exit 1
+    fi
+  fi
+  if ! restart_node "$i"; then
+    release_restart_lease "$i"
+    exit 1
+  fi
+  if ! wait_cluster_ready; then
+    release_restart_lease "$i"
+    exit 1
+  fi
+  release_restart_lease "$i"
 done
 
 shard_addrs_list=()
