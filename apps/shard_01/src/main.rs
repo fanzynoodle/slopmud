@@ -5676,7 +5676,7 @@ async fn handle_broker(
                         .await?;
                     continue;
                 }
-                if lc == "buildinfo" || lc == "version" {
+                if is_buildinfo_command(&lc) {
                     let s = render_buildinfo();
                     write_resp_async(&mut fw, RESP_OUTPUT, session, s.as_bytes()).await?;
                     continue;
@@ -11442,6 +11442,10 @@ exit\r\n\
     s.to_string()
 }
 
+fn is_buildinfo_command(lc: &str) -> bool {
+    lc == "buildinfo" || lc == "version"
+}
+
 fn render_buildinfo() -> String {
     let version = env!("CARGO_PKG_VERSION");
     let profile = option_env!("SLOPMUD_PROFILE").unwrap_or("unknown");
@@ -11554,6 +11558,25 @@ fn normalize_dir(line: &str) -> Option<&'static str> {
 mod tests {
     use super::*;
     use std::collections::{BTreeMap, BTreeSet};
+
+    #[test]
+    fn version_command_is_advertised_and_returns_build_timestamp() {
+        assert!(is_buildinfo_command("version"));
+        assert!(is_buildinfo_command("buildinfo"));
+        assert!(!is_buildinfo_command("versions"));
+
+        let help = help_text();
+        assert!(help.contains("version\r\n"));
+        assert!(help.contains("buildinfo\r\n"));
+
+        let out = render_buildinfo();
+        assert!(out.starts_with("buildinfo:\r\n"));
+        assert!(out.contains(" - version: "));
+        assert!(out.contains(" - git: "));
+        assert!(out.contains(" - built_at_utc: "));
+        assert!(out.contains(" - built_at_unix: "));
+        assert!(out.contains(" - profile: "));
+    }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     enum StateClass {
