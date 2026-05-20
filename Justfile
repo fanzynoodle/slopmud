@@ -724,6 +724,9 @@ live-upgrade-split-raft-trio-fast env="prd-split":
     set -a; source "$env_file"; set +a; \
     if [ "${ENABLED:-1}" != "1" ]; then echo "{{env}} disabled (ENABLED=${ENABLED:-})"; exit 0; fi; \
     SLOPMUD_SKIP_BUILD=1 \
+    SLOPMUD_FAST_ROLLING_RESTART=1 \
+    SLOPMUD_ROLLING_RESTART_BUDGET_MS="${SLOPMUD_ROLLING_RESTART_BUDGET_MS:-5000}" \
+    SLOPMUD_SSH_MULTIPLEX="${SLOPMUD_SSH_MULTIPLEX:-1}" \
     SLOPMUD_ROLLING_TRANSFER_LEADER=1 \
     SLOPMUD_ALLOW_UNGRACEFUL_LEADER_RESTART=0 \
     SLOPMUD_ATOMIC_BIN_SWAP=1 \
@@ -760,12 +763,22 @@ live-upgrade-split-raft-trio-s3-fast env="prd-split":
     if [ "${ENABLED:-1}" != "1" ]; then echo "{{env}} disabled (ENABLED=${ENABLED:-})"; exit 0; fi; \
     SLOPMUD_SKIP_BUILD=1 \
     SLOPMUD_DEPLOY_FROM_S3=1 \
+    SLOPMUD_FAST_ROLLING_RESTART=1 \
+    SLOPMUD_ROLLING_RESTART_BUDGET_MS="${SLOPMUD_ROLLING_RESTART_BUDGET_MS:-5000}" \
+    SLOPMUD_SSH_MULTIPLEX="${SLOPMUD_SSH_MULTIPLEX:-1}" \
     SLOPMUD_ROLLING_TRANSFER_LEADER=1 \
     SLOPMUD_ALLOW_UNGRACEFUL_LEADER_RESTART=0 \
     SLOPMUD_ATOMIC_BIN_SWAP=1 \
     SLOPMUD_STRICT_LIVE_UPGRADE=1 \
     SLOPMUD_QUORUM_RESTART_GUARD=1 \
       ./scripts/deploy_split_raft_trio.sh "$env_file"; \
+  '
+
+k8s-raft-fast-restart namespace="slopmud" statefulset="":
+  bash -ceu ' \
+    set -o pipefail; \
+    SLOPMUD_K8S_ROLLING_RESTART_BUDGET_MS="${SLOPMUD_K8S_ROLLING_RESTART_BUDGET_MS:-10000}" \
+      ./scripts/k8s_raft_fast_restart.sh "{{namespace}}" "{{statefulset}}"; \
   '
 
 render-single-az-raft-env out="/tmp/slopmud-prd-split-az1.env" base="/home/rob/slopmud/env/prd.env" tfdir="infra/terraform/single-az-raft-us-east-1" env_name="prd-split-az1":

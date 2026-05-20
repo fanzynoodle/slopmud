@@ -39,6 +39,16 @@ Optional env:
   SLOPMUD_RAFT_RESTART_LEASE_TTL_MS default 60000
   SLOPMUD_ROLLING_TRANSFER_LEADER default 1
   SLOPMUD_ALLOW_UNGRACEFUL_LEADER_RESTART default 1
+  SLOPMUD_FAST_ROLLING_RESTART default 0; set 1 for bare-metal 5s-budget restart tuning
+  SLOPMUD_ROLLING_RESTART_BUDGET_MS default 5000 in fast mode; elapsed rolling phase budget
+  SLOPMUD_SSH_MULTIPLEX default 1 in fast mode; reuse SSH control sockets
+  SLOPMUD_ROLLING_POLL_SLEEP_S default 0.05 in fast mode, 0.5 otherwise
+  SLOPMUD_LEADER_WAIT_TIMEOUT_S default 5 in fast mode, 40 otherwise
+  SLOPMUD_CLUSTER_READY_TIMEOUT_S default 5 in fast mode, 40 otherwise
+  SLOPMUD_RESTART_LEASE_TIMEOUT_S default 5 in fast mode, 90 otherwise
+  SLOPMUD_NODE_PORT_WAIT_TRIES default 40 in fast mode, 80 otherwise
+  SLOPMUD_NODE_PORT_WAIT_SLEEP_S default 0.05 in fast mode, 0.25 otherwise
+  SLOPMUD_SKIP_SYSTEMD_STATUS default 1 in fast mode, 0 otherwise
 EOF
 }
 
@@ -71,6 +81,78 @@ shard_port="${SHARD_PORT:-5000}"
 raft_port="${SHARD_RAFT_PORT:-5100}"
 node_ids_csv="${SHARD_RAFT_NODE_IDS:-${SHARD_NODE_IDS:-n0,n1,n2}}"
 base_log="${SHARD_RAFT_LOG:-${REMOTE_ROOT}/var/shard_01_groups_raft.jsonl}"
+
+case "${SLOPMUD_FAST_ROLLING_RESTART:-0}" in
+  1|true|yes|on) fast_rolling_restart=1 ;;
+  0|false|no|off|"") fast_rolling_restart=0 ;;
+  *)
+    echo "ERROR: SLOPMUD_FAST_ROLLING_RESTART must be 0/1, true/false, yes/no, or on/off" >&2
+    exit 2
+    ;;
+esac
+
+if [[ "$fast_rolling_restart" == "1" ]]; then
+  rolling_poll_sleep_s="${SLOPMUD_ROLLING_POLL_SLEEP_S:-0.05}"
+  leader_wait_timeout_s="${SLOPMUD_LEADER_WAIT_TIMEOUT_S:-5}"
+  cluster_ready_timeout_s="${SLOPMUD_CLUSTER_READY_TIMEOUT_S:-5}"
+  restart_lease_timeout_s="${SLOPMUD_RESTART_LEASE_TIMEOUT_S:-5}"
+  node_port_wait_tries="${SLOPMUD_NODE_PORT_WAIT_TRIES:-40}"
+  node_port_wait_sleep_s="${SLOPMUD_NODE_PORT_WAIT_SLEEP_S:-0.05}"
+  skip_systemd_status="${SLOPMUD_SKIP_SYSTEMD_STATUS:-1}"
+  ssh_multiplex="${SLOPMUD_SSH_MULTIPLEX:-1}"
+  rolling_restart_budget_ms="${SLOPMUD_ROLLING_RESTART_BUDGET_MS:-5000}"
+else
+  rolling_poll_sleep_s="${SLOPMUD_ROLLING_POLL_SLEEP_S:-0.5}"
+  leader_wait_timeout_s="${SLOPMUD_LEADER_WAIT_TIMEOUT_S:-40}"
+  cluster_ready_timeout_s="${SLOPMUD_CLUSTER_READY_TIMEOUT_S:-40}"
+  restart_lease_timeout_s="${SLOPMUD_RESTART_LEASE_TIMEOUT_S:-90}"
+  node_port_wait_tries="${SLOPMUD_NODE_PORT_WAIT_TRIES:-80}"
+  node_port_wait_sleep_s="${SLOPMUD_NODE_PORT_WAIT_SLEEP_S:-0.25}"
+  skip_systemd_status="${SLOPMUD_SKIP_SYSTEMD_STATUS:-0}"
+  ssh_multiplex="${SLOPMUD_SSH_MULTIPLEX:-0}"
+  rolling_restart_budget_ms="${SLOPMUD_ROLLING_RESTART_BUDGET_MS:-}"
+fi
+
+for pair in \
+  "SLOPMUD_LEADER_WAIT_TIMEOUT_S:${leader_wait_timeout_s}" \
+  "SLOPMUD_CLUSTER_READY_TIMEOUT_S:${cluster_ready_timeout_s}" \
+  "SLOPMUD_RESTART_LEASE_TIMEOUT_S:${restart_lease_timeout_s}" \
+  "SLOPMUD_NODE_PORT_WAIT_TRIES:${node_port_wait_tries}"
+do
+  name="${pair%%:*}"
+  value="${pair#*:}"
+  if ! [[ "$value" =~ ^[0-9]+$ ]] || [[ "$value" == "0" ]]; then
+    echo "ERROR: ${name} must be a positive integer" >&2
+    exit 2
+  fi
+done
+
+case "$skip_systemd_status" in
+  1|true|yes|on) skip_systemd_status=1 ;;
+  0|false|no|off|"") skip_systemd_status=0 ;;
+  *)
+    echo "ERROR: SLOPMUD_SKIP_SYSTEMD_STATUS must be 0/1, true/false, yes/no, or on/off" >&2
+    exit 2
+    ;;
+esac
+case "$ssh_multiplex" in
+  1|true|yes|on) ssh_multiplex=1 ;;
+  0|false|no|off|"") ssh_multiplex=0 ;;
+  *)
+    echo "ERROR: SLOPMUD_SSH_MULTIPLEX must be 0/1, true/false, yes/no, or on/off" >&2
+    exit 2
+    ;;
+esac
+if [[ -n "$rolling_restart_budget_ms" ]]; then
+  if ! [[ "$rolling_restart_budget_ms" =~ ^[0-9]+$ ]] || [[ "$rolling_restart_budget_ms" == "0" ]]; then
+    echo "ERROR: SLOPMUD_ROLLING_RESTART_BUDGET_MS must be a positive integer when set" >&2
+    exit 2
+  fi
+fi
+
+now_ms() {
+  date +%s%3N
+}
 
 split_csv() {
   local raw="$1"
@@ -183,30 +265,48 @@ raft_status_node() {
   raft_rpc_node "$i" '{"t":"StatusReq"}'
 }
 
+raft_status_all() {
+  local out_dir="${tmp_dir}/raft-status-${RANDOM}-${RANDOM}"
+  local i pid
+  local pids=()
+  mkdir -p "$out_dir"
+  for i in 0 1 2; do
+    (
+      raft_status_node "$i" >"${out_dir}/${i}.out" 2>/dev/null || true
+    ) &
+    pids+=("$!")
+  done
+  for pid in "${pids[@]}"; do
+    wait "$pid" || true
+  done
+  for i in 0 1 2; do
+    printf '%s\t%s\n' "$i" "$(cat "${out_dir}/${i}.out" 2>/dev/null || true)"
+  done
+  rm -rf "$out_dir"
+}
+
 current_leader_index() {
   local i resp kind role
-  for i in 0 1 2; do
-    resp="$(raft_status_node "$i" 2>/dev/null || true)"
+  while IFS=$'\t' read -r i resp; do
     kind="$(json_field "$resp" t 2>/dev/null || true)"
     role="$(json_field "$resp" role 2>/dev/null || true)"
     if [[ "$kind" == "StatusResp" && "$role" == "Leader" ]]; then
       printf '%s\n' "$i"
       return 0
     fi
-  done
+  done < <(raft_status_all)
   return 1
 }
 
 status_supported_count() {
   local i resp kind count
   count=0
-  for i in 0 1 2; do
-    resp="$(raft_status_node "$i" 2>/dev/null || true)"
+  while IFS=$'\t' read -r i resp; do
     kind="$(json_field "$resp" t 2>/dev/null || true)"
     if [[ "$kind" == "StatusResp" ]]; then
       count=$((count + 1))
     fi
-  done
+  done < <(raft_status_all)
   printf '%s\n' "$count"
 }
 
@@ -221,32 +321,30 @@ gateway_active_shard_host() {
 
 wait_node_ports() {
   local i="$1"
-  local port
-  for port in "$shard_port" "$raft_port"; do
-    ssh_node "$i" "\
-      set -euo pipefail; \
-      for _ in {1..80}; do \
-        if sudo ss -lntp | grep -q ':${port}\\b'; then exit 0; fi; \
-        sleep 0.25; \
-      done; \
-      sudo ss -lntp | grep -n ':${port}\\b' || true; \
-      echo 'not listening on ${node_hosts[$i]}:${port}'; \
-      exit 1 \
-    "
-  done
+  ssh_node "$i" "\
+    set -euo pipefail; \
+    for _ in \$(seq 1 '${node_port_wait_tries}'); do \
+      ports=\$(sudo ss -lntp || true); \
+      if printf '%s\n' \"\$ports\" | grep -q ':${shard_port}\\b' && printf '%s\n' \"\$ports\" | grep -q ':${raft_port}\\b'; then exit 0; fi; \
+      sleep '${node_port_wait_sleep_s}'; \
+    done; \
+    sudo ss -lntp || true; \
+    echo 'not listening on ${node_hosts[$i]}:${shard_port} and ${node_hosts[$i]}:${raft_port}'; \
+    exit 1 \
+  "
 }
 
 wait_for_leader() {
   local expected="${1:-}"
-  local deadline=$((SECONDS + 40))
+  local deadline_ms=$(( $(now_ms) + leader_wait_timeout_s * 1000 ))
   local leader
-  while (( SECONDS < deadline )); do
+  while (( $(now_ms) < deadline_ms )); do
     leader="$(current_leader_index || true)"
     if [[ -n "$leader" && ( -z "$expected" || "$leader" == "$expected" ) ]]; then
       echo "Raft leader is ${node_ids[$leader]} (${node_hosts[$leader]})"
       return 0
     fi
-    sleep 0.5
+    sleep "$rolling_poll_sleep_s"
   done
   echo "ERROR: timed out waiting for Raft leader ${expected:-any}" >&2
   for i in 0 1 2; do
@@ -256,13 +354,12 @@ wait_for_leader() {
 }
 
 wait_cluster_ready() {
-  local deadline=$((SECONDS + 40))
+  local deadline_ms=$(( $(now_ms) + cluster_ready_timeout_s * 1000 ))
   local leader active_host active_i status_seen i resp kind role
-  while (( SECONDS < deadline )); do
+  while (( $(now_ms) < deadline_ms )); do
     leader=""
     status_seen=0
-    for i in 0 1 2; do
-      resp="$(raft_status_node "$i" 2>/dev/null || true)"
+    while IFS=$'\t' read -r i resp; do
       kind="$(json_field "$resp" t 2>/dev/null || true)"
       role="$(json_field "$resp" role 2>/dev/null || true)"
       if [[ "$kind" == "StatusResp" ]]; then
@@ -271,7 +368,7 @@ wait_cluster_ready() {
           leader="$i"
         fi
       fi
-    done
+    done < <(raft_status_all)
     active_host="$(gateway_active_shard_host || true)"
     active_i=""
     if [[ -n "$active_host" ]]; then
@@ -289,7 +386,7 @@ wait_cluster_ready() {
       fi
       return 0
     fi
-    sleep 0.5
+    sleep "$rolling_poll_sleep_s"
   done
   echo "ERROR: timed out waiting for gateway to connect to current Raft leader" >&2
   echo "leader index: $(current_leader_index 2>/dev/null || true)" >&2
@@ -302,11 +399,19 @@ restart_node() {
   local unit_name
   unit_name="$(unit_name_for "$i")"
   echo "Restarting ${node_ids[$i]} (${node_hosts[$i]})"
-  ssh_node "$i" "\
-    set -euo pipefail; \
-    sudo systemctl restart '${unit_name}'; \
-    sudo systemctl --no-pager --full status '${unit_name}' || true \
-  "
+  if [[ "$skip_systemd_status" == "1" ]]; then
+    ssh_node "$i" "\
+      set -euo pipefail; \
+      sudo systemctl restart '${unit_name}'; \
+      sudo systemctl is-active --quiet '${unit_name}' \
+    "
+  else
+    ssh_node "$i" "\
+      set -euo pipefail; \
+      sudo systemctl restart '${unit_name}'; \
+      sudo systemctl --no-pager --full status '${unit_name}' || true \
+    "
+  fi
   wait_node_ports "$i"
 }
 
@@ -335,7 +440,7 @@ acquire_restart_lease() {
   local i="$1"
   local mode="${SLOPMUD_RAFT_RESTART_LEASE:-auto}"
   local ttl_ms="${SLOPMUD_RAFT_RESTART_LEASE_TTL_MS:-60000}"
-  local token deadline leader_i resp kind accepted reason holder holder_token expires
+  local token deadline_ms leader_i resp kind accepted reason holder holder_token expires
   case "$mode" in
     off|0|false|no) return 0 ;;
     auto|required) ;;
@@ -350,11 +455,11 @@ acquire_restart_lease() {
   fi
 
   token="${release_id}-${node_ids[$i]}-$$-${RANDOM}-${RANDOM}"
-  deadline=$((SECONDS + 90))
-  while (( SECONDS < deadline )); do
+  deadline_ms=$(( $(now_ms) + restart_lease_timeout_s * 1000 ))
+  while (( $(now_ms) < deadline_ms )); do
     leader_i="$(current_leader_index || true)"
     if [[ -z "$leader_i" ]]; then
-      sleep 0.5
+      sleep "$rolling_poll_sleep_s"
       continue
     fi
     resp="$(raft_rpc_node "$leader_i" "{\"t\":\"RestartLeaseReq\",\"node_id\":\"${node_ids[$i]}\",\"token\":\"${token}\",\"ttl_ms\":${ttl_ms}}" 2>/dev/null || true)"
@@ -380,7 +485,7 @@ acquire_restart_lease() {
     case "$reason" in
       "another restart lease is active"|"another restart lease won the race")
         echo "Waiting for active restart lease holder=${holder:-unknown} expires_in_ms=${expires:-unknown}"
-        sleep 0.5
+        sleep "$rolling_poll_sleep_s"
         ;;
       *)
         echo "ERROR: restart lease rejected for ${node_ids[$i]}: ${reason:-unknown} holder=${holder:-} token=${holder_token:-}" >&2
@@ -423,8 +528,7 @@ guard_quorum_before_restart() {
   status_seen=0
   other_seen=0
   leader=""
-  for i in 0 1 2; do
-    resp="$(raft_status_node "$i" 2>/dev/null || true)"
+  while IFS=$'\t' read -r i resp; do
     kind="$(json_field "$resp" t 2>/dev/null || true)"
     role="$(json_field "$resp" role 2>/dev/null || true)"
     if [[ "$kind" == "StatusResp" ]]; then
@@ -436,7 +540,7 @@ guard_quorum_before_restart() {
         leader="$i"
       fi
     fi
-  done
+  done < <(raft_status_all)
   if (( other_seen < 2 )); then
     echo "ERROR: refusing to restart ${node_ids[$candidate_i]}: only ${other_seen}/2 remaining voters answered Raft status" >&2
     return 1
@@ -468,6 +572,9 @@ wait_jobs() {
   fi
 }
 
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+
 proxy_jump="${SSH_USER}@${gateway_host}"
 if [[ "$SSH_PORT" != "22" ]]; then
   proxy_jump="${proxy_jump}:${SSH_PORT}"
@@ -476,6 +583,13 @@ fi
 ssh_opts=(-o StrictHostKeyChecking=accept-new -o "ProxyJump=${proxy_jump}" -p "$raft_ssh_port")
 scp_opts=(-o StrictHostKeyChecking=accept-new -o "ProxyJump=${proxy_jump}" -P "$raft_ssh_port")
 gateway_ssh_opts=(-o StrictHostKeyChecking=accept-new -p "$SSH_PORT")
+if [[ "$ssh_multiplex" == "1" ]]; then
+  ssh_control_dir="${tmp_dir}/ssh"
+  mkdir -p "$ssh_control_dir"
+  ssh_opts+=(-o ControlMaster=auto -o ControlPersist=20s -o "ControlPath=${ssh_control_dir}/%C")
+  scp_opts+=(-o ControlMaster=auto -o ControlPersist=20s -o "ControlPath=${ssh_control_dir}/%C")
+  gateway_ssh_opts+=(-o ControlMaster=auto -o ControlPersist=20s -o "ControlPath=${ssh_control_dir}/gateway-%C")
+fi
 
 remote_bin_dir="$(dirname "$SHARD_REMOTE_BIN")"
 release_id="${SLOPMUD_RELEASE_ID:-$(git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)}"
@@ -506,9 +620,6 @@ if [[ ! -x "$bin_src" ]]; then
   echo "ERROR: expected binary at $bin_src" >&2
   exit 2
 fi
-
-tmp_dir="$(mktemp -d)"
-trap 'rm -rf "$tmp_dir"' EXIT
 
 release_sha256="$(sha256sum "$bin_src" | awk '{print $1}')"
 aws_region="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
@@ -776,7 +887,12 @@ else
   restart_order+=("$active_i")
 fi
 
+if [[ "$fast_rolling_restart" == "1" ]]; then
+  echo "Bare-metal fast restart budget_ms=${rolling_restart_budget_ms}"
+fi
+rolling_start_ms="$(now_ms)"
 for i in "${restart_order[@]}"; do
+  node_restart_start_ms="$(now_ms)"
   current_i="$(current_leader_index || true)"
   if [[ -z "$current_i" ]]; then
       if [[ "$(status_supported_count)" == "3" ]]; then
@@ -826,7 +942,15 @@ for i in "${restart_order[@]}"; do
     exit 1
   fi
   release_restart_lease "$i"
+  node_restart_elapsed_ms=$(( $(now_ms) - node_restart_start_ms ))
+  echo "Rolling restart node ${node_ids[$i]} elapsed_ms=${node_restart_elapsed_ms}"
 done
+rolling_elapsed_ms=$(( $(now_ms) - rolling_start_ms ))
+echo "Rolling restart elapsed_ms=${rolling_elapsed_ms}"
+if [[ -n "$rolling_restart_budget_ms" && "$rolling_elapsed_ms" -gt "$rolling_restart_budget_ms" ]]; then
+  echo "ERROR: rolling restart exceeded budget_ms=${rolling_restart_budget_ms} elapsed_ms=${rolling_elapsed_ms}" >&2
+  exit 1
+fi
 
 shard_addrs_list=()
 for host in "${node_hosts[@]}"; do

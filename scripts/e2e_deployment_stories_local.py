@@ -392,6 +392,7 @@ def test_deployment_dag_workflow_coverage() -> None:
         "onebox_current_public",
         "cicd_dev",
         "cicd_stg_to_prod",
+        "k8s_statefulset",
         "instance_replacement",
     }
     actual = {workflow.id for workflow in dag.WORKFLOWS}
@@ -420,15 +421,16 @@ def test_deployment_dag_quorum_contract() -> None:
         "cluster_ready",
         "release_lease",
     )
-    for workflow_id in ("local_split_direct", "local_split_s3"):
+    for workflow_id in ("local_split_direct", "local_split_s3", "k8s_statefulset"):
         workflow = workflow_by_id(workflow_id)
         if not workflow.quorum_guarded:
             raise AssertionError(f"{workflow_id} must be marked quorum guarded")
         assert_workflow_contains(workflow_id, quorum_order)
     direct_path = [edge.dst for edge in dag.EDGES if edge.src == "split_stage_direct"]
     s3_path = [edge.dst for edge in dag.EDGES if edge.src == "split_prefetch_all"]
-    if direct_path != ["leader_visible"] or s3_path != ["leader_visible"]:
-        raise AssertionError("split deploy paths must converge before quorum guarded activation")
+    k8s_path = [edge.dst for edge in dag.EDGES if edge.src == "k8s_stage_image"]
+    if direct_path != ["leader_visible"] or s3_path != ["leader_visible"] or k8s_path != ["leader_visible"]:
+        raise AssertionError("split/k8s deploy paths must converge before quorum guarded activation")
 
 
 def test_deployment_dag_promotion_contracts() -> None:
@@ -489,6 +491,9 @@ def test_rapid_split_raft_live_upgrade() -> None:
     with tempfile.TemporaryDirectory(prefix="slopmud_deploy_story_") as d:
         tmp = Path(d)
         state_path, env = deploy_env(tmp, base_cluster_state())
+        env["SLOPMUD_FAST_ROLLING_RESTART"] = "1"
+        env["SLOPMUD_ROLLING_RESTART_BUDGET_MS"] = "5000"
+        env["SLOPMUD_SSH_MULTIPLEX"] = "1"
         proc = run(["bash", "scripts/deploy_split_raft_trio.sh", str(split_env_file(tmp))], env=env)
         assert_ok(proc)
         state = read_state(state_path)
@@ -506,9 +511,53 @@ def test_rapid_split_raft_live_upgrade() -> None:
                 raise AssertionError(f"restart for {node} was not bracketed by lease acquire/release")
         if proc.stdout.count("Quorum guard:") != 3:
             raise AssertionError(f"expected quorum guard before each restart\n{proc.stdout}")
+        if "Bare-metal fast restart budget_ms=5000" not in proc.stdout:
+            raise AssertionError(f"fast bare-metal restart budget was not announced\n{proc.stdout}")
+        if "Rolling restart elapsed_ms=" not in proc.stdout:
+            raise AssertionError(f"rolling restart elapsed timing was not printed\n{proc.stdout}")
+        restart_commands = "\n".join(e["command"] for e in state["events"] if e["kind"] == "restart")
+        if "systemctl --no-pager --full status" in restart_commands:
+            raise AssertionError("fast restart path should not dump systemd status for each node")
+        ssh_opts = [opt for e in state["events"] if e["kind"] == "ssh" for opt in e.get("opts", [])]
+        if "ControlMaster=auto" not in ssh_opts:
+            raise AssertionError(f"fast restart path should reuse SSH control sockets: {ssh_opts}")
         aws_events = [e for e in state["events"] if e["kind"] == "aws"]
         if aws_events:
             raise AssertionError(f"rapid direct deploy should not call aws: {aws_events}")
+
+
+def test_kubernetes_and_bare_metal_restart_budget_contract() -> None:
+    justfile = (REPO / "Justfile").read_text(encoding="utf-8")
+    split_script = (REPO / "scripts/deploy_split_raft_trio.sh").read_text(encoding="utf-8")
+    k8s_script = (REPO / "scripts/k8s_raft_fast_restart.sh").read_text(encoding="utf-8")
+    docs = (REPO / "docs/deployment_stories.md").read_text(encoding="utf-8")
+    if 'SLOPMUD_ROLLING_RESTART_BUDGET_MS="${SLOPMUD_ROLLING_RESTART_BUDGET_MS:-5000}"' not in justfile:
+        raise AssertionError("bare-metal fast split restart must default to a 5 second budget")
+    if 'rolling_restart_budget_ms="${SLOPMUD_ROLLING_RESTART_BUDGET_MS:-5000}"' not in split_script:
+        raise AssertionError("split deploy script lost the 5 second fast-mode default")
+    if 'SLOPMUD_K8S_ROLLING_RESTART_BUDGET_MS="${SLOPMUD_K8S_ROLLING_RESTART_BUDGET_MS:-10000}"' not in justfile:
+        raise AssertionError("Kubernetes restart just recipe must default to 10 seconds")
+    if 'budget_ms="${SLOPMUD_K8S_ROLLING_RESTART_BUDGET_MS:-10000}"' not in k8s_script:
+        raise AssertionError("Kubernetes restart script lost the 10 second default")
+    if 'raft_port="${SHARD_RAFT_PORT:-5001}"' not in k8s_script:
+        raise AssertionError("Kubernetes restart script must default to the StatefulSet Raft RPC port 5001")
+    if 'node_ids_csv="${statefulset}-0,${statefulset}-1,${statefulset}-2"' not in k8s_script:
+        raise AssertionError("Kubernetes restart script must default Raft node ids to StatefulSet pod names")
+    for needle in (
+        "TransferLeaderReq",
+        "RestartLeaseReq",
+        "Kubernetes quorum guard:",
+        "--grace-period=0 --force --wait=false",
+        "Kubernetes rolling restart elapsed_ms=",
+    ):
+        if needle not in k8s_script:
+            raise AssertionError(f"Kubernetes fast restart script lost app-aware guard: {needle}")
+    for needle in (
+        "SLOPMUD_ROLLING_RESTART_BUDGET_MS=5000",
+        "SLOPMUD_K8S_ROLLING_RESTART_BUDGET_MS=10000",
+    ):
+        if needle not in docs:
+            raise AssertionError(f"deployment docs lost restart budget contract: {needle}")
 
 
 def test_current_public_onebox_shard_deploy() -> None:
@@ -682,6 +731,7 @@ TESTS = [
     ("CI/CD asset build heartbeat", test_cicd_asset_build_has_heartbeat),
     ("CI/CD tiny runner memory guards", test_cicd_tiny_runner_memory_guards),
     ("rapid split Raft live upgrade", test_rapid_split_raft_live_upgrade),
+    ("Kubernetes and bare-metal restart budget contract", test_kubernetes_and_bare_metal_restart_budget_contract),
     ("current public one-box shard deploy", test_current_public_onebox_shard_deploy),
     ("split Raft S3 fanout upgrade", test_split_raft_s3_fanout_upgrade),
     ("CI/CD S3 redeploy wrapper", test_cicd_s3_redeploy_wrapper),

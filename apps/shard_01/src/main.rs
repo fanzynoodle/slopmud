@@ -1155,8 +1155,13 @@ fn parse_raft_peers_env() -> Vec<raftlog::ConsensusPeer> {
             .split_once('@')
             .map(|(id, addr)| (id.trim().to_string(), addr.trim()))
             .unwrap_or_else(|| (part.to_string(), part));
-        let addr: SocketAddr = addr_s.parse().unwrap_or_else(|_| usage_and_exit());
-        out.push(raftlog::ConsensusPeer { node_id, addr });
+        if !addr_s.contains(':') {
+            usage_and_exit();
+        }
+        out.push(raftlog::ConsensusPeer {
+            node_id,
+            addr: addr_s.to_string(),
+        });
     }
     out
 }

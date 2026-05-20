@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::fs::OpenOptions;
 use std::hash::{Hash, Hasher};
 use std::io::{BufRead, BufReader, Write};
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::{SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -25,7 +25,7 @@ pub struct RaftEnvelope<E> {
 #[derive(Clone, Debug)]
 pub struct ConsensusPeer {
     pub node_id: String,
-    pub addr: SocketAddr,
+    pub addr: String,
 }
 
 #[derive(Clone, Debug)]
@@ -549,7 +549,7 @@ where
         for peer in &c.cfg.peers {
             let req = RaftRpc::<E>::StatusReq;
             let started = Instant::now();
-            match send_rpc(peer.addr, &req, timeout) {
+            match send_rpc(&peer.addr, &req, timeout) {
                 Ok(RaftRpc::StatusResp {
                     term,
                     node_id,
@@ -868,35 +868,89 @@ where
         self.recent.push_back(line);
     }
 
+    fn trim_ascii_bytes(mut bytes: &[u8]) -> &[u8] {
+        while matches!(bytes.first(), Some(b' ' | b'\t' | b'\r' | b'\n')) {
+            bytes = &bytes[1..];
+        }
+        while matches!(bytes.last(), Some(b' ' | b'\t' | b'\r' | b'\n')) {
+            bytes = &bytes[..bytes.len().saturating_sub(1)];
+        }
+        bytes
+    }
+
+    fn backup_and_truncate_corrupt_suffix(
+        &self,
+        valid_end: u64,
+        lineno: usize,
+        err: &serde_json::Error,
+    ) -> anyhow::Result<()> {
+        let original_len = std::fs::metadata(&self.path)?.len();
+        if valid_end >= original_len {
+            return Ok(());
+        }
+        let millis = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
+        let backup_path = PathBuf::from(format!(
+            "{}.corrupt-{}-line-{}.bak",
+            self.path.display(),
+            millis,
+            lineno
+        ));
+        std::fs::copy(&self.path, &backup_path)?;
+        let f = OpenOptions::new().write(true).open(&self.path)?;
+        f.set_len(valid_end)?;
+        f.sync_all()?;
+        tracing::warn!(
+            path = %self.path.display(),
+            backup = %backup_path.display(),
+            corrupt_line = lineno,
+            valid_bytes = valid_end,
+            original_bytes = original_len,
+            err = %err,
+            "raft log corrupt suffix backed up and truncated"
+        );
+        Ok(())
+    }
+
     fn load_replay(&mut self) -> anyhow::Result<()> {
         let f = match std::fs::File::open(&self.path) {
             Ok(v) => v,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
             Err(e) => return Err(e.into()),
         };
-        let rd = BufReader::new(f);
+        let mut rd = BufReader::new(f);
 
         let mut max_index = 0u64;
-        for (lineno, line) in rd.lines().enumerate() {
-            let line = line?;
-            let raw = line.trim();
+        let mut offset = 0u64;
+        let mut valid_end = 0u64;
+        let mut lineno = 0usize;
+        let mut buf = Vec::new();
+        loop {
+            buf.clear();
+            let n = rd.read_until(b'\n', &mut buf)?;
+            if n == 0 {
+                break;
+            }
+            lineno += 1;
+            offset = offset.saturating_add(n as u64);
+            let raw = Self::trim_ascii_bytes(&buf);
             if raw.is_empty() {
+                valid_end = offset;
                 continue;
             }
-            let env: RaftEnvelope<E> = match serde_json::from_str(raw) {
+            let env: RaftEnvelope<E> = match serde_json::from_slice(raw) {
                 Ok(v) => v,
                 Err(e) => {
-                    return Err(anyhow::anyhow!(
-                        "raft log parse error at {}:{}: {}",
-                        self.path.display(),
-                        lineno + 1,
-                        e
-                    ));
+                    self.backup_and_truncate_corrupt_suffix(valid_end, lineno, &e)?;
+                    break;
                 }
             };
             max_index = max_index.max(env.index);
-            self.push_recent(raw.to_string());
+            self.push_recent(String::from_utf8_lossy(raw).into_owned());
             self.entries.push(env);
+            valid_end = offset;
         }
         self.next_log_index = max_index.saturating_add(1).max(1);
         Ok(())
@@ -1284,7 +1338,7 @@ where
         {
             let req = RaftRpc::<E>::StatusReq;
             match send_rpc(
-                peer.addr,
+                &peer.addr,
                 &req,
                 Duration::from_millis(self.cfg.heartbeat_ms.max(250)),
             ) {
@@ -1569,7 +1623,7 @@ where
             leader_id: self.cfg.node_id.clone(),
         };
         let timeout = Duration::from_millis(self.cfg.election_timeout_ms.max(1_000));
-        match send_rpc(peer.addr, &req, timeout) {
+        match send_rpc(&peer.addr, &req, timeout) {
             Ok(RaftRpc::TimeoutNowResp {
                 term: peer_term,
                 started,
@@ -1754,7 +1808,7 @@ where
                 last_log_term,
             };
             match send_rpc(
-                peer.addr,
+                &peer.addr,
                 &req,
                 Duration::from_millis(self.cfg.election_timeout_ms),
             ) {
@@ -1814,7 +1868,7 @@ where
             };
             let started = Instant::now();
             let resp = send_rpc(
-                peer.addr,
+                &peer.addr,
                 &req,
                 Duration::from_millis(self.cfg.heartbeat_ms.max(100)),
             );
@@ -1870,7 +1924,7 @@ where
                 leader_commit,
             };
             let started = Instant::now();
-            let resp = send_rpc(peer.addr, &req, Duration::from_secs(2));
+            let resp = send_rpc(&peer.addr, &req, Duration::from_secs(2));
             let latency_ok = matches!(&resp, Ok(RaftRpc::AppendResp { success: true, .. }));
             self.record_replication_latency(started, latency_ok);
             match resp {
@@ -1942,7 +1996,7 @@ where
             entries,
         };
         let started = Instant::now();
-        let resp = send_rpc(peer.addr, &req, RAFT_BULK_RPC_TIMEOUT);
+        let resp = send_rpc(&peer.addr, &req, RAFT_BULK_RPC_TIMEOUT);
         let latency_ok = matches!(&resp, Ok(RaftRpc::AppendResp { success: true, .. }));
         self.record_replication_latency(started, latency_ok);
         match resp {
@@ -1995,11 +2049,30 @@ where
     }
 }
 
-fn send_rpc<E>(addr: SocketAddr, req: &RaftRpc<E>, timeout: Duration) -> anyhow::Result<RaftRpc<E>>
+fn send_rpc<E>(addr: &str, req: &RaftRpc<E>, timeout: Duration) -> anyhow::Result<RaftRpc<E>>
 where
     E: serde::Serialize + DeserializeOwned + Clone,
 {
-    let stream = TcpStream::connect_timeout(&addr, timeout)?;
+    let mut last_err = None;
+    let mut stream = None;
+    for resolved in addr.to_socket_addrs()? {
+        match TcpStream::connect_timeout(&resolved, timeout) {
+            Ok(s) => {
+                stream = Some(s);
+                break;
+            }
+            Err(err) => last_err = Some(err),
+        }
+    }
+    let stream = stream.ok_or_else(|| {
+        anyhow::anyhow!(
+            "raft rpc connect {} failed: {}",
+            addr,
+            last_err
+                .map(|e| e.to_string())
+                .unwrap_or_else(|| "no resolved addresses".to_string())
+        )
+    })?;
     stream.set_read_timeout(Some(timeout))?;
     stream.set_write_timeout(Some(timeout))?;
     let mut wr = stream.try_clone()?;
@@ -2152,6 +2225,118 @@ mod tests {
     }
 
     #[test]
+    fn load_replay_truncates_corrupt_suffix_and_preserves_backup() {
+        let (path, state_path) = temp_raft_path("corrupt_suffix");
+        let good_entries = [
+            RaftEnvelope {
+                index: 1,
+                term: 1,
+                ms: 10,
+                entry: "first".to_string(),
+            },
+            RaftEnvelope {
+                index: 2,
+                term: 1,
+                ms: 20,
+                entry: "second".to_string(),
+            },
+        ];
+        let mut raw = String::new();
+        for env in &good_entries {
+            raw.push_str(&serde_json::to_string(env).unwrap());
+            raw.push('\n');
+        }
+        let valid_len = raw.len() as u64;
+        raw.push_str("{not-json\n");
+        std::fs::write(&path, raw).unwrap();
+
+        let (_log, replay) = RaftLog::<String>::open(path.clone()).unwrap();
+
+        assert_eq!(replay.len(), 2);
+        assert_eq!(replay[0].entry, "first");
+        assert_eq!(replay[1].entry, "second");
+        assert_eq!(std::fs::metadata(&path).unwrap().len(), valid_len);
+        assert!(!std::fs::read_to_string(&path).unwrap().contains("not-json"));
+
+        let backup_prefix = format!("{}.corrupt-", path.file_name().unwrap().to_string_lossy());
+        let backups: Vec<PathBuf> = std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|candidate| {
+                candidate
+                    .file_name()
+                    .map(|name| name.to_string_lossy().starts_with(&backup_prefix))
+                    .unwrap_or(false)
+            })
+            .collect();
+        assert_eq!(backups.len(), 1);
+        assert!(
+            std::fs::read_to_string(&backups[0])
+                .unwrap()
+                .contains("not-json")
+        );
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+        for backup in backups {
+            let _ = std::fs::remove_file(backup);
+        }
+    }
+
+    #[test]
+    fn load_replay_can_recover_from_corrupt_first_record() {
+        let (path, state_path) = temp_raft_path("corrupt_first");
+        std::fs::write(&path, "not-json\n").unwrap();
+
+        let (_log, replay) = RaftLog::<String>::open(path.clone()).unwrap();
+
+        assert!(replay.is_empty());
+        assert_eq!(std::fs::metadata(&path).unwrap().len(), 0);
+
+        let backup_prefix = format!("{}.corrupt-", path.file_name().unwrap().to_string_lossy());
+        let backups: Vec<PathBuf> = std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|candidate| {
+                candidate
+                    .file_name()
+                    .map(|name| name.to_string_lossy().starts_with(&backup_prefix))
+                    .unwrap_or(false)
+            })
+            .collect();
+        assert_eq!(backups.len(), 1);
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+        for backup in backups {
+            let _ = std::fs::remove_file(backup);
+        }
+    }
+
+    #[test]
+    fn raft_rpc_accepts_dns_peer_names() {
+        let addr = status_server("n1", "n0");
+        let resp = send_rpc::<String>(
+            &format!("localhost:{}", addr.port()),
+            &RaftRpc::StatusReq,
+            Duration::from_secs(1),
+        )
+        .unwrap();
+
+        match resp {
+            RaftRpc::StatusResp {
+                node_id, leader_id, ..
+            } => {
+                assert_eq!(node_id, "n1");
+                assert_eq!(leader_id.as_deref(), Some("n0"));
+            }
+            other => panic!("unexpected rpc response: {other:?}"),
+        }
+    }
+
+    #[test]
     fn replicated_append_rejects_gaps_and_overwrites_conflicts() {
         let dir = std::env::temp_dir().join(format!(
             "slopmud_raftlog_test_{}.jsonl",
@@ -2213,7 +2398,7 @@ mod tests {
                 bind: None,
                 peers: vec![ConsensusPeer {
                     node_id: "n1".to_string(),
-                    addr: "127.0.0.1:9".parse().unwrap(),
+                    addr: "127.0.0.1:9".to_string(),
                 }],
                 election_timeout_ms: 5_000,
                 heartbeat_ms: 500,
@@ -2456,7 +2641,7 @@ mod tests {
             bind: Some("127.0.0.1:0".parse().unwrap()),
             peers: vec![ConsensusPeer {
                 node_id: "n1".to_string(),
-                addr: "127.0.0.1:9".parse().unwrap(),
+                addr: "127.0.0.1:9".to_string(),
             }],
             election_timeout_ms: 60_000,
             heartbeat_ms: 60_000,
@@ -2617,7 +2802,7 @@ mod tests {
                 bind: None,
                 peers: vec![ConsensusPeer {
                     node_id: "n1".to_string(),
-                    addr: "127.0.0.1:9".parse().unwrap(),
+                    addr: "127.0.0.1:9".to_string(),
                 }],
                 election_timeout_ms: 5_000,
                 heartbeat_ms: 500,
@@ -2702,11 +2887,11 @@ mod tests {
             vec![
                 ConsensusPeer {
                     node_id: "n1".to_string(),
-                    addr: "127.0.0.1:9".parse().unwrap(),
+                    addr: "127.0.0.1:9".to_string(),
                 },
                 ConsensusPeer {
                     node_id: "n2".to_string(),
-                    addr: n2_addr,
+                    addr: n2_addr.to_string(),
                 },
             ],
         );
@@ -2752,11 +2937,11 @@ mod tests {
             vec![
                 ConsensusPeer {
                     node_id: "n1".to_string(),
-                    addr: "127.0.0.1:9".parse().unwrap(),
+                    addr: "127.0.0.1:9".to_string(),
                 },
                 ConsensusPeer {
                     node_id: "n2".to_string(),
-                    addr: n2_addr,
+                    addr: n2_addr.to_string(),
                 },
             ],
         );
@@ -2794,11 +2979,11 @@ mod tests {
             vec![
                 ConsensusPeer {
                     node_id: "n1".to_string(),
-                    addr: "127.0.0.1:9".parse().unwrap(),
+                    addr: "127.0.0.1:9".to_string(),
                 },
                 ConsensusPeer {
                     node_id: "n2".to_string(),
-                    addr: n2_addr,
+                    addr: n2_addr.to_string(),
                 },
             ],
         );
@@ -2841,11 +3026,11 @@ mod tests {
             vec![
                 ConsensusPeer {
                     node_id: "n1".to_string(),
-                    addr: "127.0.0.1:9".parse().unwrap(),
+                    addr: "127.0.0.1:9".to_string(),
                 },
                 ConsensusPeer {
                     node_id: "n2".to_string(),
-                    addr: n2_addr,
+                    addr: n2_addr.to_string(),
                 },
             ],
         );
@@ -2885,11 +3070,11 @@ mod tests {
             vec![
                 ConsensusPeer {
                     node_id: "n1".to_string(),
-                    addr: "127.0.0.1:9".parse().unwrap(),
+                    addr: "127.0.0.1:9".to_string(),
                 },
                 ConsensusPeer {
                     node_id: "n2".to_string(),
-                    addr: "127.0.0.1:9".parse().unwrap(),
+                    addr: "127.0.0.1:9".to_string(),
                 },
             ],
         );
@@ -2918,11 +3103,11 @@ mod tests {
             vec![
                 ConsensusPeer {
                     node_id: "n1".to_string(),
-                    addr: "127.0.0.1:9".parse().unwrap(),
+                    addr: "127.0.0.1:9".to_string(),
                 },
                 ConsensusPeer {
                     node_id: "n2".to_string(),
-                    addr: n2_addr,
+                    addr: n2_addr.to_string(),
                 },
             ],
         );
@@ -2951,7 +3136,7 @@ mod tests {
                 bind: None,
                 peers: vec![ConsensusPeer {
                     node_id: "n0".to_string(),
-                    addr: "127.0.0.1:9".parse().unwrap(),
+                    addr: "127.0.0.1:9".to_string(),
                 }],
                 election_timeout_ms: 5_000,
                 heartbeat_ms: 500,
@@ -3021,7 +3206,7 @@ mod tests {
             "restart_lease_leader_reject",
             vec![ConsensusPeer {
                 node_id: "n1".to_string(),
-                addr: "127.0.0.1:9".parse().unwrap(),
+                addr: "127.0.0.1:9".to_string(),
             }],
         );
         match consensus.handle_restart_lease("n0".to_string(), "tok".to_string(), 30_000) {
@@ -3049,11 +3234,11 @@ mod tests {
             vec![
                 ConsensusPeer {
                     node_id: "n1".to_string(),
-                    addr: "127.0.0.1:9".parse().unwrap(),
+                    addr: "127.0.0.1:9".to_string(),
                 },
                 ConsensusPeer {
                     node_id: "n2".to_string(),
-                    addr: n2_addr,
+                    addr: n2_addr.to_string(),
                 },
             ],
         );
@@ -3077,7 +3262,7 @@ mod tests {
             "restart_lease_blocks_transfer",
             vec![ConsensusPeer {
                 node_id: "n1".to_string(),
-                addr: "127.0.0.1:9".parse().unwrap(),
+                addr: "127.0.0.1:9".to_string(),
             }],
         );
         {
@@ -3188,7 +3373,7 @@ mod tests {
                 bind: None,
                 peers: vec![ConsensusPeer {
                     node_id: "n0".to_string(),
-                    addr: "127.0.0.1:9".parse().unwrap(),
+                    addr: "127.0.0.1:9".to_string(),
                 }],
                 election_timeout_ms: 5_000,
                 heartbeat_ms: 500,

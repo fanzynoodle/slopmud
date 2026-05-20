@@ -37,9 +37,11 @@ flowchart TD
 
   artifact --> splitDirect[split Raft direct live upgrade]
   artifact --> splitS3[split Raft S3 fan-out live upgrade]
+  artifact --> k8sStage[Kubernetes image staged]
   splitS3 --> prefetch[all private voters prefetch + checksum]
   splitDirect --> roll[lease/quorum guarded rolling restart]
   prefetch --> roll
+  k8sStage --> roll
   roll --> raftSmoke[raft status + version smoke]
 
   tf[Terraform apply/rebuild] --> render[render split env from recommended_env]
@@ -90,7 +92,10 @@ Path:
    that the two remaining voters are reachable and that the target is not the
    current leader, restarts one node, waits for the cluster/gateway to recover,
    releases the lease, and repeats.
-4. Smoke through the player path with `version`, `raft status`, and a websocket
+4. The fast path enforces `SLOPMUD_ROLLING_RESTART_BUDGET_MS=5000` by default
+   for the rolling activation phase. It also prints per-node and total elapsed
+   timings so a slow bare-metal rollout points at the phase that needs work.
+5. Smoke through the player path with `version`, `raft status`, and a websocket
    reconnect/resume check.
 
 Local regression:
@@ -99,7 +104,33 @@ Local regression:
 - Scenario: `rapid split Raft live upgrade`
 - Assertions: no AWS dependency, active gateway node is delayed, leader is
   transferred before restart, every restart is bracketed by restart lease
-  acquire/release, and the quorum guard runs before each restart.
+  acquire/release, the quorum guard runs before each restart, SSH multiplexing
+  is enabled for the fast path, and the bare-metal budget remains 5 seconds.
+
+## Kubernetes StatefulSet Restart
+
+Use this when shard voters are running as a three-replica Kubernetes
+StatefulSet. Kubernetes pod replacement has scheduler and readiness overhead,
+so its default budget is intentionally looser than bare metal.
+
+Path:
+
+1. Stage or roll the target image through the normal image path.
+2. Run `just k8s-raft-fast-restart slopmud <statefulset>`, or omit the
+   StatefulSet name when the shard StatefulSet can be auto-detected by label.
+3. The helper finds the current Raft leader, restarts non-leaders first, uses
+   Raft leader transfer before touching a leader, acquires the restart lease,
+   checks quorum, deletes exactly one pod, waits for the replacement pod UID to
+   become Ready, waits for Raft readiness, releases the lease, and repeats.
+4. The default Kubernetes rolling budget is
+   `SLOPMUD_K8S_ROLLING_RESTART_BUDGET_MS=10000`.
+
+Local regression:
+
+- `just e2e-deployment-stories`
+- Scenario: `Kubernetes and bare-metal restart budget contract`
+- Assertions: Kubernetes restart tooling defaults to 10 seconds while
+  bare-metal split Raft fast rollouts default to 5 seconds.
 
 ## Current Public One-Box Shard Deploy
 
