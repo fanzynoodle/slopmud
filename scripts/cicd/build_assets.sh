@@ -15,6 +15,7 @@ build_internal_oidc="${BUILD_INTERNAL_OIDC:-1}"
 assets_root="${ASSETS_ROOT:-assets}"
 assets_env_dir="${ASSETS_ENV_DIR:-${PWD}/env}"
 assets_env_files="${ASSETS_ENV_FILES:-}"
+assets_env_required="${ASSETS_ENV_REQUIRED:-0}"
 sha="${GITHUB_SHA:-}"
 
 if [[ -z "$sha" ]]; then
@@ -116,13 +117,12 @@ if [[ "$build_internal_oidc" == "1" ]]; then
   cp -f "$bin_internal_oidc_src" "${out_dir}/bin/internal_oidc"
 fi
 
-if [[ ! -d "$assets_env_dir" ]]; then
-  echo "ERROR: missing env dir for asset bundle: ${assets_env_dir}" >&2
-  echo "Set ASSETS_ENV_DIR=/path/to/env when building from a worktree without env/" >&2
-  exit 2
-fi
-
 if [[ -n "$assets_env_files" ]]; then
+  if [[ ! -d "$assets_env_dir" ]]; then
+    echo "ERROR: missing explicit env dir for asset bundle: ${assets_env_dir}" >&2
+    echo "ASSETS_ENV_FILES was set, so ASSETS_ENV_DIR must point at a readable env directory." >&2
+    exit 2
+  fi
   for env_name in $assets_env_files; do
     if [[ ! -f "${assets_env_dir}/${env_name}" ]]; then
       echo "ERROR: missing env file for asset bundle: ${assets_env_dir}/${env_name}" >&2
@@ -130,8 +130,19 @@ if [[ -n "$assets_env_files" ]]; then
     fi
     cp -a "${assets_env_dir}/${env_name}" "${out_dir}/env/${env_name}"
   done
-else
+elif [[ -d "$assets_env_dir" ]]; then
   cp -a "${assets_env_dir}/." "${out_dir}/env/"
+else
+  case "$assets_env_required" in
+    1|true|TRUE|yes|YES|on|ON)
+      echo "ERROR: missing required env dir for asset bundle: ${assets_env_dir}" >&2
+      echo "Unset ASSETS_ENV_REQUIRED or set ASSETS_ENV_DIR=/path/to/env for this build." >&2
+      exit 2
+      ;;
+    *)
+      echo "WARN: missing optional env dir for asset bundle: ${assets_env_dir}; continuing with empty env bundle" >&2
+      ;;
+  esac
 fi
 
 cp -a "${repo_root}/web_homepage/." "${out_dir}/web_homepage/"

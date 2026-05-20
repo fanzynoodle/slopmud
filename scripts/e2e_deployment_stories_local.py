@@ -487,6 +487,21 @@ def test_cicd_tiny_runner_memory_guards() -> None:
         raise AssertionError("runner bootstrap must provision swap for tiny build hosts")
 
 
+def test_cicd_clean_checkout_asset_contract() -> None:
+    workflow = (REPO / ".github/workflows/enterprise-cicd.yml").read_text(encoding="utf-8")
+    build_assets = (REPO / "scripts/cicd/build_assets.sh").read_text(encoding="utf-8")
+    for env_key in ("BUILD_STATIC_WEB", "BUILD_SLOPMUD_WEB", "BUILD_INTERNAL_OIDC"):
+        expected = f"{env_key}: ${{{{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}}}"
+        if expected not in workflow:
+            raise AssertionError(f"dev CI hot path must skip unused release binary: {env_key}")
+    if "missing optional env dir for asset bundle" not in build_assets:
+        raise AssertionError("CI asset bundling must tolerate clean checkouts without ignored env/")
+    if "ASSETS_ENV_FILES was set" not in build_assets:
+        raise AssertionError("explicit env bundle requests must still fail when env files are absent")
+    if "ASSETS_ENV_REQUIRED" not in build_assets:
+        raise AssertionError("operators need a strict env bundle switch for release builds that require env/")
+
+
 def test_rapid_split_raft_live_upgrade() -> None:
     with tempfile.TemporaryDirectory(prefix="slopmud_deploy_story_") as d:
         tmp = Path(d)
@@ -730,6 +745,7 @@ TESTS = [
     ("CI/CD runner inventory fallback", test_cicd_runner_inventory_fallback_does_not_skip_deploy),
     ("CI/CD asset build heartbeat", test_cicd_asset_build_has_heartbeat),
     ("CI/CD tiny runner memory guards", test_cicd_tiny_runner_memory_guards),
+    ("CI/CD clean checkout asset contract", test_cicd_clean_checkout_asset_contract),
     ("rapid split Raft live upgrade", test_rapid_split_raft_live_upgrade),
     ("Kubernetes and bare-metal restart budget contract", test_kubernetes_and_bare_metal_restart_budget_contract),
     ("current public one-box shard deploy", test_current_public_onebox_shard_deploy),
