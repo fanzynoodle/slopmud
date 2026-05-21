@@ -568,6 +568,8 @@ def test_cicd_clean_checkout_asset_contract() -> None:
         raise AssertionError("ws E2E must build every helper binary it launches, not just e2e_ws")
     if "dev-mud.slopmud.com" not in workflow or "deploy_public_smoke" not in workflow:
         raise AssertionError("dev deploy must include a blocking outside-in public telnet smoke")
+    if "asset_ready_epoch" not in workflow or "deploy_public_smoke_after_asset_ready_s" not in workflow:
+        raise AssertionError("dev deploy must report public-smoke latency excluding build time")
     if "always() &&" not in workflow or "needs.build.result == 'success'" not in workflow:
         raise AssertionError("deploy must evaluate its explicit gates even when optional E2Es are skipped")
     for job in ("e2e-core-local", "e2e-core-party", "e2e-ws"):
