@@ -203,10 +203,10 @@ maybe_override_from_unit() {
   fi
 }
 
-if [[ "$unit_exists" == "1" ]]; then
+if [[ "$unit_exists" == "1" && "$rewrite_unit" != "1" ]]; then
   maybe_override_from_unit "$unit_name" "SLOPMUD_BIND"
 fi
-if [[ "$shard_unit_exists" == "1" ]]; then
+if [[ "$shard_unit_exists" == "1" && "$rewrite_unit" != "1" ]]; then
   maybe_override_from_unit "$shard_unit_name" "SHARD_BIND"
 fi
 
@@ -320,6 +320,10 @@ systemctl is-active --quiet "${service_name}" || {
 port="${bind##*:}"
 echo "Listening check (port ${port})"
 wait_for_listen "${port}" "${port}"
+systemctl is-active --quiet "${service_name}" || {
+  systemctl status "${service_name}" --no-pager --lines=40 >&2 || true
+  exit 1
+}
 
 if [[ -x "$bin_shard_src" ]]; then
   shard_unit_path="/etc/systemd/system/${shard_service_name}.service"
@@ -367,6 +371,10 @@ EOF
   shard_port="${shard_bind##*:}"
   echo "Listening check (shard port ${shard_port})"
   wait_for_listen "${shard_port}" "${shard_port}"
+  systemctl is-active --quiet "${shard_service_name}" || {
+    systemctl status "${shard_service_name}" --no-pager --lines=40 >&2 || true
+    exit 1
+  }
 fi
 
 echo "OK: ${service_name} deployed (sha=${sha})"
