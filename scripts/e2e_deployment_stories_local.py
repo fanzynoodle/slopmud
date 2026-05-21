@@ -531,6 +531,8 @@ def test_cicd_tiny_runner_memory_guards() -> None:
     rust_tool_bin = 'tool_bin="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin"'
     if workflow.count(rust_tool_bin) < 4:
         raise AssertionError("CI Rust setup steps must repair cached-over Rust tool shims")
+    if workflow.count("uses: Swatinem/rust-cache@v2") != 1:
+        raise AssertionError("only the build job should restore Rust cache on the tiny runner")
     dep_line = "for c in gcc git jq make pkg-config just python3 tar; do"
     if dep_line not in workflow:
         raise AssertionError("CI runner dependency preflight must cover the full tiny-runner toolchain")

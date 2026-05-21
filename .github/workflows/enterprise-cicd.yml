@@ -421,9 +421,6 @@ jobs:
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           cargo --version
 
-      - name: Restore Rust cache
-        uses: Swatinem/rust-cache@v2
-
       - name: Run e2e-local (skip-build)
         id: run
         shell: bash
@@ -470,9 +467,6 @@ jobs:
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           cargo --version
 
-      - name: Restore Rust cache
-        uses: Swatinem/rust-cache@v2
-
       - name: Run e2e-party (skip-build)
         id: run
         shell: bash
@@ -518,9 +512,6 @@ jobs:
           fi
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           cargo --version
-
-      - name: Restore Rust cache
-        uses: Swatinem/rust-cache@v2
 
       - name: Build and run ws e2e
         id: run
