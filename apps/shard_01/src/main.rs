@@ -8728,6 +8728,11 @@ async fn handle_broker(
                     world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
                     continue;
                 }
+                if lc == "twirl" {
+                    let emote = room_emote_noarg(&p.name, "twirls");
+                    world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
+                    continue;
+                }
                 if lc == "smile" {
                     let emote = room_emote_noarg(&p.name, "smiles");
                     world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
@@ -11502,6 +11507,7 @@ pose <action>\r\n\
 yell <msg>\r\n\
 whisper <player> <msg>\r\n\
 dance\r\n\
+twirl\r\n\
 smile\r\n\
 nod\r\n\
 bow\r\n\
@@ -13221,6 +13227,7 @@ mod tests {
     #[test]
     fn room_emote_noarg_generates_room_motion() {
         assert_eq!(room_emote_noarg("Alice", "dances"), "* Alice dances");
+        assert_eq!(room_emote_noarg("Alice", "twirls"), "* Alice twirls");
         assert_eq!(room_emote_noarg("Alice", "smiles"), "* Alice smiles");
         assert_eq!(room_emote_noarg("Alice", "bows"), "* Alice bows");
         assert_eq!(room_emote_noarg("Alice", "laughs"), "* Alice laughs");
