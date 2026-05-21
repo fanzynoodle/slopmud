@@ -292,6 +292,9 @@ def main():
     env["RUST_BACKTRACE"] = env.get("RUST_BACKTRACE", "1")
     # Keep accounts isolated per run so we always exercise the "set password" path.
     env["SLOPMUD_ACCOUNTS_PATH"] = f"/tmp/slopmud_accounts_e2e_local_{run_id}.json"
+    # Keep shard state isolated too; otherwise previous local/CI runs can leave
+    # Alice/Bob in progressed rooms and break the fresh-character contract.
+    env["SHARD_RAFT_LOG"] = f"/tmp/slopmud_e2e_local_raft_{run_id}.jsonl"
     shard_log = Path(f"/tmp/slopmud_e2e_local_shard_{run_id}.log")
     broker_log = Path(f"/tmp/slopmud_e2e_local_broker_{run_id}.log")
     shard_f = open(shard_log, "wb")

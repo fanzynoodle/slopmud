@@ -214,6 +214,7 @@ def main():
     env["RUST_BACKTRACE"] = env.get("RUST_BACKTRACE", "1")
     # Keep accounts isolated per run so we always exercise the "set password" path.
     env["SLOPMUD_ACCOUNTS_PATH"] = f"/tmp/slopmud_accounts_e2e_party_{run_id}.json"
+    env["SHARD_RAFT_LOG"] = f"/tmp/slopmud_e2e_party_raft_{run_id}.jsonl"
 
     build_log = Path(f"/tmp/slopmud_e2e_party_build_{run_id}.log")
     shard_log = Path(f"/tmp/slopmud_e2e_party_shard_{run_id}.log")

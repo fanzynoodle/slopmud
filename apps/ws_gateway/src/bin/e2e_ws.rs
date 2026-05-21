@@ -1,5 +1,5 @@
 use std::process::Stdio;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use std::{io, net::TcpListener};
 
 use futures_util::{SinkExt, StreamExt};
@@ -65,9 +65,14 @@ async fn main() -> anyhow::Result<()> {
     let shard_bind = format!("127.0.0.1:{shard_port}");
     let ws_bind = format!("127.0.0.1:{ws_port}");
     let ws_url = format!("ws://{ws_bind}/v1/json");
+    let run_id = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)?
+        .as_nanos();
+    let raft_log = format!("/tmp/slopmud_e2e_ws_raft_{run_id}.jsonl");
 
     let mut shard = Command::new("target/debug/shard_01")
         .env("SHARD_BIND", &shard_bind)
+        .env("SHARD_RAFT_LOG", &raft_log)
         .env("WORLD_TICK_MS", "200")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
