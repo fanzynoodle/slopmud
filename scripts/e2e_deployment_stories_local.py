@@ -546,6 +546,10 @@ def test_cicd_clean_checkout_asset_contract() -> None:
         raise AssertionError("shuttle helper should allow non-root --help while keeping deploy operations root-only")
     if 'shard_service_name="shard-01-sandbox"' not in shuttle or 'shard_bind="127.0.0.1:5009"' not in shuttle:
         raise AssertionError("sandbox deploy must define its own shard service when artifacts include shard_01")
+    if 'shard_service_name="shard-01-dev"' not in shuttle or 'shard_bind="127.0.0.1:4941"' not in shuttle:
+        raise AssertionError("dev deploy shard must not collide with prod shard port 5000")
+    if 'systemctl is-active --quiet "${shard_service_name}"' not in shuttle:
+        raise AssertionError("CI deploy must fail when the shard service fails after restart")
 
 
 def test_rapid_split_raft_live_upgrade() -> None:

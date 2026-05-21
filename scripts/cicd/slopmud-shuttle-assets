@@ -101,7 +101,7 @@ case "$env_name" in
     bind="0.0.0.0:4000"
     bin_dst="/opt/slopmud/bin/slopmud-dev"
     shard_service_name="shard-01-dev"
-    shard_bind="127.0.0.1:5000"
+    shard_bind="127.0.0.1:4941"
     shard_bin_dst="/opt/slopmud/bin/shard-01-dev"
     ;;
   sandbox)
@@ -312,6 +312,10 @@ if [[ "$unit_exists" != "1" || "$rewrite_unit" == "1" ]]; then
   systemctl enable --now "${service_name}"
 fi
 systemctl restart "${service_name}"
+systemctl is-active --quiet "${service_name}" || {
+  systemctl status "${service_name}" --no-pager --lines=40 >&2 || true
+  exit 1
+}
 
 port="${bind##*:}"
 echo "Listening check (port ${port})"
@@ -355,6 +359,10 @@ EOF
     systemctl enable --now "${shard_service_name}"
   fi
   systemctl restart "${shard_service_name}"
+  systemctl is-active --quiet "${shard_service_name}" || {
+    systemctl status "${shard_service_name}" --no-pager --lines=40 >&2 || true
+    exit 1
+  }
 
   shard_port="${shard_bind##*:}"
   echo "Listening check (shard port ${shard_port})"
