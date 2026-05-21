@@ -540,6 +540,8 @@ def test_cicd_clean_checkout_asset_contract() -> None:
         raise AssertionError("CI deploy jobs must use the sudo-installed shuttle hook")
     if "cargo build -q -p shard_01 -p ws_gateway -p bot_party --bins" not in workflow:
         raise AssertionError("ws E2E must build every helper binary it launches, not just e2e_ws")
+    if "dev-mud.slopmud.com" not in workflow or "deploy_public_smoke" not in workflow:
+        raise AssertionError("dev deploy must include a blocking outside-in public telnet smoke")
     if "./scripts/cicd/slopmud-shuttle-assets --help" in workflow:
         raise AssertionError("CI must not assert the root-only deploy hook through the unprivileged checkout copy")
     if shuttle.find("-h|--help)") > shuttle.find("ERROR: must run as root"):

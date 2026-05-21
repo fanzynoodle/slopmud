@@ -27,6 +27,8 @@ The current one-box mud host can remain the build/deploy runner. Deploy to the p
 - AZ: `us-east-1a`
 - Gateway: `t3a.nano`, on-demand, public IPv4
 - Raft nodes: 3x `t3a.nano`, Spot, private IPv4 only
+- Public dev telnet: `dev-mud.slopmud.com:4000` on the gateway
+- Public prod telnet: `mud.slopmud.com:4200` on the gateway
 - Persistent state: 1 GiB encrypted EBS data volume on the gateway and each Raft node
 - OS: Debian 12 x86_64
 - S3 Gateway endpoint: enabled, no hourly endpoint charge, used for private release artifact fetches
@@ -121,6 +123,7 @@ for strict k8s-style activations.
 The important runtime values are:
 
 - `HOST` / `GATEWAY_HOST`: public DNS for the gateway.
+- `dev-mud.slopmud.com:4000`: outside-in dev telnet smoke target. CI must prove this path after a dev deploy.
 - `ASSETS_BUCKET`: S3 bucket used for release artifacts.
 - `SLOPMUD_WAL_BACKUP_S3_BUCKET` / `SLOPMUD_WAL_BACKUP_S3_PREFIX`: S3 target for per-node streaming WAL backups. By default this reuses the assets bucket under a separate prefix.
 - `SLOPMUD_WAL_RESTORE_ENABLED=auto`: replaced nodes attempt restore from WAL backups when their local Raft log is missing or empty, and skip cleanly if no manifest exists yet.

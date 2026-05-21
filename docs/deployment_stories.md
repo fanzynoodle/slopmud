@@ -164,6 +164,8 @@ Dev path:
 3. CI publishes the artifact to the dev track when S3 is available.
 4. CI deploys the same artifact to sandbox and smokes sandbox.
 5. CI deploys the same artifact to dev and smokes dev.
+6. CI connects to `dev-mud.slopmud.com:4000` from outside the service host.
+   Loopback smoke alone is not sufficient for a successful dev promotion.
 
 Staging to production path:
 

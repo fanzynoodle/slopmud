@@ -552,6 +552,8 @@ jobs:
         shell: bash
         env:
           DEPLOY_ENV: ${{ needs.build.outputs.deploy_env }}
+          SLOPMUD_PUBLIC_SMOKE_HOST: ${{ vars.SLOPMUD_PUBLIC_SMOKE_HOST }}
+          SLOPMUD_PUBLIC_SMOKE_PORT: ${{ vars.SLOPMUD_PUBLIC_SMOKE_PORT }}
         run: |
           set -euo pipefail
           start_ts="$(date +%s)"
@@ -563,6 +565,14 @@ jobs:
           esac
 
           python3 ./scripts/cicd/smoke_telnet.py --host 127.0.0.1 --port "$port"
+
+          if [[ "$DEPLOY_ENV" == "dev" ]]; then
+            public_host="${SLOPMUD_PUBLIC_SMOKE_HOST:-dev-mud.slopmud.com}"
+            public_port="${SLOPMUD_PUBLIC_SMOKE_PORT:-4000}"
+            python3 ./scripts/cicd/smoke_telnet.py --host "$public_host" --port "$public_port" --timeout-s 10
+            echo "::notice::deploy_public_smoke=${public_host}:${public_port}"
+          fi
+
           duration_s=$(( $(date +%s) - start_ts ))
           echo "::notice::deploy_smoke_duration_s=${duration_s}"
 

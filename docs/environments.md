@@ -93,6 +93,7 @@ For this repo, a push to `dev` should trigger `.github/workflows/enterprise-cicd
 2. `deploy_sandbox` (deploy artifact to sandbox on port `4500`)
 3. smoke test against `127.0.0.1:4500`
 4. `deploy` (promote the same artifact to `dev` on `4000`)
+5. public smoke test against `dev-mud.slopmud.com:4000`
 
 If any sandbox step fails, the `dev` deploy is blocked and `deploy` does not run.
 
@@ -114,7 +115,7 @@ ssh -o StrictHostKeyChecking=accept-new admin@mud.slopmud.com \
   'sudo ss -ltnp | rg "(4000|4023|4200|4500|443|4242|4042|4043)"'
 ```
 
-If SSH is unreachable, validate DNS/instance and SGs (`mud.slopmud.com` points to the current instance and SSH is allowed from your egress IP).
+If SSH is unreachable, validate DNS/instance and SGs. The public dev smoke target is `dev-mud.slopmud.com:4000`; `mud.slopmud.com:4200` is the split-gateway prod telnet endpoint.
 
 ## CI/CD troubleshooting
 

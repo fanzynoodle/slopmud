@@ -118,7 +118,7 @@ variable "raft_private_ips" {
 variable "gateway_public_tcp_ports" {
   type        = list(number)
   description = "Public TCP ports on the gateway. Defaults cover HTTP, HTTPS, telnet broker, playable web HTTPS, and internal OIDC HTTPS."
-  default     = [80, 443, 4200, 4242, 9000]
+  default     = [80, 443, 4000, 4200, 4242, 9000]
 }
 
 variable "shard_port" {
