@@ -510,6 +510,9 @@ def test_cicd_tiny_runner_memory_guards() -> None:
     workflow = (REPO / ".github/workflows/enterprise-cicd.yml").read_text(encoding="utf-8")
     build_script = (REPO / "scripts/build_bookworm_release.sh").read_text(encoding="utf-8")
     bootstrap = (REPO / "scripts/cicd/bootstrap_runner.sh").read_text(encoding="utf-8")
+    tf_vars = (REPO / "infra/terraform/single-az-raft-us-east-1/variables.tf").read_text(
+        encoding="utf-8"
+    )
     if 'SLOPMUD_CARGO_BUILD_JOBS: "1"' not in workflow:
         raise AssertionError("CI asset build must force single-job release builds on tiny runners")
     if "build_cmd+=(-j" not in build_script or "CARGO_BUILD_JOBS" not in build_script:
@@ -526,6 +529,8 @@ def test_cicd_tiny_runner_memory_guards() -> None:
     for required in ("build-essential", "git", "jq", "pkg-config", "python3", "awscli", "ripgrep"):
         if required not in bootstrap:
             raise AssertionError(f"runner bootstrap must install {required}")
+    if 'variable "gateway_root_volume_gib"' not in tf_vars or "default     = 24" not in tf_vars:
+        raise AssertionError("gateway root volume must leave room for the self-hosted runner build cache")
 
 
 def test_cicd_clean_checkout_asset_contract() -> None:

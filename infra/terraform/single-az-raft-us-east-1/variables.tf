@@ -64,8 +64,8 @@ variable "raft_instance_type" {
 
 variable "gateway_root_volume_gib" {
   type        = number
-  description = "Gateway root EBS size."
-  default     = 8
+  description = "Gateway root EBS size. Needs room for the tiny self-hosted runner toolchain and warm Rust build cache."
+  default     = 24
 }
 
 variable "raft_root_volume_gib" {

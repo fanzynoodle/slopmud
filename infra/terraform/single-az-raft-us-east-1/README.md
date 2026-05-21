@@ -29,6 +29,7 @@ The current one-box mud host can remain the build/deploy runner. Deploy to the p
 - Raft nodes: 3x `t3a.nano`, Spot, private IPv4 only
 - Public dev telnet: `dev-mud.slopmud.com:4000` on the gateway
 - Public prod telnet: `mud.slopmud.com:4200` on the gateway
+- Gateway root disk: 24 GiB gp3 so the tiny self-hosted runner can keep Rust tooling and warm build cache without exhausting `/`
 - Persistent state: 1 GiB encrypted EBS data volume on the gateway and each Raft node
 - OS: Debian 12 x86_64
 - S3 Gateway endpoint: enabled, no hourly endpoint charge, used for private release artifact fetches
