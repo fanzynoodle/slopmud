@@ -91,7 +91,7 @@ just_path="$(
     command -v just; \
   '
 )"
-sudo ln -sf "$just_path" /usr/local/bin/just
+sudo install -m 0755 "$just_path" /usr/local/bin/just
 
 echo "Installing deploy hook to /usr/local/bin/slopmud-shuttle-assets"
 sudo install -m 0755 scripts/cicd/slopmud-shuttle-assets /usr/local/bin/slopmud-shuttle-assets

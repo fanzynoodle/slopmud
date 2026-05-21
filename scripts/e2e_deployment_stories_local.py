@@ -487,6 +487,8 @@ def test_cicd_tiny_runner_memory_guards() -> None:
         raise AssertionError("runner bootstrap must provision swap for tiny build hosts")
     if "Repairing direct Rust tool shims" not in bootstrap or "cargo install just --locked" not in bootstrap:
         raise AssertionError("runner bootstrap must keep Rust tool shims and just available after rebuilds")
+    if 'sudo install -m 0755 "$just_path" /usr/local/bin/just' not in bootstrap:
+        raise AssertionError("runner bootstrap must install just as a real binary outside Cargo cache")
 
 
 def test_cicd_clean_checkout_asset_contract() -> None:
