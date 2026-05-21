@@ -485,6 +485,8 @@ def test_cicd_tiny_runner_memory_guards() -> None:
         raise AssertionError("bookworm release builder must honor the CI cargo job limit")
     if "RUNNER_SWAPFILE_MB" not in bootstrap or "/sbin/mkswap" not in bootstrap:
         raise AssertionError("runner bootstrap must provision swap for tiny build hosts")
+    if "Repairing direct Rust tool shims" not in bootstrap or "cargo install just --locked" not in bootstrap:
+        raise AssertionError("runner bootstrap must keep Rust tool shims and just available after rebuilds")
 
 
 def test_cicd_clean_checkout_asset_contract() -> None:

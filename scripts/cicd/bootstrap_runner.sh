@@ -64,11 +64,27 @@ sudo -u ghrunner -H bash -lc ' \
   "$HOME/.cargo/bin/rustc" --version; \
 '
 
+echo "Repairing direct Rust tool shims for runner service PATH"
+sudo -u ghrunner -H bash -lc ' \
+  set -euo pipefail; \
+  tool_bin="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin"; \
+  mkdir -p "$HOME/.cargo/bin"; \
+  for c in cargo rustc rustfmt cargo-fmt cargo-clippy clippy-driver rustdoc; do \
+    if [ -x "$tool_bin/$c" ]; then \
+      ln -sf "$tool_bin/$c" "$HOME/.cargo/bin/$c"; \
+    fi; \
+  done; \
+'
+
 echo "Installing just for ghrunner (if missing)"
 just_path="$(
   sudo -u ghrunner -H bash -lc ' \
     set -euo pipefail; \
     source "$HOME/.cargo/env"; \
+    tool_bin="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin"; \
+    if ! command -v cargo >/dev/null 2>&1 && [ -x "$tool_bin/cargo" ]; then \
+      export PATH="$tool_bin:$PATH"; \
+    fi; \
     if ! command -v just >/dev/null 2>&1; then \
       cargo install just --locked; \
     fi; \
