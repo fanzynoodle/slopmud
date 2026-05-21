@@ -537,7 +537,12 @@ def test_cicd_clean_checkout_asset_contract() -> None:
     workflow = (REPO / ".github/workflows/enterprise-cicd.yml").read_text(encoding="utf-8")
     build_assets = (REPO / "scripts/cicd/build_assets.sh").read_text(encoding="utf-8")
     shuttle = (REPO / "scripts/cicd/slopmud-shuttle-assets").read_text(encoding="utf-8")
-    for env_key in ("BUILD_STATIC_WEB", "BUILD_SLOPMUD_WEB", "BUILD_INTERNAL_OIDC"):
+    for env_key in (
+        "BUILD_STATIC_WEB",
+        "BUILD_SLOPMUD_WEB",
+        "BUILD_INTERNAL_OIDC",
+        "BUILD_SLOPMUD_ADMINCTL",
+    ):
         expected = f"{env_key}: ${{{{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}}}"
         if expected not in workflow:
             raise AssertionError(f"dev CI hot path must skip unused release binary: {env_key}")

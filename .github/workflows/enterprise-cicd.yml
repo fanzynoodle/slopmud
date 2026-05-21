@@ -251,6 +251,7 @@ jobs:
           BUILD_STATIC_WEB: ${{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}
           BUILD_SLOPMUD_WEB: ${{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}
           BUILD_INTERNAL_OIDC: ${{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}
+          BUILD_SLOPMUD_ADMINCTL: ${{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}
           # The mud runner is intentionally tiny; keep release builds single-job.
           SLOPMUD_CARGO_BUILD_JOBS: "1"
         run: |
