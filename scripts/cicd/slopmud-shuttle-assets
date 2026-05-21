@@ -109,6 +109,9 @@ case "$env_name" in
     node_id="9"
     bind="0.0.0.0:4500"
     bin_dst="/opt/slopmud/bin/slopmud-sandbox"
+    shard_service_name="shard-01-sandbox"
+    shard_bind="127.0.0.1:5009"
+    shard_bin_dst="/opt/slopmud/bin/shard-01-sandbox"
     ;;
   stg)
     service_name="slopmud-stg"

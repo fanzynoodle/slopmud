@@ -509,6 +509,8 @@ def test_cicd_clean_checkout_asset_contract() -> None:
         raise AssertionError("CI must not assert the root-only deploy hook through the unprivileged checkout copy")
     if shuttle.find("-h|--help)") > shuttle.find("ERROR: must run as root"):
         raise AssertionError("shuttle helper should allow non-root --help while keeping deploy operations root-only")
+    if 'shard_service_name="shard-01-sandbox"' not in shuttle or 'shard_bind="127.0.0.1:5009"' not in shuttle:
+        raise AssertionError("sandbox deploy must define its own shard service when artifacts include shard_01")
 
 
 def test_rapid_split_raft_live_upgrade() -> None:
