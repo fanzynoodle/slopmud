@@ -491,7 +491,7 @@ jobs:
         run: |
           set -euo pipefail
           start_ts="$(date +%s)"
-          cargo build -q -p ws_gateway --bin e2e_ws
+          cargo build -q -p shard_01 -p ws_gateway -p bot_party --bins
           ./target/debug/e2e_ws
           duration_s=$(( $(date +%s) - start_ts ))
           echo "::notice::e2e_ws_duration_s=${duration_s}"
