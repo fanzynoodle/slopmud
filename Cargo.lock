@@ -3512,6 +3512,7 @@ dependencies = [
  "aws-sdk-s3",
  "serde",
  "serde_json",
+ "sha2",
  "tokio",
  "tracing",
 ]

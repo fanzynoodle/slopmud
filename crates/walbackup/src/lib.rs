@@ -9,6 +9,7 @@ use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::types::ServerSideEncryption;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tracing::{info, warn};
 
@@ -17,6 +18,7 @@ pub const DEFAULT_BACKUP_INTERVAL_S: u64 = 60;
 pub const DEFAULT_MAX_SEGMENT_BYTES: u64 = 512 * 1024 * 1024;
 pub const DEFAULT_MAX_LOCAL_MANIFESTS: usize = 24 * 60;
 pub const DEFAULT_S3_PREFIX: &str = "slopmud/wal-backups";
+pub const DEFAULT_RESTORE_CACHE_SUFFIX: &str = ".walrestore-cache";
 const COPY_BUF_BYTES: usize = 1024 * 1024;
 const MAX_META_PREFIX_BYTES: usize = 64 * 1024;
 
@@ -111,6 +113,8 @@ pub struct WalBackupSegment {
     pub first_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sha256_hex: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -176,6 +180,121 @@ impl RecoveryTarget {
 pub struct VerifyReport {
     pub checked_segments: usize,
     pub bytes: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WalRestoreSource {
+    Local(PathBuf),
+    S3 { uri: String, cache_dir: PathBuf },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WalRestoreConfig {
+    pub target_path: PathBuf,
+    pub source: WalRestoreSource,
+    pub node_id: Option<String>,
+    pub target: RecoveryTarget,
+    pub manifest_unix_at_or_before: Option<u64>,
+    pub overwrite_existing: bool,
+    pub missing_manifest_ok: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WalRestoreOutcome {
+    SkippedExisting {
+        path: PathBuf,
+        bytes: u64,
+    },
+    NoManifest,
+    Restored {
+        path: PathBuf,
+        bytes: u64,
+        source_len: u64,
+        manifest_relpath: String,
+    },
+}
+
+impl WalRestoreConfig {
+    pub fn from_env(target_path: PathBuf) -> anyhow::Result<Option<Self>> {
+        let restore_enabled_raw = std::env::var("SLOPMUD_WAL_RESTORE_ENABLED")
+            .ok()
+            .filter(|v| !v.trim().is_empty());
+        let restore_auto = restore_enabled_raw
+            .as_deref()
+            .is_some_and(|v| v.trim().eq_ignore_ascii_case("auto"));
+        let explicit_enabled = match restore_enabled_raw.as_deref() {
+            Some(v) if v.trim().eq_ignore_ascii_case("auto") => None,
+            Some(v) => Some(parse_bool(v)?),
+            None => None,
+        };
+        let restore_dir = std::env::var("SLOPMUD_WAL_RESTORE_DIR")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .map(PathBuf::from);
+        let restore_s3_uri = restore_s3_uri_from_env()?;
+        let fallback_s3_uri = backup_s3_uri_from_env()?;
+        let fallback_dir = std::env::var("SLOPMUD_WAL_BACKUP_DIR")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .map(PathBuf::from);
+        let restore_source_configured = restore_dir.is_some() || restore_s3_uri.is_some();
+        let any_source_configured =
+            restore_source_configured || fallback_s3_uri.is_some() || fallback_dir.is_some();
+        let enabled = if restore_auto {
+            any_source_configured
+        } else {
+            explicit_enabled.unwrap_or(restore_source_configured)
+        };
+        if !enabled {
+            return Ok(None);
+        }
+
+        let source = match (restore_dir, restore_s3_uri) {
+            (Some(_), Some(_)) => {
+                bail!("use only one of SLOPMUD_WAL_RESTORE_DIR or SLOPMUD_WAL_RESTORE_S3_*")
+            }
+            (Some(dir), None) => WalRestoreSource::Local(dir),
+            (None, Some(uri)) => WalRestoreSource::S3 {
+                cache_dir: restore_cache_dir_from_env(&target_path)?,
+                uri,
+            },
+            (None, None) => {
+                if let Some(uri) = fallback_s3_uri {
+                    WalRestoreSource::S3 {
+                        cache_dir: restore_cache_dir_from_env(&target_path)?,
+                        uri,
+                    }
+                } else if let Some(dir) = fallback_dir {
+                    WalRestoreSource::Local(dir)
+                } else {
+                    bail!("WAL restore enabled but no restore source is configured");
+                }
+            }
+        };
+        let overwrite_existing = parse_optional_bool_env("SLOPMUD_WAL_RESTORE_OVERWRITE")?
+            .or(parse_optional_bool_env("SLOPMUD_WAL_RESTORE_FORCE")?)
+            .unwrap_or(false);
+        let missing_manifest_ok = restore_auto
+            || parse_optional_bool_env("SLOPMUD_WAL_RESTORE_MISSING_OK")?.unwrap_or(false);
+        let manifest_unix_at_or_before =
+            parse_optional_u64_env("SLOPMUD_WAL_RESTORE_MANIFEST_UNIX_AT_OR_BEFORE")?;
+        let node_id = restore_node_id_from_env();
+        let target = parse_recovery_target_env(
+            "SLOPMUD_WAL_RESTORE_UNTIL_OFFSET",
+            "SLOPMUD_WAL_RESTORE_UNTIL_INDEX",
+            "SLOPMUD_WAL_RESTORE_UNTIL_MS",
+        )?;
+
+        Ok(Some(Self {
+            target_path,
+            source,
+            node_id,
+            target,
+            manifest_unix_at_or_before,
+            overwrite_existing,
+            missing_manifest_ok,
+        }))
+    }
 }
 
 pub struct WalBackupStore {
@@ -300,6 +419,7 @@ impl WalBackupStore {
                 last_index: meta.last_index,
                 first_ms: meta.first_ms,
                 last_ms: meta.last_ms,
+                sha256_hex: Some(meta.sha256_hex),
             };
             starts_at_line_boundary = segment.ends_at_line_boundary;
             offset = end;
@@ -408,6 +528,7 @@ impl WalBackupStore {
                 std::fs::create_dir_all(parent)?;
             }
         }
+        self.verify_manifest(manifest)?;
         let tmp = tmp_path(out_path, "recovering");
         let mut out = OpenOptions::new()
             .create(true)
@@ -469,6 +590,18 @@ impl WalBackupStore {
                     segment.bytes,
                     len
                 );
+            }
+            if let Some(expected_hash) = segment.sha256_hex.as_deref() {
+                let got_hash = file_sha256_hex(&path)
+                    .with_context(|| format!("hash wal backup segment {}", path.display()))?;
+                if got_hash != expected_hash {
+                    bail!(
+                        "wal backup segment checksum mismatch for {}: manifest={} disk={}",
+                        segment.relpath,
+                        expected_hash,
+                        got_hash
+                    );
+                }
             }
             bytes = bytes.saturating_add(len);
             expected_start = segment.end_offset;
@@ -699,6 +832,37 @@ pub fn select_manifest_from_list(
     manifests: &[WalBackupManifest],
     created_unix_s: Option<u64>,
 ) -> Option<WalBackupManifest> {
+    select_manifest_from_candidates(manifests, created_unix_s)
+}
+
+pub fn filter_manifests_by_node(
+    manifests: &[WalBackupManifest],
+    node_id: Option<&str>,
+) -> Vec<WalBackupManifest> {
+    let Some(raw_node_id) = node_id.map(str::trim).filter(|v| !v.is_empty()) else {
+        return manifests.to_vec();
+    };
+    let sanitized_node_id = sanitize_component(raw_node_id);
+    manifests
+        .iter()
+        .filter(|m| m.node_id == raw_node_id || m.node_id == sanitized_node_id)
+        .cloned()
+        .collect()
+}
+
+pub fn select_manifest_from_list_for_node(
+    manifests: &[WalBackupManifest],
+    created_unix_s: Option<u64>,
+    node_id: Option<&str>,
+) -> Option<WalBackupManifest> {
+    let filtered = filter_manifests_by_node(manifests, node_id);
+    select_manifest_from_candidates(&filtered, created_unix_s)
+}
+
+fn select_manifest_from_candidates(
+    manifests: &[WalBackupManifest],
+    created_unix_s: Option<u64>,
+) -> Option<WalBackupManifest> {
     let mut candidates = manifests
         .iter()
         .filter(|m| created_unix_s.map_or(true, |cutoff| m.created_unix_s <= cutoff))
@@ -718,6 +882,57 @@ pub fn store_for_manifest(root: PathBuf, manifest: &WalBackupManifest) -> WalBac
     )
 }
 
+pub async fn restore_wal_from_backup(cfg: &WalRestoreConfig) -> anyhow::Result<WalRestoreOutcome> {
+    if !cfg.overwrite_existing {
+        if let Ok(meta) = std::fs::metadata(&cfg.target_path) {
+            if meta.len() > 0 {
+                return Ok(WalRestoreOutcome::SkippedExisting {
+                    path: cfg.target_path.clone(),
+                    bytes: meta.len(),
+                });
+            }
+        }
+    }
+
+    let (root, manifest) = match &cfg.source {
+        WalRestoreSource::Local(dir) => {
+            let manifests = list_local_manifests(dir)?;
+            let Some(manifest) = select_manifest_from_list_for_node(
+                &manifests,
+                cfg.manifest_unix_at_or_before,
+                cfg.node_id.as_deref(),
+            ) else {
+                return Ok(WalRestoreOutcome::NoManifest);
+            };
+            (dir.clone(), manifest)
+        }
+        WalRestoreSource::S3 { uri, cache_dir } => {
+            let client = S3WalBackupClient::from_uri(uri).await?;
+            let manifests = client.list_manifests().await?;
+            let Some(manifest) = select_manifest_from_list_for_node(
+                &manifests,
+                cfg.manifest_unix_at_or_before,
+                cfg.node_id.as_deref(),
+            ) else {
+                return Ok(WalRestoreOutcome::NoManifest);
+            };
+            client
+                .download_manifest_to_cache(&manifest, cache_dir)
+                .await?;
+            (cache_dir.clone(), manifest)
+        }
+    };
+
+    let store = store_for_manifest(root, &manifest);
+    let bytes = store.recover_to_path(&manifest, &cfg.target_path, cfg.target)?;
+    Ok(WalRestoreOutcome::Restored {
+        path: cfg.target_path.clone(),
+        bytes,
+        source_len: manifest.source_len,
+        manifest_relpath: manifest.manifest_relpath,
+    })
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct WalSegmentLineMeta {
     ends_at_line_boundary: bool,
@@ -725,6 +940,7 @@ struct WalSegmentLineMeta {
     last_index: Option<u64>,
     first_ms: Option<u64>,
     last_ms: Option<u64>,
+    sha256_hex: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -785,6 +1001,7 @@ impl WalMetadataScanner {
             last_index: self.last_index,
             first_ms: self.first_ms,
             last_ms: self.last_ms,
+            sha256_hex: String::new(),
         }
     }
 
@@ -817,6 +1034,7 @@ fn copy_source_range(
         .truncate(true)
         .open(&tmp)?;
     let mut scanner = WalMetadataScanner::new(starts_at_line_boundary);
+    let mut hasher = Sha256::new();
     let mut remaining = end.saturating_sub(start);
     let mut buf = vec![0u8; COPY_BUF_BYTES];
 
@@ -827,6 +1045,7 @@ fn copy_source_range(
             bail!("source WAL ended before requested backup extent");
         }
         output.write_all(&buf[..n])?;
+        hasher.update(&buf[..n]);
         scanner.feed(&buf[..n]);
         remaining = remaining.saturating_sub(n as u64);
     }
@@ -835,7 +1054,23 @@ fn copy_source_range(
     output.sync_data()?;
     drop(output);
     std::fs::rename(tmp, dst)?;
-    Ok(scanner.finish())
+    let mut meta = scanner.finish();
+    meta.sha256_hex = hex_encode(&hasher.finalize());
+    Ok(meta)
+}
+
+fn file_sha256_hex(path: &Path) -> anyhow::Result<String> {
+    let mut input = File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; COPY_BUF_BYTES];
+    loop {
+        let n = input.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hex_encode(&hasher.finalize()))
 }
 
 fn copy_n(input: &mut File, output: &mut File, bytes: u64) -> anyhow::Result<()> {
@@ -1347,12 +1582,50 @@ fn parse_bool(raw: &str) -> anyhow::Result<bool> {
     }
 }
 
+fn parse_optional_bool_env(name: &str) -> anyhow::Result<Option<bool>> {
+    std::env::var(name)
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .map(|v| parse_bool(&v))
+        .transpose()
+}
+
 fn parse_u64_env(name: &str, default: u64) -> anyhow::Result<u64> {
     std::env::var(name)
         .ok()
         .map(|v| v.parse().with_context(|| format!("parse {name}={v:?}")))
         .transpose()
         .map(|v| v.unwrap_or(default))
+}
+
+fn parse_optional_u64_env(name: &str) -> anyhow::Result<Option<u64>> {
+    std::env::var(name)
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .map(|v| v.parse().with_context(|| format!("parse {name}={v:?}")))
+        .transpose()
+}
+
+fn parse_recovery_target_env(
+    offset_env: &str,
+    index_env: &str,
+    ms_env: &str,
+) -> anyhow::Result<RecoveryTarget> {
+    let mut targets = Vec::new();
+    if let Some(v) = parse_optional_u64_env(offset_env)? {
+        targets.push(RecoveryTarget::Offset(v));
+    }
+    if let Some(v) = parse_optional_u64_env(index_env)? {
+        targets.push(RecoveryTarget::Index(v));
+    }
+    if let Some(v) = parse_optional_u64_env(ms_env)? {
+        targets.push(RecoveryTarget::Ms(v));
+    }
+    match targets.len() {
+        0 => Ok(RecoveryTarget::Latest),
+        1 => Ok(targets.remove(0)),
+        _ => bail!("use at most one WAL restore recovery target"),
+    }
 }
 
 fn parse_usize_env(name: &str, default: usize) -> anyhow::Result<usize> {
@@ -1388,6 +1661,74 @@ fn join_prefix(prefix: &str, rel: &str) -> String {
         rel.to_string()
     } else {
         format!("{prefix}/{rel}")
+    }
+}
+
+fn restore_s3_uri_from_env() -> anyhow::Result<Option<String>> {
+    if let Some(uri) = std::env::var("SLOPMUD_WAL_RESTORE_S3_URI")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+    {
+        let (bucket, prefix) = parse_s3_uri(&uri)?;
+        return Ok(Some(format_s3_uri(&bucket, &prefix)));
+    }
+    let bucket = std::env::var("SLOPMUD_WAL_RESTORE_S3_BUCKET")
+        .ok()
+        .filter(|v| !v.trim().is_empty());
+    let prefix = std::env::var("SLOPMUD_WAL_RESTORE_S3_PREFIX")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_S3_PREFIX.to_string());
+    Ok(bucket.map(|bucket| format_s3_uri(&bucket, &prefix)))
+}
+
+fn backup_s3_uri_from_env() -> anyhow::Result<Option<String>> {
+    let bucket = std::env::var("SLOPMUD_WAL_BACKUP_S3_BUCKET")
+        .ok()
+        .filter(|v| !v.trim().is_empty());
+    let prefix = std::env::var("SLOPMUD_WAL_BACKUP_S3_PREFIX")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_S3_PREFIX.to_string());
+    Ok(bucket.map(|bucket| format_s3_uri(&bucket, &prefix)))
+}
+
+fn restore_cache_dir_from_env(target_path: &Path) -> anyhow::Result<PathBuf> {
+    if let Some(dir) = std::env::var("SLOPMUD_WAL_RESTORE_CACHE_DIR")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+    {
+        return Ok(PathBuf::from(dir));
+    }
+    Ok(PathBuf::from(format!(
+        "{}{}",
+        target_path.display(),
+        DEFAULT_RESTORE_CACHE_SUFFIX
+    )))
+}
+
+fn restore_node_id_from_env() -> Option<String> {
+    [
+        "SLOPMUD_WAL_RESTORE_NODE_ID",
+        "SLOPMUD_WAL_BACKUP_NODE_ID",
+        "SHARD_RAFT_NODE_ID",
+        "NODE_ID",
+    ]
+    .iter()
+    .find_map(|name| {
+        std::env::var(name)
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+    })
+}
+
+fn format_s3_uri(bucket: &str, prefix: &str) -> String {
+    let prefix = normalize_prefix(prefix);
+    if prefix.is_empty() {
+        format!("s3://{bucket}")
+    } else {
+        format!("s3://{bucket}/{prefix}")
     }
 }
 
@@ -1457,6 +1798,11 @@ mod tests {
         );
         assert_eq!(manifest.segments[0].first_index, Some(1));
         assert_eq!(manifest.segments[0].last_index, Some(2));
+        let segment_hash = file_sha256_hex(&root.join(&manifest.segments[0].relpath)).unwrap();
+        assert_eq!(
+            manifest.segments[0].sha256_hex.as_deref(),
+            Some(segment_hash.as_str())
+        );
         assert_eq!(
             std::fs::read_to_string(root.join(&manifest.segments[0].relpath)).unwrap(),
             std::fs::read_to_string(source).unwrap()
@@ -1591,6 +1937,30 @@ mod tests {
     }
 
     #[test]
+    fn manifest_selection_can_filter_by_node_id() {
+        let dir = temp_dir("node_filter");
+        let source_a = dir.join("a.jsonl");
+        let source_b = dir.join("b.jsonl");
+        let root = dir.join("backup");
+        append_wal(&source_a, &[(1, 10, "a")]);
+        append_wal(&source_b, &[(1, 20, "b")]);
+        let mut store_a = WalBackupStore::new(source_a, root.clone(), "n/0".to_string(), 1024, 10);
+        let mut store_b = WalBackupStore::new(source_b, root.clone(), "n1".to_string(), 1024, 10);
+        store_a.sync_once(100).unwrap();
+        store_b.sync_once(200).unwrap();
+
+        let manifests = list_local_manifests(&root).unwrap();
+        assert_eq!(
+            select_manifest_from_list(&manifests, None).unwrap().node_id,
+            "n1"
+        );
+        let selected = select_manifest_from_list_for_node(&manifests, None, Some("n/0")).unwrap();
+        assert_eq!(selected.node_id, "n_0");
+        assert_eq!(selected.created_unix_s, 100);
+        assert!(select_manifest_from_list_for_node(&manifests, None, Some("missing")).is_none());
+    }
+
+    #[test]
     fn recovery_by_offset_reassembles_requested_prefix() {
         let dir = temp_dir("recover_offset");
         let source = dir.join("raft.jsonl");
@@ -1658,6 +2028,131 @@ mod tests {
 
         let err = store.verify_latest().unwrap_err().to_string();
         assert!(err.contains("missing wal backup segment"));
+    }
+
+    #[test]
+    fn verify_catches_same_length_corrupt_segment() {
+        let dir = temp_dir("verify_corrupt");
+        let source = dir.join("raft.jsonl");
+        let root = dir.join("backup");
+        append_wal(&source, &[(1, 10, "a")]);
+        let mut store = store(source, root.clone(), 1024);
+        let manifest = store.sync_once(100).unwrap().manifest.unwrap();
+        let segment_path = root.join(&manifest.segments[0].relpath);
+        let mut raw = std::fs::read(&segment_path).unwrap();
+        raw[0] = if raw[0] == b'{' { b'[' } else { b'{' };
+        std::fs::write(&segment_path, raw).unwrap();
+
+        let err = store.verify_latest().unwrap_err().to_string();
+        assert!(err.contains("checksum mismatch"));
+    }
+
+    #[test]
+    fn recovery_rejects_corrupt_segment_before_replacing_output() {
+        let dir = temp_dir("recover_corrupt");
+        let source = dir.join("raft.jsonl");
+        let root = dir.join("backup");
+        append_wal(&source, &[(1, 10, "a")]);
+        let mut store = store(source, root.clone(), 1024);
+        let manifest = store.sync_once(100).unwrap().manifest.unwrap();
+        let out = dir.join("recover.jsonl");
+        std::fs::write(&out, b"keep me\n").unwrap();
+        let segment_path = root.join(&manifest.segments[0].relpath);
+        let mut raw = std::fs::read(&segment_path).unwrap();
+        raw[0] = if raw[0] == b'{' { b'[' } else { b'{' };
+        std::fs::write(&segment_path, raw).unwrap();
+
+        let err = store
+            .recover_to_path(&manifest, &out, RecoveryTarget::Latest)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("checksum mismatch"));
+        assert_eq!(std::fs::read_to_string(out).unwrap(), "keep me\n");
+    }
+
+    #[tokio::test]
+    async fn restore_from_local_backup_is_idempotent_and_can_restore_latest() {
+        let dir = temp_dir("restore_local");
+        let source = dir.join("raft.jsonl");
+        let root = dir.join("backup");
+        let out = dir.join("restored.jsonl");
+        append_wal(&source, &[(1, 10, "a"), (2, 20, "b")]);
+        let mut store = store(source.clone(), root.clone(), 1024);
+        let manifest = store.sync_once(100).unwrap().manifest.unwrap();
+
+        let cfg = WalRestoreConfig {
+            target_path: out.clone(),
+            source: WalRestoreSource::Local(root),
+            node_id: None,
+            target: RecoveryTarget::Latest,
+            manifest_unix_at_or_before: None,
+            overwrite_existing: false,
+            missing_manifest_ok: false,
+        };
+        let outcome = restore_wal_from_backup(&cfg).await.unwrap();
+        assert_eq!(
+            outcome,
+            WalRestoreOutcome::Restored {
+                path: out.clone(),
+                bytes: manifest.source_len,
+                source_len: manifest.source_len,
+                manifest_relpath: manifest.manifest_relpath,
+            }
+        );
+        assert_eq!(
+            std::fs::read(&out).unwrap(),
+            std::fs::read(&source).unwrap()
+        );
+
+        let second = restore_wal_from_backup(&cfg).await.unwrap();
+        assert_eq!(
+            second,
+            WalRestoreOutcome::SkippedExisting {
+                path: out,
+                bytes: manifest.source_len,
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn restore_from_local_backup_can_select_node_manifest() {
+        let dir = temp_dir("restore_node");
+        let source_a = dir.join("a.jsonl");
+        let source_b = dir.join("b.jsonl");
+        let root = dir.join("backup");
+        let out = dir.join("restored.jsonl");
+        append_wal(&source_a, &[(1, 10, "a")]);
+        append_wal(&source_b, &[(1, 20, "b")]);
+        let mut store_a =
+            WalBackupStore::new(source_a.clone(), root.clone(), "n/0".to_string(), 1024, 10);
+        let mut store_b =
+            WalBackupStore::new(source_b.clone(), root.clone(), "n1".to_string(), 1024, 10);
+        let manifest_a = store_a.sync_once(100).unwrap().manifest.unwrap();
+        store_b.sync_once(200).unwrap();
+
+        let cfg = WalRestoreConfig {
+            target_path: out.clone(),
+            source: WalRestoreSource::Local(root),
+            node_id: Some("n/0".to_string()),
+            target: RecoveryTarget::Latest,
+            manifest_unix_at_or_before: None,
+            overwrite_existing: false,
+            missing_manifest_ok: false,
+        };
+        let outcome = restore_wal_from_backup(&cfg).await.unwrap();
+        assert_eq!(
+            outcome,
+            WalRestoreOutcome::Restored {
+                path: out.clone(),
+                bytes: manifest_a.source_len,
+                source_len: manifest_a.source_len,
+                manifest_relpath: manifest_a.manifest_relpath,
+            }
+        );
+        assert_eq!(
+            std::fs::read(&out).unwrap(),
+            std::fs::read(&source_a).unwrap()
+        );
     }
 
     #[test]

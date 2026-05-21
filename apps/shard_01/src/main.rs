@@ -996,7 +996,8 @@ fn usage_and_exit() -> ! {
         "shard_01\n\n\
 USAGE:\n  shard_01 [--bind HOST:PORT]\n\n\
 ENV:\n  SHARD_BIND                  default 127.0.0.1:5000\n  WORLD_SEED                  default 1 (deterministic; replace with raft time/seed later)\n  WORLD_TICK_MS               default 1000\n  WORLD_TIME_SCALE_PPM        default 1000000 (1000000 = real time, 500000 = half speed)\n  BARTENDER_EMOTE_MS          default 30000\n  MOB_WANDER_MS               default 15000\n  SHARD_RAFT_LOG              default var/shard_01_raft.jsonl\n  SHARD_RAFT_NODE_ID          default NODE_ID or SHARD_BIND\n  SHARD_RAFT_BIND             optional raft RPC bind address\n  SHARD_RAFT_PEERS            optional comma-separated node@host:port peers\n  SHARD_RAFT_ELECTION_MS      optional; default 450+jitter\n  SHARD_RAFT_HEARTBEAT_MS     optional; default 120\n  SHARD_RAFT_APPLICATION_MAX_FORMAT optional; default current binary max\n  SHARD_BOOTSTRAP_ADMINS      comma-separated acct names added to admin group (genesis only)\n  SHARD_BOOTSTRAP_ADMIN_SSO   comma-separated principals added to admin group (genesis only)\n                             ex: google_email:rob@caskey.org,google_sub:123,acct:rob\n",
-        "  SLOPMUD_WAL_BACKUP_ENABLED optional; enables raw WAL extent backups\n  SLOPMUD_WAL_BACKUP_DIR     local WAL backup root; default SHARD_RAFT_LOG.walbackup when enabled\n  SLOPMUD_WAL_BACKUP_INTERVAL_S default 60\n  SLOPMUD_WAL_BACKUP_MAX_SEGMENT_BYTES default 536870912\n  SLOPMUD_WAL_BACKUP_S3_BUCKET optional S3 bucket for WAL backup extents/manifests\n  SLOPMUD_WAL_BACKUP_S3_PREFIX default slopmud/wal-backups\n"
+        "  SLOPMUD_WAL_BACKUP_ENABLED optional; enables raw WAL extent backups\n  SLOPMUD_WAL_BACKUP_DIR     local WAL backup root; default SHARD_RAFT_LOG.walbackup when enabled\n  SLOPMUD_WAL_BACKUP_INTERVAL_S default 60\n  SLOPMUD_WAL_BACKUP_MAX_SEGMENT_BYTES default 536870912\n  SLOPMUD_WAL_BACKUP_S3_BUCKET optional S3 bucket for WAL backup extents/manifests\n  SLOPMUD_WAL_BACKUP_S3_PREFIX default slopmud/wal-backups\n",
+        "  SLOPMUD_WAL_RESTORE_ENABLED optional; restores SHARD_RAFT_LOG before startup if missing/empty\n  SLOPMUD_WAL_RESTORE_DIR    local WAL backup root for restore\n  SLOPMUD_WAL_RESTORE_S3_URI or SLOPMUD_WAL_RESTORE_S3_BUCKET/SLOPMUD_WAL_RESTORE_S3_PREFIX\n  SLOPMUD_WAL_RESTORE_CACHE_DIR optional cache for S3 restore extents\n  SLOPMUD_WAL_RESTORE_OVERWRITE optional; replace existing log when true\n"
     ));
     std::process::exit(2);
 }
@@ -1011,6 +1012,7 @@ struct Config {
     mob_wander_ms: u64,
     raft_log_path: PathBuf,
     raft_consensus: raftlog::ConsensusConfig,
+    wal_restore: Option<slopmud_walbackup::WalRestoreConfig>,
     wal_backup: Option<slopmud_walbackup::WalBackupConfig>,
     bootstrap_admins: Vec<String>,
     bootstrap_admin_sso: Vec<String>,
@@ -1090,6 +1092,11 @@ fn parse_args() -> Config {
         eprintln!("bad WAL backup config: {e}");
         std::process::exit(2);
     });
+    let wal_restore = slopmud_walbackup::WalRestoreConfig::from_env(raft_log_path.clone())
+        .unwrap_or_else(|e| {
+            eprintln!("bad WAL restore config: {e}");
+            std::process::exit(2);
+        });
     let bootstrap_admins: Vec<String> = std::env::var("SHARD_BOOTSTRAP_ADMINS")
         .ok()
         .map(|v| {
@@ -1130,6 +1137,7 @@ fn parse_args() -> Config {
         mob_wander_ms,
         raft_log_path,
         raft_consensus,
+        wal_restore,
         wal_backup,
         bootstrap_admins,
         bootstrap_admin_sso,
@@ -5363,6 +5371,44 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let cfg = parse_args();
+    if let Some(wal_restore) = cfg.wal_restore.clone() {
+        match slopmud_walbackup::restore_wal_from_backup(&wal_restore).await? {
+            slopmud_walbackup::WalRestoreOutcome::SkippedExisting { path, bytes } => {
+                info!(path = %path.display(), bytes, "wal restore skipped; target already exists");
+            }
+            slopmud_walbackup::WalRestoreOutcome::NoManifest => {
+                if wal_restore.missing_manifest_ok {
+                    info!("wal restore skipped; no backup manifest was found");
+                } else {
+                    anyhow::bail!("WAL restore enabled but no backup manifest was found");
+                }
+            }
+            slopmud_walbackup::WalRestoreOutcome::Restored {
+                path,
+                bytes,
+                source_len,
+                manifest_relpath,
+            } => {
+                let state_path =
+                    PathBuf::from(format!("{}.state.json", cfg.raft_log_path.display()));
+                match std::fs::remove_file(&state_path) {
+                    Ok(()) => {
+                        info!(path = %state_path.display(), "removed stale raft state after WAL restore");
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(e) => return Err(e.into()),
+                }
+                info!(
+                    path = %path.display(),
+                    bytes,
+                    source_len,
+                    manifest = %manifest_relpath,
+                    "wal restore completed before shard startup"
+                );
+            }
+        }
+    }
+
     let listener = TcpListener::bind(cfg.bind).await?;
     info!(bind = %cfg.bind, "shard_01 listening");
 

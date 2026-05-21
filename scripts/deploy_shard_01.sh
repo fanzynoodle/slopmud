@@ -33,16 +33,35 @@ fi
 release_dir="${SLOPMUD_VERSIONED_BIN_DIR:-${remote_bin_dir}/releases}"
 remote_release_bin="${release_dir}/shard_01-${release_id}"
 bin_src="${SLOPMUD_BIN_SRC:-target/release/shard_01}"
+adminctl_src="${SLOPMUD_ADMINCTL_BIN_SRC:-target/release/slopmud_adminctl}"
+remote_adminctl_bin="${remote_bin_dir}/slopmud_adminctl"
+wal_restore_helper_src="scripts/restore_wal_backup.sh"
+wal_restore_enabled=0
+case "${SLOPMUD_WAL_RESTORE_ENABLED:-}" in
+  1|true|TRUE|yes|YES|on|ON|auto) wal_restore_enabled=1 ;;
+esac
 
 if [[ "${SLOPMUD_SKIP_BUILD:-0}" == "1" ]]; then
   echo "Skipping build; using ${bin_src}"
 else
   echo "Building shard_01 (release)"
   ./scripts/build_bookworm_release.sh shard_01
+  if [[ "$wal_restore_enabled" == "1" ]]; then
+    echo "Building slopmud_adminctl (release)"
+    ./scripts/build_bookworm_release.sh slopmud_adminctl
+  fi
 fi
 
 if [[ ! -x "$bin_src" ]]; then
   echo "ERROR: expected binary at $bin_src" >&2
+  exit 2
+fi
+if [[ "$wal_restore_enabled" == "1" && ! -x "$adminctl_src" ]]; then
+  echo "ERROR: expected adminctl binary at $adminctl_src" >&2
+  exit 2
+fi
+if [[ "$wal_restore_enabled" == "1" && ! -x "$wal_restore_helper_src" ]]; then
+  echo "ERROR: expected restore helper at $wal_restore_helper_src" >&2
   exit 2
 fi
 
@@ -81,6 +100,18 @@ else
     set -euo pipefail; \
     sudo install -m 0755 -o root -g root /tmp/shard_01 \"${SHARD_REMOTE_BIN}\"; \
     sudo rm -f /tmp/shard_01 \
+  "
+fi
+
+if [[ "$wal_restore_enabled" == "1" ]]; then
+  echo "Uploading wal restore helper + adminctl"
+  scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$adminctl_src" "${SSH_USER}@${HOST}:/tmp/slopmud_adminctl.${release_id}"
+  scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$wal_restore_helper_src" "${SSH_USER}@${HOST}:/tmp/slopmud-wal-restore"
+  ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+    set -euo pipefail; \
+    sudo install -m 0755 -o root -g root '/tmp/slopmud_adminctl.${release_id}' \"${remote_adminctl_bin}\"; \
+    sudo install -m 0755 -o root -g root /tmp/slopmud-wal-restore /usr/local/bin/slopmud-wal-restore; \
+    sudo rm -f '/tmp/slopmud_adminctl.${release_id}' /tmp/slopmud-wal-restore \
   "
 fi
 
@@ -130,12 +161,28 @@ for var in \
   SLOPMUD_WAL_BACKUP_MAX_LOCAL_MANIFESTS \
   SLOPMUD_WAL_BACKUP_S3_BUCKET \
   SLOPMUD_WAL_BACKUP_S3_PREFIX \
-  SLOPMUD_WAL_BACKUP_UPLOAD_ENABLED
+  SLOPMUD_WAL_BACKUP_UPLOAD_ENABLED \
+  SLOPMUD_WAL_RESTORE_ENABLED \
+  SLOPMUD_WAL_RESTORE_DIR \
+  SLOPMUD_WAL_RESTORE_S3_URI \
+  SLOPMUD_WAL_RESTORE_S3_BUCKET \
+  SLOPMUD_WAL_RESTORE_S3_PREFIX \
+  SLOPMUD_WAL_RESTORE_CACHE_DIR \
+  SLOPMUD_WAL_RESTORE_NODE_ID \
+  SLOPMUD_WAL_RESTORE_OVERWRITE \
+  SLOPMUD_WAL_RESTORE_MISSING_OK \
+  SLOPMUD_WAL_RESTORE_MANIFEST_UNIX_AT_OR_BEFORE \
+  SLOPMUD_WAL_RESTORE_UNTIL_OFFSET \
+  SLOPMUD_WAL_RESTORE_UNTIL_INDEX \
+  SLOPMUD_WAL_RESTORE_UNTIL_MS
 do
   if [[ -n "${!var:-}" ]]; then
     echo "Environment=${var}=${!var}" >>"$tmp_unit"
   fi
 done
+if [[ "$wal_restore_enabled" == "1" ]]; then
+  echo "Environment=SLOPMUD_ADMINCTL_BIN=${remote_adminctl_bin}" >>"$tmp_unit"
+fi
 if [[ -n "${SHARD_BOOTSTRAP_ADMINS:-}" ]]; then
   echo "Environment=SHARD_BOOTSTRAP_ADMINS=${SHARD_BOOTSTRAP_ADMINS}" >>"$tmp_unit"
 fi
@@ -164,6 +211,7 @@ if [[ -n "${OPENAI_API_KEY_SSM:-}" ]]; then
 fi
 
 cat >>"$tmp_unit" <<EOF
+$(if [[ "$wal_restore_enabled" == "1" ]]; then echo "ExecStartPre=/usr/local/bin/slopmud-wal-restore"; fi)
 ExecStart=${exec_start}
 Restart=always
 RestartSec=2

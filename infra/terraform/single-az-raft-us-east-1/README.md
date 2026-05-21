@@ -122,6 +122,8 @@ The important runtime values are:
 
 - `HOST` / `GATEWAY_HOST`: public DNS for the gateway.
 - `ASSETS_BUCKET`: S3 bucket used for release artifacts.
+- `SLOPMUD_WAL_BACKUP_S3_BUCKET` / `SLOPMUD_WAL_BACKUP_S3_PREFIX`: S3 target for per-node streaming WAL backups. By default this reuses the assets bucket under a separate prefix.
+- `SLOPMUD_WAL_RESTORE_ENABLED=auto`: replaced nodes attempt restore from WAL backups when their local Raft log is missing or empty, and skip cleanly if no manifest exists yet.
 - `SHARD_ADDRS`: private shard addresses for the broker.
 - `SHARD_NODE_HOSTS`: private IPs used by deploy scripts through ProxyJump.
 - `SHARD_TRIO_RAFT_PEERS`: literal Raft peer addresses.
@@ -130,4 +132,4 @@ The important runtime values are:
 
 Raft peer config currently uses literal `SocketAddr` values, not DNS names. If Spot nodes are replaced and private IPs change, regenerate deploy env from Terraform outputs and redeploy the shard units plus gateway broker env. To avoid that operational step, set `raft_private_ips` to three known-free private IPs in the selected subnet.
 
-The data EBS volumes survive instance replacement and are reattached by Terraform. After a gateway rebuild or Spot replacement, run the data-volume mount helper before service deploy; the generated env stores gateway accounts, OAuth handoffs, nearline state, and Raft logs under `/opt/slopmud/state`.
+The data EBS volumes survive instance replacement and are reattached by Terraform. After a gateway rebuild or Spot replacement, run the data-volume mount helper before service deploy; the generated env stores gateway accounts, OAuth handoffs, nearline state, and Raft logs under `/opt/slopmud/state`. If the data volume is unavailable or empty, the shard service can restore its node-specific Raft WAL from S3 before joining the cluster.

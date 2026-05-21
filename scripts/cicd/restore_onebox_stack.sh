@@ -206,6 +206,19 @@ ensure_hook_binary() {
   install -m 0755 "${script_dir}/certbot_deploy_hook_slopmud.sh" /usr/local/bin/slopmud-certbot-sync
 }
 
+ensure_wal_restore_helper() {
+  local src="${assets_dir}/scripts/restore_wal_backup.sh"
+  if [[ ! -x "$src" ]]; then
+    src="${script_dir}/restore_wal_backup.sh"
+  fi
+  if [[ ! -x "$src" ]]; then
+    echo "ERROR: WAL restore helper is missing from artifact and bootstrap bundle" >&2
+    exit 2
+  fi
+  install -d -m 0755 /usr/local/bin
+  install -m 0755 "$src" /usr/local/bin/slopmud-wal-restore
+}
+
 cert_domains_args() {
   local domains="$1"
   local out=()
@@ -344,6 +357,21 @@ write_shard_unit() {
   : "${SHARD_BIND:?missing SHARD_BIND in ${env_file}}"
 
   install_binary "${assets_dir}/bin/shard_01" "$SHARD_REMOTE_BIN"
+  case "${SLOPMUD_WAL_RESTORE_ENABLED:-}" in
+    1|true|TRUE|yes|YES|on|ON|auto)
+      if [[ ! -x "${assets_dir}/bin/slopmud_adminctl" ]]; then
+        echo "ERROR: WAL restore is enabled but artifact is missing bin/slopmud_adminctl" >&2
+        exit 2
+      fi
+      install_binary "${assets_dir}/bin/slopmud_adminctl" "${install_root}/bin/slopmud_adminctl"
+      ensure_wal_restore_helper
+      SLOPMUD_ADMINCTL_BIN="${SLOPMUD_ADMINCTL_BIN:-${install_root}/bin/slopmud_adminctl}"
+      wal_restore_enabled=1
+      ;;
+    *)
+      wal_restore_enabled=0
+      ;;
+  esac
   unit_path="/etc/systemd/system/${SHARD_APP_NAME}.service"
 
   cat >"$unit_path" <<EOF
@@ -371,6 +399,20 @@ EOF
   append_unit_env "$unit_path" "SLOPMUD_WAL_BACKUP_S3_BUCKET"
   append_unit_env "$unit_path" "SLOPMUD_WAL_BACKUP_S3_PREFIX"
   append_unit_env "$unit_path" "SLOPMUD_WAL_BACKUP_UPLOAD_ENABLED"
+  append_unit_env "$unit_path" "SLOPMUD_WAL_RESTORE_ENABLED"
+  append_unit_env "$unit_path" "SLOPMUD_WAL_RESTORE_S3_URI"
+  append_unit_env "$unit_path" "SLOPMUD_WAL_RESTORE_S3_BUCKET"
+  append_unit_env "$unit_path" "SLOPMUD_WAL_RESTORE_S3_PREFIX"
+  append_unit_env "$unit_path" "SLOPMUD_WAL_RESTORE_DIR"
+  append_unit_env "$unit_path" "SLOPMUD_WAL_RESTORE_CACHE_DIR"
+  append_unit_env "$unit_path" "SLOPMUD_WAL_RESTORE_NODE_ID"
+  append_unit_env "$unit_path" "SLOPMUD_WAL_RESTORE_OVERWRITE"
+  append_unit_env "$unit_path" "SLOPMUD_WAL_RESTORE_MISSING_OK"
+  append_unit_env "$unit_path" "SLOPMUD_WAL_RESTORE_MANIFEST_UNIX_AT_OR_BEFORE"
+  append_unit_env "$unit_path" "SLOPMUD_WAL_RESTORE_UNTIL_OFFSET"
+  append_unit_env "$unit_path" "SLOPMUD_WAL_RESTORE_UNTIL_INDEX"
+  append_unit_env "$unit_path" "SLOPMUD_WAL_RESTORE_UNTIL_MS"
+  append_unit_env "$unit_path" "SLOPMUD_ADMINCTL_BIN"
   append_unit_env "$unit_path" "OPENAI_API_BASE"
   append_unit_env "$unit_path" "OPENAI_PING_MODEL"
   append_unit_env "$unit_path" "OPENAI_API_KEY_SSM"
@@ -381,6 +423,7 @@ EOF
   fi
 
   cat >>"$unit_path" <<EOF
+$(if [[ "$wal_restore_enabled" == "1" ]]; then echo "ExecStartPre=/usr/local/bin/slopmud-wal-restore"; fi)
 ExecStart=${exec_start}
 Restart=always
 RestartSec=2

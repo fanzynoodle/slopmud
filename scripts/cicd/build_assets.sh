@@ -12,6 +12,7 @@ build_shard="${BUILD_SHARD:-1}"
 build_static_web="${BUILD_STATIC_WEB:-1}"
 build_slopmud_web="${BUILD_SLOPMUD_WEB:-1}"
 build_internal_oidc="${BUILD_INTERNAL_OIDC:-1}"
+build_adminctl="${BUILD_SLOPMUD_ADMINCTL:-1}"
 assets_root="${ASSETS_ROOT:-assets}"
 assets_env_dir="${ASSETS_ENV_DIR:-${PWD}/env}"
 assets_env_files="${ASSETS_ENV_FILES:-}"
@@ -72,6 +73,11 @@ if [[ "$build_internal_oidc" == "1" ]]; then
   ./scripts/build_bookworm_release.sh internal_oidc 1>&2
 fi
 
+if [[ "$build_adminctl" == "1" ]]; then
+  echo "Building slopmud_adminctl (track=${track}, clean=${clean_build}, sha=${sha})" >&2
+  ./scripts/build_bookworm_release.sh slopmud_adminctl 1>&2
+fi
+
 bin_src="${repo_root}/target/release/slopmud"
 if [[ ! -x "$bin_src" ]]; then
   echo "ERROR: expected binary at ${bin_src}" >&2
@@ -102,6 +108,11 @@ if [[ "$build_internal_oidc" == "1" && ! -x "$bin_internal_oidc_src" ]]; then
   echo "ERROR: expected binary at ${bin_internal_oidc_src}" >&2
   exit 2
 fi
+bin_adminctl_src="${repo_root}/target/release/slopmud_adminctl"
+if [[ "$build_adminctl" == "1" && ! -x "$bin_adminctl_src" ]]; then
+  echo "ERROR: expected binary at ${bin_adminctl_src}" >&2
+  exit 2
+fi
 
 cp -f "$bin_src" "${out_dir}/bin/slopmud"
 if [[ "$build_shard" == "1" ]]; then
@@ -115,6 +126,9 @@ if [[ "$build_slopmud_web" == "1" ]]; then
 fi
 if [[ "$build_internal_oidc" == "1" ]]; then
   cp -f "$bin_internal_oidc_src" "${out_dir}/bin/internal_oidc"
+fi
+if [[ "$build_adminctl" == "1" ]]; then
+  cp -f "$bin_adminctl_src" "${out_dir}/bin/slopmud_adminctl"
 fi
 
 if [[ -n "$assets_env_files" ]]; then
@@ -146,6 +160,9 @@ else
 fi
 
 cp -a "${repo_root}/web_homepage/." "${out_dir}/web_homepage/"
+mkdir -p "${out_dir}/scripts"
+cp -f "${repo_root}/scripts/restore_wal_backup.sh" "${out_dir}/scripts/restore_wal_backup.sh"
+chmod 0755 "${out_dir}/scripts/restore_wal_backup.sh"
 
 cat >"${out_dir}/BUILD_INFO.txt" <<EOF
 sha=${sha}
@@ -157,6 +174,6 @@ rustc=$(rustc --version 2>/dev/null || true)
 EOF
 
 tarball="${out_dir}/artifact.tgz"
-tar -C "$out_dir" -czf "$tarball" bin env web_homepage BUILD_INFO.txt
+tar -C "$out_dir" -czf "$tarball" bin env web_homepage scripts BUILD_INFO.txt
 
 echo "$tarball"

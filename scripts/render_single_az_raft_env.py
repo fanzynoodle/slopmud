@@ -76,6 +76,15 @@ def main() -> int:
         raise SystemExit(f"missing Terraform env keys: {', '.join(missing)}")
     optional = [
         "ASSETS_BUCKET",
+        "SLOPMUD_WAL_BACKUP_ENABLED",
+        "SLOPMUD_WAL_BACKUP_DIR",
+        "SLOPMUD_WAL_BACKUP_INTERVAL_S",
+        "SLOPMUD_WAL_BACKUP_S3_BUCKET",
+        "SLOPMUD_WAL_BACKUP_S3_PREFIX",
+        "SLOPMUD_WAL_BACKUP_UPLOAD_ENABLED",
+        "SLOPMUD_WAL_RESTORE_ENABLED",
+        "SLOPMUD_WAL_RESTORE_CACHE_DIR",
+        "SLOPMUD_WAL_RESTORE_MISSING_OK",
     ]
 
     lines = [

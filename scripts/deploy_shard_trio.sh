@@ -82,13 +82,32 @@ ssh_port_opt=(-p "$SSH_PORT")
 scp_port_opt=(-P "$SSH_PORT")
 
 remote_bin_dir="$(dirname "$SHARD_REMOTE_BIN")"
+adminctl_src="${SLOPMUD_ADMINCTL_BIN_SRC:-target/release/slopmud_adminctl}"
+remote_adminctl_bin="${remote_bin_dir}/slopmud_adminctl"
+wal_restore_helper_src="scripts/restore_wal_backup.sh"
+wal_restore_enabled=0
+case "${SLOPMUD_WAL_RESTORE_ENABLED:-}" in
+  1|true|TRUE|yes|YES|on|ON|auto) wal_restore_enabled=1 ;;
+esac
 
 echo "Building shard_01 (release)"
 ./scripts/build_bookworm_release.sh shard_01
+if [[ "$wal_restore_enabled" == "1" ]]; then
+  echo "Building slopmud_adminctl (release)"
+  ./scripts/build_bookworm_release.sh slopmud_adminctl
+fi
 
 bin_src="target/release/shard_01"
 if [[ ! -x "$bin_src" ]]; then
   echo "ERROR: expected binary at $bin_src" >&2
+  exit 2
+fi
+if [[ "$wal_restore_enabled" == "1" && ! -x "$adminctl_src" ]]; then
+  echo "ERROR: expected adminctl binary at $adminctl_src" >&2
+  exit 2
+fi
+if [[ "$wal_restore_enabled" == "1" && ! -x "$wal_restore_helper_src" ]]; then
+  echo "ERROR: expected restore helper at $wal_restore_helper_src" >&2
   exit 2
 fi
 
@@ -117,6 +136,18 @@ ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
   sudo install -m 0755 -o root -g root /tmp/shard_01 \"${SHARD_REMOTE_BIN}\"; \
   sudo rm -f /tmp/shard_01 \
 "
+
+if [[ "$wal_restore_enabled" == "1" ]]; then
+  echo "Uploading wal restore helper + adminctl"
+  scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$adminctl_src" "${SSH_USER}@${HOST}:/tmp/slopmud_adminctl"
+  scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$wal_restore_helper_src" "${SSH_USER}@${HOST}:/tmp/slopmud-wal-restore"
+  ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
+    set -euo pipefail; \
+    sudo install -m 0755 -o root -g root /tmp/slopmud_adminctl \"${remote_adminctl_bin}\"; \
+    sudo install -m 0755 -o root -g root /tmp/slopmud-wal-restore /usr/local/bin/slopmud-wal-restore; \
+    sudo rm -f /tmp/slopmud_adminctl /tmp/slopmud-wal-restore \
+  "
+fi
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
@@ -167,12 +198,28 @@ EOF
     SLOPMUD_WAL_BACKUP_MAX_LOCAL_MANIFESTS \
     SLOPMUD_WAL_BACKUP_S3_BUCKET \
     SLOPMUD_WAL_BACKUP_S3_PREFIX \
-    SLOPMUD_WAL_BACKUP_UPLOAD_ENABLED
+    SLOPMUD_WAL_BACKUP_UPLOAD_ENABLED \
+    SLOPMUD_WAL_RESTORE_ENABLED \
+    SLOPMUD_WAL_RESTORE_DIR \
+    SLOPMUD_WAL_RESTORE_S3_URI \
+    SLOPMUD_WAL_RESTORE_S3_BUCKET \
+    SLOPMUD_WAL_RESTORE_S3_PREFIX \
+    SLOPMUD_WAL_RESTORE_CACHE_DIR \
+    SLOPMUD_WAL_RESTORE_NODE_ID \
+    SLOPMUD_WAL_RESTORE_OVERWRITE \
+    SLOPMUD_WAL_RESTORE_MISSING_OK \
+    SLOPMUD_WAL_RESTORE_MANIFEST_UNIX_AT_OR_BEFORE \
+    SLOPMUD_WAL_RESTORE_UNTIL_OFFSET \
+    SLOPMUD_WAL_RESTORE_UNTIL_INDEX \
+    SLOPMUD_WAL_RESTORE_UNTIL_MS
   do
     if [[ -n "${!var:-}" ]]; then
       echo "Environment=${var}=${!var}" >>"$tmp_unit"
     fi
   done
+  if [[ "$wal_restore_enabled" == "1" ]]; then
+    echo "Environment=SLOPMUD_ADMINCTL_BIN=${remote_adminctl_bin}" >>"$tmp_unit"
+  fi
   if [[ -n "${WORLD_TICK_MS:-}" ]]; then
     echo "Environment=WORLD_TICK_MS=${WORLD_TICK_MS}" >>"$tmp_unit"
   fi
@@ -207,6 +254,7 @@ EOF
   fi
 
   cat >>"$tmp_unit" <<EOF
+$(if [[ "$wal_restore_enabled" == "1" ]]; then echo "ExecStartPre=/usr/local/bin/slopmud-wal-restore"; fi)
 ExecStart=${exec_start}
 Restart=always
 RestartSec=2

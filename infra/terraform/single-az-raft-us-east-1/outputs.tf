@@ -38,6 +38,10 @@ output "assets_bucket_name" {
   value = local.assets_bucket_name
 }
 
+output "wal_backup_bucket_name" {
+  value = local.wal_backup_bucket_name
+}
+
 output "s3_gateway_endpoint_id" {
   value = var.s3_gateway_endpoint_enabled ? aws_vpc_endpoint.s3[0].id : ""
 }
@@ -57,24 +61,33 @@ output "raft_node_ids" {
 output "recommended_env" {
   description = "Non-secret env values to combine with env/prd.env-style secrets for split deploy scripts."
   value = {
-    HOST                    = aws_instance.gateway.public_dns
-    GATEWAY_HOST            = aws_instance.gateway.public_dns
-    SSH_PORT                = "22"
-    REMOTE_ROOT             = "/opt/slopmud"
-    SLOPMUD_BIND            = "0.0.0.0:4200"
-    SHARD_ADDRS             = join(",", [for i in aws_instance.raft : "${i.private_ip}:${var.shard_port}"])
-    SHARD_NODE_HOSTS        = join(",", [for i in aws_instance.raft : i.private_ip])
-    SHARD_NODE_IDS          = join(",", local.node_ids)
-    SHARD_PORT              = tostring(var.shard_port)
-    SHARD_RAFT_PORT         = tostring(var.raft_rpc_port)
-    SHARD_RAFT_NODE_IDS     = join(",", local.node_ids)
-    SHARD_TRIO_BINDS        = join(",", [for i in aws_instance.raft : "0.0.0.0:${var.shard_port}"])
-    SHARD_TRIO_RAFT_BINDS   = join(",", [for i in aws_instance.raft : "0.0.0.0:${var.raft_rpc_port}"])
-    SHARD_TRIO_RAFT_PEERS   = join(",", [for idx, i in aws_instance.raft : "${local.node_ids[idx]}@${i.private_ip}:${var.raft_rpc_port}"])
-    SINGLE_AZ_RAFT_SUBNET   = local.subnet_id
-    SINGLE_AZ_RAFT_AZ       = var.availability_zone
-    SINGLE_AZ_RAFT_BACKHAUL = "private-vpc"
-    ASSETS_BUCKET           = local.assets_bucket_name
+    HOST                              = aws_instance.gateway.public_dns
+    GATEWAY_HOST                      = aws_instance.gateway.public_dns
+    SSH_PORT                          = "22"
+    REMOTE_ROOT                       = "/opt/slopmud"
+    SLOPMUD_BIND                      = "0.0.0.0:4200"
+    SHARD_ADDRS                       = join(",", [for i in aws_instance.raft : "${i.private_ip}:${var.shard_port}"])
+    SHARD_NODE_HOSTS                  = join(",", [for i in aws_instance.raft : i.private_ip])
+    SHARD_NODE_IDS                    = join(",", local.node_ids)
+    SHARD_PORT                        = tostring(var.shard_port)
+    SHARD_RAFT_PORT                   = tostring(var.raft_rpc_port)
+    SHARD_RAFT_NODE_IDS               = join(",", local.node_ids)
+    SHARD_TRIO_BINDS                  = join(",", [for i in aws_instance.raft : "0.0.0.0:${var.shard_port}"])
+    SHARD_TRIO_RAFT_BINDS             = join(",", [for i in aws_instance.raft : "0.0.0.0:${var.raft_rpc_port}"])
+    SHARD_TRIO_RAFT_PEERS             = join(",", [for idx, i in aws_instance.raft : "${local.node_ids[idx]}@${i.private_ip}:${var.raft_rpc_port}"])
+    SINGLE_AZ_RAFT_SUBNET             = local.subnet_id
+    SINGLE_AZ_RAFT_AZ                 = var.availability_zone
+    SINGLE_AZ_RAFT_BACKHAUL           = "private-vpc"
+    ASSETS_BUCKET                     = local.assets_bucket_name
+    SLOPMUD_WAL_BACKUP_ENABLED        = "1"
+    SLOPMUD_WAL_BACKUP_DIR            = "/opt/slopmud/state/walbackup"
+    SLOPMUD_WAL_BACKUP_INTERVAL_S     = "60"
+    SLOPMUD_WAL_BACKUP_S3_BUCKET      = local.wal_backup_bucket_name
+    SLOPMUD_WAL_BACKUP_S3_PREFIX      = local.wal_backup_s3_prefix
+    SLOPMUD_WAL_BACKUP_UPLOAD_ENABLED = "1"
+    SLOPMUD_WAL_RESTORE_ENABLED       = "auto"
+    SLOPMUD_WAL_RESTORE_CACHE_DIR     = "/opt/slopmud/state/walrestore-cache"
+    SLOPMUD_WAL_RESTORE_MISSING_OK    = "1"
   }
 }
 

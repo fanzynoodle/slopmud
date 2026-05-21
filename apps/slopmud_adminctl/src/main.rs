@@ -6,7 +6,8 @@ use base64::Engine;
 use serde::Serialize;
 use slopmud_walbackup::{
     RecoveryTarget, S3WalBackupClient, WalBackupManifest, extent_summary_lines,
-    list_local_manifests, manifest_summary_lines, select_manifest_from_list, store_for_manifest,
+    filter_manifests_by_node, list_local_manifests, manifest_summary_lines,
+    select_manifest_from_list, select_manifest_from_list_for_node, store_for_manifest,
 };
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
@@ -24,8 +25,8 @@ COMMANDS:\n\
   promote-admin <name>\n\
   get-account <name>\n\
   list-accounts\n\
-  wal-backup list (--dir DIR | --s3 s3://BUCKET/PREFIX) [--extents] [--json]\n\
-  wal-backup recover (--dir DIR | --s3 s3://BUCKET/PREFIX --cache-dir DIR) --out PATH [--until-offset N|--until-index N|--until-ms N] [--manifest-unix-at-or-before S]\n\
+  wal-backup list (--dir DIR | --s3 s3://BUCKET/PREFIX) [--node-id NODE] [--extents] [--json]\n\
+  wal-backup recover (--dir DIR | --s3 s3://BUCKET/PREFIX --cache-dir DIR) --out PATH [--node-id NODE] [--until-offset N|--until-index N|--until-ms N] [--manifest-unix-at-or-before S] [--missing-ok]\n\
   wal-backup verify --dir DIR\n"
     );
     std::process::exit(2);
@@ -105,14 +106,17 @@ enum WalBackupSource {
 enum WalBackupCliCommand {
     List {
         source: WalBackupSource,
+        node_id: Option<String>,
         extents: bool,
         json: bool,
     },
     Recover {
         source: WalBackupSource,
         out: PathBuf,
+        node_id: Option<String>,
         target: RecoveryTarget,
         manifest_unix_at_or_before: Option<u64>,
+        missing_ok: bool,
     },
     Verify {
         dir: PathBuf,
@@ -129,6 +133,7 @@ fn parse_wal_backup_args(rest: &[String]) -> anyhow::Result<WalBackupCliCommand>
             let (source, _) = parse_wal_backup_source(args, false)?;
             Ok(WalBackupCliCommand::List {
                 source,
+                node_id: flag_value(args, "--node-id"),
                 extents: has_flag(args, "--extents"),
                 json: has_flag(args, "--json"),
             })
@@ -145,8 +150,10 @@ fn parse_wal_backup_args(rest: &[String]) -> anyhow::Result<WalBackupCliCommand>
             Ok(WalBackupCliCommand::Recover {
                 source,
                 out,
+                node_id: flag_value(args, "--node-id"),
                 target,
                 manifest_unix_at_or_before,
+                missing_ok: has_flag(args, "--missing-ok"),
             })
         }
         "verify" => {
@@ -220,10 +227,11 @@ async fn handle_wal_backup(rest: &[String]) -> anyhow::Result<()> {
     match parse_wal_backup_args(rest)? {
         WalBackupCliCommand::List {
             source,
+            node_id,
             extents,
             json,
         } => {
-            let manifests = load_manifests_for_source(&source).await?;
+            let manifests = load_manifests_for_source(&source, node_id.as_deref()).await?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&manifests)?);
                 return Ok(());
@@ -242,11 +250,25 @@ async fn handle_wal_backup(rest: &[String]) -> anyhow::Result<()> {
         WalBackupCliCommand::Recover {
             source,
             out,
+            node_id,
             target,
             manifest_unix_at_or_before,
+            missing_ok,
         } => {
-            let (root, manifest) =
-                prepare_manifest_for_recovery(&source, manifest_unix_at_or_before).await?;
+            let prepared = prepare_manifest_for_recovery(
+                &source,
+                node_id.as_deref(),
+                manifest_unix_at_or_before,
+            )
+            .await;
+            let (root, manifest) = match prepared {
+                Ok(prepared) => prepared,
+                Err(err) if missing_ok && err.to_string().contains("no matching") => {
+                    println!("no matching WAL backup manifest");
+                    return Ok(());
+                }
+                Err(err) => return Err(err),
+            };
             let store = store_for_manifest(root, &manifest);
             let bytes = store.recover_to_path(&manifest, &out, target)?;
             println!(
@@ -278,8 +300,9 @@ async fn handle_wal_backup(rest: &[String]) -> anyhow::Result<()> {
 
 async fn load_manifests_for_source(
     source: &WalBackupSource,
+    node_id: Option<&str>,
 ) -> anyhow::Result<Vec<WalBackupManifest>> {
-    match source {
+    let manifests = match source {
         WalBackupSource::Local(dir) => list_local_manifests(dir),
         WalBackupSource::S3 { uri, .. } => {
             S3WalBackupClient::from_uri(uri)
@@ -287,18 +310,21 @@ async fn load_manifests_for_source(
                 .list_manifests()
                 .await
         }
-    }
+    }?;
+    Ok(filter_manifests_by_node(&manifests, node_id))
 }
 
 async fn prepare_manifest_for_recovery(
     source: &WalBackupSource,
+    node_id: Option<&str>,
     manifest_unix_at_or_before: Option<u64>,
 ) -> anyhow::Result<(PathBuf, WalBackupManifest)> {
     match source {
         WalBackupSource::Local(dir) => {
             let manifests = list_local_manifests(dir)?;
-            let manifest = select_manifest_from_list(&manifests, manifest_unix_at_or_before)
-                .ok_or_else(|| anyhow::anyhow!("no matching local WAL backup manifest"))?;
+            let manifest =
+                select_manifest_from_list_for_node(&manifests, manifest_unix_at_or_before, node_id)
+                    .ok_or_else(|| anyhow::anyhow!("no matching local WAL backup manifest"))?;
             Ok((dir.clone(), manifest))
         }
         WalBackupSource::S3 { uri, cache_dir } => {
@@ -307,8 +333,9 @@ async fn prepare_manifest_for_recovery(
                 .ok_or_else(|| anyhow::anyhow!("recover from S3 requires --cache-dir"))?;
             let client = S3WalBackupClient::from_uri(uri).await?;
             let manifests = client.list_manifests().await?;
-            let manifest = select_manifest_from_list(&manifests, manifest_unix_at_or_before)
-                .ok_or_else(|| anyhow::anyhow!("no matching S3 WAL backup manifest"))?;
+            let manifest =
+                select_manifest_from_list_for_node(&manifests, manifest_unix_at_or_before, node_id)
+                    .ok_or_else(|| anyhow::anyhow!("no matching S3 WAL backup manifest"))?;
             client
                 .download_manifest_to_cache(&manifest, &cache_dir)
                 .await?;
@@ -440,6 +467,7 @@ mod tests {
             cmd,
             WalBackupCliCommand::List {
                 source: WalBackupSource::Local(PathBuf::from("/tmp/backups")),
+                node_id: None,
                 extents: true,
                 json: true,
             }
@@ -456,6 +484,8 @@ mod tests {
             "/tmp/cache",
             "--out",
             "/tmp/raft.jsonl",
+            "--node-id",
+            "n1",
             "--until-index",
             "42",
             "--manifest-unix-at-or-before",
@@ -470,8 +500,10 @@ mod tests {
                     cache_dir: Some(PathBuf::from("/tmp/cache")),
                 },
                 out: PathBuf::from("/tmp/raft.jsonl"),
+                node_id: Some("n1".to_string()),
                 target: RecoveryTarget::Index(42),
                 manifest_unix_at_or_before: Some(1000),
+                missing_ok: false,
             }
         );
     }

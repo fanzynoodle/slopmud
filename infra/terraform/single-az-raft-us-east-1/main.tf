@@ -10,9 +10,11 @@ data "aws_vpc" "default" {
 }
 
 locals {
-  vpc_id             = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default[0].id
-  assets_bucket_name = var.assets_bucket_name != "" ? var.assets_bucket_name : "slopmud-assets-${data.aws_caller_identity.current.account_id}-${var.region}"
-  node_ids           = ["n0", "n1", "n2"]
+  vpc_id                 = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default[0].id
+  assets_bucket_name     = var.assets_bucket_name != "" ? var.assets_bucket_name : "slopmud-assets-${data.aws_caller_identity.current.account_id}-${var.region}"
+  wal_backup_bucket_name = var.wal_backup_bucket_name != "" ? var.wal_backup_bucket_name : local.assets_bucket_name
+  wal_backup_s3_prefix   = "${var.name_prefix}/wal-backups"
+  node_ids               = ["n0", "n1", "n2"]
   tags = {
     ManagedBy = "terraform"
     Stack     = var.name_prefix
@@ -235,6 +237,41 @@ resource "aws_iam_role_policy_attachment" "gateway_assets" {
 resource "aws_iam_role_policy_attachment" "raft_assets" {
   role       = aws_iam_role.raft.name
   policy_arn = aws_iam_policy.gateway_assets.arn
+}
+
+data "aws_iam_policy_document" "raft_wal_backups" {
+  statement {
+    sid    = "ListWalBackupBucket"
+    effect = "Allow"
+    actions = [
+      "s3:ListBucket",
+    ]
+    resources = ["arn:aws:s3:::${local.wal_backup_bucket_name}"]
+  }
+
+  statement {
+    sid    = "ReadWriteWalBackupObjects"
+    effect = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:AbortMultipartUpload",
+      "s3:ListMultipartUploadParts",
+    ]
+    resources = ["arn:aws:s3:::${local.wal_backup_bucket_name}/${local.wal_backup_s3_prefix}/*"]
+  }
+}
+
+resource "aws_iam_policy" "raft_wal_backups" {
+  name_prefix = "${var.name_prefix}-wal-backups-"
+  description = "Allow Raft nodes to stream WAL backups to S3 and restore them after replacement."
+  policy      = data.aws_iam_policy_document.raft_wal_backups.json
+  tags        = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "raft_wal_backups" {
+  role       = aws_iam_role.raft.name
+  policy_arn = aws_iam_policy.raft_wal_backups.arn
 }
 
 data "aws_iam_policy_document" "gateway_ssm_read" {

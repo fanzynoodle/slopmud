@@ -139,6 +139,12 @@ variable "assets_bucket_name" {
   default     = ""
 }
 
+variable "wal_backup_bucket_name" {
+  type        = string
+  description = "Existing S3 bucket for streaming WAL backups. Empty reuses assets_bucket_name."
+  default     = ""
+}
+
 variable "s3_gateway_endpoint_enabled" {
   type        = bool
   description = "Create a no-hourly-cost S3 Gateway VPC endpoint so private Raft nodes can fetch release artifacts without NAT."

@@ -245,7 +245,16 @@ print(json.dumps({
     "SHARD_PORT": "5000",
     "SHARD_RAFT_PORT": "5100",
     "SLOPMUD_BIND": "0.0.0.0:4200",
-    "ASSETS_BUCKET": "slopmud-assets-test"
+    "ASSETS_BUCKET": "slopmud-assets-test",
+    "SLOPMUD_WAL_BACKUP_ENABLED": "1",
+    "SLOPMUD_WAL_BACKUP_DIR": "/opt/slopmud/state/walbackup",
+    "SLOPMUD_WAL_BACKUP_INTERVAL_S": "60",
+    "SLOPMUD_WAL_BACKUP_S3_BUCKET": "slopmud-assets-test",
+    "SLOPMUD_WAL_BACKUP_S3_PREFIX": "slopmud-az1/wal-backups",
+    "SLOPMUD_WAL_BACKUP_UPLOAD_ENABLED": "1",
+    "SLOPMUD_WAL_RESTORE_ENABLED": "auto",
+    "SLOPMUD_WAL_RESTORE_CACHE_DIR": "/opt/slopmud/state/walrestore-cache",
+    "SLOPMUD_WAL_RESTORE_MISSING_OK": "1"
 }))
 """
 
@@ -323,6 +332,28 @@ def split_env_file(tmp: Path) -> Path:
 def fake_shard_binary(tmp: Path) -> Path:
     bin_path = tmp / "shard_01"
     bin_path.write_text("#!/usr/bin/env sh\nexit 0\n", encoding="utf-8")
+    bin_path.chmod(0o755)
+    return bin_path
+
+
+def fake_adminctl_binary(tmp: Path, args_path: Path) -> Path:
+    bin_path = tmp / "slopmud_adminctl"
+    bin_path.write_text(
+        "\n".join(
+            [
+                "#!/usr/bin/env python3",
+                "import json",
+                "import sys",
+                "from pathlib import Path",
+                f"Path({str(args_path)!r}).write_text(json.dumps(sys.argv[1:]), encoding='utf-8')",
+                "out = Path(sys.argv[sys.argv.index('--out') + 1])",
+                "out.parent.mkdir(parents=True, exist_ok=True)",
+                "out.write_text('restored\\n', encoding='utf-8')",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
     bin_path.chmod(0o755)
     return bin_path
 
@@ -635,6 +666,94 @@ def test_current_public_onebox_shard_deploy() -> None:
             raise AssertionError(f"one-box deploy did not restart the shard service: {restarts}")
 
 
+def test_wal_restore_helper_noop_and_s3_recover_contract() -> None:
+    with tempfile.TemporaryDirectory(prefix="slopmud_wal_restore_") as d:
+        tmp = Path(d)
+        script = REPO / "scripts/restore_wal_backup.sh"
+        clean_env = {
+            k: v
+            for k, v in os.environ.items()
+            if not k.startswith("SLOPMUD_WAL_") and not k.startswith("SHARD_RAFT_")
+        }
+
+        proc = run(["bash", str(script)], env=clean_env)
+        assert_ok(proc)
+        if "wal restore: disabled" not in proc.stdout:
+            raise AssertionError(f"restore helper should no-op when disabled\n{proc.stdout}")
+
+        auto_env = clean_env | {"SLOPMUD_WAL_RESTORE_ENABLED": "auto"}
+        proc = run(["bash", str(script)], env=auto_env)
+        assert_ok(proc)
+        if "no target/source config; skipping" not in proc.stdout:
+            raise AssertionError(f"restore helper should no-op without source config\n{proc.stdout}")
+
+        args_path = tmp / "adminctl_args.json"
+        target = tmp / "raft.jsonl"
+        target.write_text("keep me\n", encoding="utf-8")
+        restore_env = auto_env | {
+            "SLOPMUD_ADMINCTL_BIN": str(fake_adminctl_binary(tmp, args_path)),
+            "SHARD_RAFT_LOG": str(target),
+            "SHARD_RAFT_NODE_ID": "n1",
+            "SLOPMUD_WAL_BACKUP_S3_BUCKET": "backup-bucket",
+            "SLOPMUD_WAL_BACKUP_S3_PREFIX": "prd/wal",
+        }
+        proc = run(["bash", str(script)], env=restore_env)
+        assert_ok(proc)
+        if args_path.exists() or target.read_text(encoding="utf-8") != "keep me\n":
+            raise AssertionError("restore helper should not invoke adminctl for a non-empty target")
+
+        target.write_text("", encoding="utf-8")
+        proc = run(["bash", str(script)], env=restore_env)
+        assert_ok(proc)
+        args = json.loads(args_path.read_text(encoding="utf-8"))
+        for required in (
+            "wal-backup",
+            "recover",
+            "--out",
+            str(target),
+            "--s3",
+            "s3://backup-bucket/prd/wal",
+            "--node-id",
+            "n1",
+        ):
+            if required not in args:
+                raise AssertionError(f"restore helper did not pass {required!r}: {args}")
+        if target.read_text(encoding="utf-8") != "restored\n":
+            raise AssertionError("restore helper did not let adminctl write the recovered WAL")
+
+
+def test_wal_restore_deploy_contract() -> None:
+    onebox = (REPO / "scripts/deploy_shard_01.sh").read_text(encoding="utf-8")
+    trio = (REPO / "scripts/deploy_shard_trio.sh").read_text(encoding="utf-8")
+    split = (REPO / "scripts/deploy_split_raft_trio.sh").read_text(encoding="utf-8")
+    restore_onebox = (REPO / "scripts/cicd/restore_onebox_stack.sh").read_text(encoding="utf-8")
+    build_assets = (REPO / "scripts/cicd/build_assets.sh").read_text(encoding="utf-8")
+    rebootstrap = (REPO / "scripts/cicd/build_rebootstrap_bundle.sh").read_text(encoding="utf-8")
+
+    for label, text in (
+        ("onebox deploy", onebox),
+        ("trio deploy", trio),
+        ("split deploy", split),
+        ("onebox restore", restore_onebox),
+    ):
+        for needle in (
+            "SLOPMUD_WAL_RESTORE_ENABLED",
+            "SLOPMUD_WAL_RESTORE_S3_URI",
+            "SLOPMUD_WAL_RESTORE_S3_BUCKET",
+            "SLOPMUD_WAL_RESTORE_CACHE_DIR",
+            "SLOPMUD_WAL_RESTORE_OVERWRITE",
+            "SLOPMUD_WAL_RESTORE_MISSING_OK",
+            "SLOPMUD_ADMINCTL_BIN",
+            "ExecStartPre=/usr/local/bin/slopmud-wal-restore",
+        ):
+            if needle not in text:
+                raise AssertionError(f"{label} lost WAL restore wiring: {needle}")
+    if "bin/slopmud_adminctl" not in build_assets or "scripts/restore_wal_backup.sh" not in build_assets:
+        raise AssertionError("asset bundles must include adminctl and the WAL restore helper")
+    if "restore_wal_backup.sh" not in rebootstrap:
+        raise AssertionError("rebootstrap bundle must include the WAL restore helper")
+
+
 def test_split_raft_s3_fanout_upgrade() -> None:
     with tempfile.TemporaryDirectory(prefix="slopmud_deploy_story_") as d:
         tmp = Path(d)
@@ -734,6 +853,14 @@ def test_node_replacement_env_render_and_mount_targets() -> None:
             raise AssertionError(f"rendered env did not carry replacement node hosts\n{text}")
         if "SHARD_ADDRS=10.10.0.11:5000,10.10.0.12:5000,10.10.0.13:5000" not in text:
             raise AssertionError(f"rendered env did not carry replacement shard addrs\n{text}")
+        for required in (
+            "SLOPMUD_WAL_BACKUP_ENABLED=1",
+            "SLOPMUD_WAL_BACKUP_S3_BUCKET=slopmud-assets-test",
+            "SLOPMUD_WAL_RESTORE_ENABLED=auto",
+            "SLOPMUD_WAL_RESTORE_MISSING_OK=1",
+        ):
+            if required not in text:
+                raise AssertionError(f"rendered env lost WAL backup/restore setting {required!r}\n{text}")
         mode = stat.S_IMODE(rendered.stat().st_mode)
         if mode != 0o600:
             raise AssertionError(f"rendered env should be private 0600, got {oct(mode)}")
@@ -762,6 +889,8 @@ TESTS = [
     ("rapid split Raft live upgrade", test_rapid_split_raft_live_upgrade),
     ("Kubernetes and bare-metal restart budget contract", test_kubernetes_and_bare_metal_restart_budget_contract),
     ("current public one-box shard deploy", test_current_public_onebox_shard_deploy),
+    ("WAL restore helper contract", test_wal_restore_helper_noop_and_s3_recover_contract),
+    ("WAL restore deploy contract", test_wal_restore_deploy_contract),
     ("split Raft S3 fanout upgrade", test_split_raft_s3_fanout_upgrade),
     ("CI/CD S3 redeploy wrapper", test_cicd_s3_redeploy_wrapper),
     ("node replacement env render and mount targets", test_node_replacement_env_render_and_mount_targets),
