@@ -29,6 +29,8 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
   libssl-dev \
   ca-certificates \
   curl \
+  git \
+  jq \
   python3 \
   awscli \
   ripgrep

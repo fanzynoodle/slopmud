@@ -520,6 +520,12 @@ def test_cicd_tiny_runner_memory_guards() -> None:
         raise AssertionError("runner bootstrap must keep Rust tool shims and just available after rebuilds")
     if 'sudo install -m 0755 "$just_path" /usr/local/bin/just' not in bootstrap:
         raise AssertionError("runner bootstrap must install just as a real binary outside Cargo cache")
+    dep_line = "for c in gcc git jq make pkg-config just python3 tar; do"
+    if dep_line not in workflow:
+        raise AssertionError("CI runner dependency preflight must cover the full tiny-runner toolchain")
+    for required in ("build-essential", "git", "jq", "pkg-config", "python3", "awscli", "ripgrep"):
+        if required not in bootstrap:
+            raise AssertionError(f"runner bootstrap must install {required}")
 
 
 def test_cicd_clean_checkout_asset_contract() -> None:
