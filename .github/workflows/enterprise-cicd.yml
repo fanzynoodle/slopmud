@@ -197,6 +197,15 @@ jobs:
           else
             export PATH="$HOME/.cargo/bin:$PATH"
           fi
+          tool_bin="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin"
+          if [[ -d "$tool_bin" ]]; then
+            mkdir -p "$HOME/.cargo/bin"
+            for c in cargo rustc rustfmt cargo-fmt cargo-clippy clippy-driver rustdoc; do
+              if [[ -x "$tool_bin/$c" ]]; then
+                ln -sf "$tool_bin/$c" "$HOME/.cargo/bin/$c"
+              fi
+            done
+          fi
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           cargo --version
           rustc --version
@@ -400,6 +409,15 @@ jobs:
           else
             export PATH="$HOME/.cargo/bin:$PATH"
           fi
+          tool_bin="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin"
+          if [[ -d "$tool_bin" ]]; then
+            mkdir -p "$HOME/.cargo/bin"
+            for c in cargo rustc rustfmt cargo-fmt cargo-clippy clippy-driver rustdoc; do
+              if [[ -x "$tool_bin/$c" ]]; then
+                ln -sf "$tool_bin/$c" "$HOME/.cargo/bin/$c"
+              fi
+            done
+          fi
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           cargo --version
 
@@ -440,6 +458,15 @@ jobs:
           else
             export PATH="$HOME/.cargo/bin:$PATH"
           fi
+          tool_bin="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin"
+          if [[ -d "$tool_bin" ]]; then
+            mkdir -p "$HOME/.cargo/bin"
+            for c in cargo rustc rustfmt cargo-fmt cargo-clippy clippy-driver rustdoc; do
+              if [[ -x "$tool_bin/$c" ]]; then
+                ln -sf "$tool_bin/$c" "$HOME/.cargo/bin/$c"
+              fi
+            done
+          fi
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           cargo --version
 
@@ -479,6 +506,15 @@ jobs:
             source "$HOME/.cargo/env"
           else
             export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          tool_bin="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin"
+          if [[ -d "$tool_bin" ]]; then
+            mkdir -p "$HOME/.cargo/bin"
+            for c in cargo rustc rustfmt cargo-fmt cargo-clippy clippy-driver rustdoc; do
+              if [[ -x "$tool_bin/$c" ]]; then
+                ln -sf "$tool_bin/$c" "$HOME/.cargo/bin/$c"
+              fi
+            done
           fi
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           cargo --version
