@@ -99,7 +99,7 @@ jobs:
       track: ${{ steps.meta.outputs.track }}
       deploy_env: ${{ steps.meta.outputs.deploy_env }}
       sha: ${{ steps.meta.outputs.sha }}
-      artifact_path: ${{ steps.meta.outputs.artifact_path }}
+      artifact_path: ${{ steps.build_asset.outputs.artifact_path }}
       bucket: ${{ steps.s3.outputs.bucket }}
       key: ${{ steps.s3.outputs.key }}
       e2e_core: ${{ steps.scope.outputs.run_e2e_core }}

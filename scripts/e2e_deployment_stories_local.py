@@ -504,6 +504,8 @@ def test_cicd_asset_build_has_heartbeat() -> None:
         raise AssertionError("CI asset build heartbeat must be cleaned up on failure")
     if "artifact_path=\"$(./scripts/cicd/build_assets.sh)\"" not in workflow:
         raise AssertionError("CI asset build should still capture the build_assets artifact path")
+    if "artifact_path: ${{ steps.build_asset.outputs.artifact_path }}" not in workflow:
+        raise AssertionError("CI build job must export the artifact path from the build_asset step")
 
 
 def test_cicd_tiny_runner_memory_guards() -> None:
