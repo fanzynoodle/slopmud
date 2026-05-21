@@ -490,6 +490,7 @@ def test_cicd_tiny_runner_memory_guards() -> None:
 def test_cicd_clean_checkout_asset_contract() -> None:
     workflow = (REPO / ".github/workflows/enterprise-cicd.yml").read_text(encoding="utf-8")
     build_assets = (REPO / "scripts/cicd/build_assets.sh").read_text(encoding="utf-8")
+    shuttle = (REPO / "scripts/cicd/slopmud-shuttle-assets").read_text(encoding="utf-8")
     for env_key in ("BUILD_STATIC_WEB", "BUILD_SLOPMUD_WEB", "BUILD_INTERNAL_OIDC"):
         expected = f"{env_key}: ${{{{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}}}"
         if expected not in workflow:
@@ -500,6 +501,12 @@ def test_cicd_clean_checkout_asset_contract() -> None:
         raise AssertionError("explicit env bundle requests must still fail when env files are absent")
     if "ASSETS_ENV_REQUIRED" not in build_assets:
         raise AssertionError("operators need a strict env bundle switch for release builds that require env/")
+    if workflow.count("sudo -n /usr/local/bin/slopmud-shuttle-assets") < 7:
+        raise AssertionError("CI deploy jobs must use the sudo-installed shuttle hook")
+    if "./scripts/cicd/slopmud-shuttle-assets --help" in workflow:
+        raise AssertionError("CI must not assert the root-only deploy hook through the unprivileged checkout copy")
+    if shuttle.find("-h|--help)") > shuttle.find("ERROR: must run as root"):
+        raise AssertionError("shuttle helper should allow non-root --help while keeping deploy operations root-only")
 
 
 def test_rapid_split_raft_live_upgrade() -> None:

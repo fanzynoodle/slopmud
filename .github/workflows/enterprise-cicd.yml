@@ -339,7 +339,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ./scripts/cicd/slopmud-shuttle-assets --help >/dev/null 2>&1
+          sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null 2>&1
 
       - name: Deploy to sandbox
         id: deploy
@@ -353,11 +353,11 @@ jobs:
           start_ts="$(date +%s)"
 
           if [[ -n "${BUCKET}" && -n "${KEY}" ]]; then
-            ./scripts/cicd/slopmud-shuttle-assets \
+            sudo -n /usr/local/bin/slopmud-shuttle-assets \
               --env sandbox \
               --from-s3 "s3://${BUCKET}/${KEY}"
           else
-            ./scripts/cicd/slopmud-shuttle-assets \
+            sudo -n /usr/local/bin/slopmud-shuttle-assets \
               --env sandbox \
               --from-file "$ARTIFACT_PATH"
           fi
@@ -521,7 +521,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ./scripts/cicd/slopmud-shuttle-assets --help >/dev/null 2>&1
+          sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null 2>&1
 
       - name: Deploy
         id: deploy
@@ -536,11 +536,11 @@ jobs:
           start_ts="$(date +%s)"
 
           if [[ -n "${BUCKET}" && -n "${KEY}" ]]; then
-            ./scripts/cicd/slopmud-shuttle-assets \
+            sudo -n /usr/local/bin/slopmud-shuttle-assets \
               --env "$DEPLOY_ENV" \
               --from-s3 "s3://${BUCKET}/${KEY}"
           else
-            ./scripts/cicd/slopmud-shuttle-assets \
+            sudo -n /usr/local/bin/slopmud-shuttle-assets \
               --env "$DEPLOY_ENV" \
               --from-file "$ARTIFACT_PATH"
           fi
@@ -589,7 +589,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ./scripts/cicd/slopmud-shuttle-assets --help >/dev/null 2>&1
+          sudo -n /usr/local/bin/slopmud-shuttle-assets --help >/dev/null 2>&1
 
       - name: Copy STG Asset -> prod/
         id: copy
@@ -631,7 +631,7 @@ jobs:
         run: |
           set -euo pipefail
           start_ts="$(date +%s)"
-          ./scripts/cicd/slopmud-shuttle-assets \
+          sudo -n /usr/local/bin/slopmud-shuttle-assets \
             --env prd \
             --from-s3 "s3://${BUCKET}/prod/${SHA}/artifact.tgz"
           duration_s=$(( $(date +%s) - start_ts ))
