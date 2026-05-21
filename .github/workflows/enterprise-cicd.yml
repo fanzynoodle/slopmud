@@ -530,8 +530,18 @@ jobs:
     timeout-minutes: 20
     needs: [build, deploy_sandbox, e2e-core-local, e2e-core-party, e2e-ws]
     if: |
-      needs.build.outputs.deploy_env == 'stg' ||
-      (needs.build.outputs.deploy_env == 'dev' && needs.deploy_sandbox.result == 'success')
+      always() &&
+      needs.build.result == 'success' &&
+      (
+        needs.build.outputs.deploy_env == 'stg' ||
+        (
+          needs.build.outputs.deploy_env == 'dev' &&
+          needs.deploy_sandbox.result == 'success' &&
+          (needs.e2e-core-local.result == 'success' || needs.e2e-core-local.result == 'skipped') &&
+          (needs.e2e-core-party.result == 'success' || needs.e2e-core-party.result == 'skipped') &&
+          (needs.e2e-ws.result == 'success' || needs.e2e-ws.result == 'skipped')
+        )
+      )
 
     steps:
       - name: Checkout

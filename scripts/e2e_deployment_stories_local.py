@@ -568,6 +568,11 @@ def test_cicd_clean_checkout_asset_contract() -> None:
         raise AssertionError("ws E2E must build every helper binary it launches, not just e2e_ws")
     if "dev-mud.slopmud.com" not in workflow or "deploy_public_smoke" not in workflow:
         raise AssertionError("dev deploy must include a blocking outside-in public telnet smoke")
+    if "always() &&" not in workflow or "needs.build.result == 'success'" not in workflow:
+        raise AssertionError("deploy must evaluate its explicit gates even when optional E2Es are skipped")
+    for job in ("e2e-core-local", "e2e-core-party", "e2e-ws"):
+        if f"needs.{job}.result == 'skipped'" not in workflow:
+            raise AssertionError(f"deploy must allow scoped-out optional job {job}")
     if "./scripts/cicd/slopmud-shuttle-assets --help" in workflow:
         raise AssertionError("CI must not assert the root-only deploy hook through the unprivileged checkout copy")
     if shuttle.find("-h|--help)") > shuttle.find("ERROR: must run as root"):
