@@ -391,6 +391,60 @@ def assert_ok(proc: subprocess.CompletedProcess[str]) -> None:
         raise AssertionError(f"command failed rc={proc.returncode}\n{proc.stdout}")
 
 
+def parse_github_output(path: Path) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        out[key] = value
+    return out
+
+
+def run_ci_scope_case(
+    changed_path: str,
+    *,
+    track: str = "dev",
+    event_name: str = "push",
+    force_scoped: bool = False,
+) -> dict[str, str]:
+    with tempfile.TemporaryDirectory(prefix="slopmud_ci_scope_") as d:
+        tmp = Path(d)
+        run(["git", "init", "-q"], env=os.environ.copy(), cwd=tmp)
+        run(["git", "config", "user.email", "ci-scope@example.invalid"], env=os.environ.copy(), cwd=tmp)
+        run(["git", "config", "user.name", "CI Scope Test"], env=os.environ.copy(), cwd=tmp)
+
+        baseline = tmp / "README.md"
+        baseline.write_text("baseline\n", encoding="utf-8")
+        run(["git", "add", "."], env=os.environ.copy(), cwd=tmp)
+        assert_ok(run(["git", "commit", "-q", "-m", "baseline"], env=os.environ.copy(), cwd=tmp))
+        before = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=tmp, text=True).strip()
+
+        changed = tmp / changed_path
+        changed.parent.mkdir(parents=True, exist_ok=True)
+        changed.write_text("changed\n", encoding="utf-8")
+        run(["git", "add", "."], env=os.environ.copy(), cwd=tmp)
+        assert_ok(run(["git", "commit", "-q", "-m", "change"], env=os.environ.copy(), cwd=tmp))
+        head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=tmp, text=True).strip()
+
+        output = tmp / "github-output.txt"
+        env = os.environ.copy()
+        env.update(
+            {
+                "GITHUB_OUTPUT": str(output),
+                "TRACK": track,
+                "GITHUB_EVENT_NAME": event_name,
+                "GITHUB_EVENT_BEFORE": before,
+                "GITHUB_SHA": head,
+            }
+        )
+        if force_scoped:
+            env["FORCE_SCOPED_E2E"] = "1"
+        proc = run(["bash", str(REPO / "scripts/cicd/ci_scope_e2e.sh")], env=env, cwd=tmp)
+        assert_ok(proc)
+        return parse_github_output(output)
+
+
 def event_kinds(events: list[dict]) -> list[str]:
     return [e["kind"] for e in events]
 
@@ -543,6 +597,54 @@ def test_cicd_tiny_runner_memory_guards() -> None:
         raise AssertionError("gateway root volume must leave room for the self-hosted runner build cache")
 
 
+def test_cicd_e2e_scope_script_contract() -> None:
+    shard = run_ci_scope_case("apps/shard_01/src/main.rs")
+    if shard.get("run_e2e_core") != "1" or shard.get("run_e2e_ws") != "0":
+        raise AssertionError(f"shard changes should run core E2E only: {shard}")
+
+    ws = run_ci_scope_case("apps/ws_gateway/src/main.rs")
+    if ws.get("run_e2e_core") != "0" or ws.get("run_e2e_ws") != "1":
+        raise AssertionError(f"ws gateway changes should run ws E2E only: {ws}")
+
+    bot_party = run_ci_scope_case("apps/bot_party/src/main.rs")
+    if bot_party.get("run_e2e_core") != "1" or bot_party.get("run_e2e_ws") != "1":
+        raise AssertionError(f"bot party changes should run core and ws E2Es: {bot_party}")
+
+    mudproto = run_ci_scope_case("crates/mudproto/src/lib.rs")
+    if mudproto.get("run_e2e_core") != "1" or mudproto.get("run_e2e_ws") != "1":
+        raise AssertionError(f"shared protocol changes should run core and ws E2Es: {mudproto}")
+
+    broker = run_ci_scope_case("crates/slopmud/src/main.rs")
+    if broker.get("run_e2e_core") != "1" or broker.get("run_e2e_ws") != "0":
+        raise AssertionError(f"broker-only crate changes should run core E2E only: {broker}")
+
+    workflow = run_ci_scope_case(".github/workflows/enterprise-cicd.yml")
+    if workflow.get("run_e2e_core") != "1" or workflow.get("run_e2e_ws") != "1":
+        raise AssertionError(f"workflow changes must run all E2Es: {workflow}")
+    if workflow.get("scope_reason") != "infra-and-tools-change":
+        raise AssertionError(f"workflow changes should explain infra/tool scope: {workflow}")
+
+    docs = run_ci_scope_case("docs/deploy-notes.md")
+    if docs.get("run_e2e_core") != "0" or docs.get("run_e2e_ws") != "0":
+        raise AssertionError(f"docs-only changes should not run E2Es on dev: {docs}")
+
+    stg = run_ci_scope_case("docs/deploy-notes.md", track="stg")
+    if stg.get("run_e2e_core") != "1" or stg.get("run_e2e_ws") != "1":
+        raise AssertionError(f"non-dev tracks must run all E2Es: {stg}")
+
+    manual = run_ci_scope_case("docs/deploy-notes.md", event_name="workflow_dispatch")
+    if manual.get("run_e2e_core") != "1" or manual.get("run_e2e_ws") != "1":
+        raise AssertionError(f"manual dispatch should run all E2Es by default: {manual}")
+
+    manual_scoped = run_ci_scope_case(
+        "docs/deploy-notes.md",
+        event_name="workflow_dispatch",
+        force_scoped=True,
+    )
+    if manual_scoped.get("run_e2e_core") != "0" or manual_scoped.get("run_e2e_ws") != "0":
+        raise AssertionError(f"forced scoped manual dispatch should honor path scope: {manual_scoped}")
+
+
 def test_cicd_clean_checkout_asset_contract() -> None:
     workflow = (REPO / ".github/workflows/enterprise-cicd.yml").read_text(encoding="utf-8")
     build_assets = (REPO / "scripts/cicd/build_assets.sh").read_text(encoding="utf-8")
@@ -570,6 +672,12 @@ def test_cicd_clean_checkout_asset_contract() -> None:
         raise AssertionError("dev deploy must include a blocking outside-in public telnet smoke")
     if "asset_ready_epoch" not in workflow or "deploy_public_smoke_after_asset_ready_s" not in workflow:
         raise AssertionError("dev deploy must report public-smoke latency excluding build time")
+    if "if command -v aws >/dev/null 2>&1; then" not in workflow:
+        raise AssertionError("dev artifact upload must tolerate runners without aws CLI")
+    if "dev track continues with the local artifact" not in workflow:
+        raise AssertionError("dev missing-aws fallback should be explicit in CI logs")
+    if "aws CLI is required for ${TRACK} artifact upload" not in workflow:
+        raise AssertionError("non-dev artifact upload must fail clearly when aws CLI is missing")
     if "always() &&" not in workflow or "needs.build.result == 'success'" not in workflow:
         raise AssertionError("deploy must evaluate its explicit gates even when optional E2Es are skipped")
     for job in ("e2e-core-local", "e2e-core-party", "e2e-ws"):
@@ -928,6 +1036,7 @@ TESTS = [
     ("CI/CD runner inventory fallback", test_cicd_runner_inventory_fallback_does_not_skip_deploy),
     ("CI/CD asset build heartbeat", test_cicd_asset_build_has_heartbeat),
     ("CI/CD tiny runner memory guards", test_cicd_tiny_runner_memory_guards),
+    ("CI/CD E2E scope script contract", test_cicd_e2e_scope_script_contract),
     ("CI/CD clean checkout asset contract", test_cicd_clean_checkout_asset_contract),
     ("rapid split Raft live upgrade", test_rapid_split_raft_live_upgrade),
     ("Kubernetes and bare-metal restart budget contract", test_kubernetes_and_bare_metal_restart_budget_contract),

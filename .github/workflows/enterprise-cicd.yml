@@ -303,21 +303,33 @@ jobs:
         run: |
           set -euo pipefail
           start_ts="$(date +%s)"
-          account_id="$(aws sts get-caller-identity --query Account --output text)"
-          bucket="slopmud-assets-${account_id}-${AWS_REGION}"
-          key="${TRACK}/${SHA}/artifact.tgz"
+          bucket=""
+          key=""
 
-          set +e
-          aws s3 cp "$ARTIFACT_PATH" "s3://${bucket}/${key}"
-          rc=$?
-          set -e
-          if [[ $rc -ne 0 ]]; then
+          if command -v aws >/dev/null 2>&1; then
+            account_id="$(aws sts get-caller-identity --query Account --output text)"
+            bucket="slopmud-assets-${account_id}-${AWS_REGION}"
+            key="${TRACK}/${SHA}/artifact.tgz"
+
+            set +e
+            aws s3 cp "$ARTIFACT_PATH" "s3://${bucket}/${key}"
+            rc=$?
+            set -e
+            if [[ $rc -ne 0 ]]; then
+              if [[ "$TRACK" == "dev" ]]; then
+                echo "WARN: S3 upload failed (dev track continues without S3). Apply terraform to create/permit the assets bucket." >&2
+                bucket=""
+                key=""
+              else
+                exit $rc
+              fi
+            fi
+          else
             if [[ "$TRACK" == "dev" ]]; then
-              echo "WARN: S3 upload failed (dev track continues without S3). Apply terraform to create/permit the assets bucket." >&2
-              bucket=""
-              key=""
+              echo "WARN: aws CLI is missing; dev track continues with the local artifact." >&2
             else
-              exit $rc
+              echo "ERROR: aws CLI is required for ${TRACK} artifact upload." >&2
+              exit 2
             fi
           fi
 
