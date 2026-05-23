@@ -27,13 +27,21 @@ struct Check {
     env: String,
     service: String,
     instance: String,
-    target: TcpTarget,
+    target: CheckTarget,
+    build: Option<String>,
+    detail: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct TcpTarget {
     host: String,
     port: u16,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum CheckTarget {
+    Tcp(TcpTarget),
+    Missing(String),
 }
 
 #[derive(Clone, Debug, serde::Serialize)]
@@ -76,10 +84,12 @@ struct CheckResult {
     env: String,
     service: String,
     instance: String,
+    build: Option<String>,
     target: String,
     ok: bool,
     latency_ms: Option<u128>,
     error: Option<String>,
+    detail: Option<String>,
 }
 
 #[derive(Clone)]
@@ -99,7 +109,7 @@ ENV:
   SLOPMUD_STATUS_TITLE   default Slopmud Status
   SLOPMUD_STATUS_ENVS    default dev,stg,prd
   SLOPMUD_STATUS_HOSTS   comma-separated hostnames served as status page; other hosts redirect to HTTPS
-  SLOPMUD_STATUS_CHECKS  comma-separated env/service/instance=tcp://host:port checks
+  SLOPMUD_STATUS_CHECKS  comma-separated env/service/instance=tcp://host:port;build=sha;detail=text checks
 "
     );
     std::process::exit(2);
@@ -176,41 +186,84 @@ fn parse_checks(raw: &str, expected_envs: &[String]) -> anyhow::Result<Vec<Check
 }
 
 fn parse_check(raw: &str, expected_envs: &[String]) -> anyhow::Result<Check> {
-    let Some((name, target)) = raw.split_once('=') else {
+    let Some((name, spec)) = raw.split_once('=') else {
         bail!("status check must be name=tcp://host:port: {raw}");
     };
-    let Some(host_port) = target.strip_prefix("tcp://") else {
-        bail!("status check only supports tcp:// targets: {raw}");
-    };
-    let Some((host, port)) = host_port.rsplit_once(':') else {
-        bail!("tcp target must include a port: {raw}");
-    };
-    let port: u16 = port
-        .parse()
-        .with_context(|| format!("parse port in {raw}"))?;
+    let (target_spec, build, detail) = parse_target_spec(spec, raw)?;
     let name = name.trim();
-    let host = host.trim();
-    if name.is_empty() || host.is_empty() {
-        bail!("status check name and host cannot be empty: {raw}");
+    if name.is_empty() {
+        bail!("status check name cannot be empty: {raw}");
     }
-    let (env, service, instance) = parse_check_identity(name, expected_envs, host, port)?;
+    let (target, identity_default) = parse_target(target_spec, raw)?;
+    let (env, service, instance) = parse_check_identity(name, expected_envs, &identity_default)?;
     Ok(Check {
         name: format!("{env}/{service}/{instance}"),
         env,
         service,
         instance,
-        target: TcpTarget {
-            host: host.to_string(),
-            port,
-        },
+        target,
+        build,
+        detail,
     })
+}
+
+fn parse_target_spec<'a>(
+    raw_spec: &'a str,
+    raw_check: &str,
+) -> anyhow::Result<(&'a str, Option<String>, Option<String>)> {
+    let mut parts = raw_spec.split(';').map(str::trim).filter(|p| !p.is_empty());
+    let Some(target) = parts.next() else {
+        bail!("status check target cannot be empty: {raw_check}");
+    };
+    let mut build = None;
+    let mut detail = None;
+    for part in parts {
+        let Some((key, value)) = part.split_once('=') else {
+            bail!("status check metadata must be key=value: {raw_check}");
+        };
+        match key.trim() {
+            "build" => build = Some(value.trim().to_string()),
+            "detail" => detail = Some(value.trim().to_string()),
+            other => bail!("unknown status check metadata key '{other}': {raw_check}"),
+        }
+    }
+    Ok((target, build, detail))
+}
+
+fn parse_target(raw_target: &str, raw_check: &str) -> anyhow::Result<(CheckTarget, String)> {
+    if let Some(host_port) = raw_target.strip_prefix("tcp://") {
+        let Some((host, port)) = host_port.rsplit_once(':') else {
+            bail!("tcp target must include a port: {raw_check}");
+        };
+        let port: u16 = port
+            .parse()
+            .with_context(|| format!("parse port in {raw_check}"))?;
+        let host = host.trim();
+        if host.is_empty() {
+            bail!("tcp target host cannot be empty: {raw_check}");
+        }
+        return Ok((
+            CheckTarget::Tcp(TcpTarget {
+                host: host.to_string(),
+                port,
+            }),
+            default_instance(host, port),
+        ));
+    }
+    if let Some(reason) = raw_target.strip_prefix("missing://") {
+        let reason = reason.trim().replace('+', " ");
+        if reason.is_empty() {
+            bail!("missing target must include a reason: {raw_check}");
+        }
+        return Ok((CheckTarget::Missing(reason), "expected".to_string()));
+    }
+    bail!("status check only supports tcp:// and missing:// targets: {raw_check}");
 }
 
 fn parse_check_identity(
     raw: &str,
     expected_envs: &[String],
-    host: &str,
-    port: u16,
+    default_instance: &str,
 ) -> anyhow::Result<(String, String, String)> {
     let slash_parts = raw
         .split('/')
@@ -227,7 +280,7 @@ fn parse_check_identity(
             slash_parts
                 .get(2)
                 .map(|s| (*s).to_string())
-                .unwrap_or_else(|| default_instance(host, port)),
+                .unwrap_or_else(|| default_instance.to_string()),
         ));
     }
 
@@ -236,7 +289,7 @@ fn parse_check_identity(
         if expected_envs.iter().any(|e| e == first) {
             let service = words.collect::<Vec<_>>().join(" ");
             if !service.trim().is_empty() {
-                return Ok((first.to_string(), service, default_instance(host, port)));
+                return Ok((first.to_string(), service, default_instance.to_string()));
             }
         }
     }
@@ -244,7 +297,7 @@ fn parse_check_identity(
     Ok((
         "ops".to_string(),
         raw.trim().to_string(),
-        default_instance(host, port),
+        default_instance.to_string(),
     ))
 }
 
@@ -287,7 +340,25 @@ async fn collect_status(cfg: &Config) -> StatusDoc {
 }
 
 async fn run_check(check: &Check, limit: Duration) -> CheckResult {
-    let target = format!("{}:{}", check.target.host, check.target.port);
+    match &check.target {
+        CheckTarget::Tcp(target) => run_tcp_check(check, target, limit).await,
+        CheckTarget::Missing(reason) => CheckResult {
+            name: check.name.clone(),
+            env: check.env.clone(),
+            service: check.service.clone(),
+            instance: check.instance.clone(),
+            build: check.build.clone(),
+            target: "missing".to_string(),
+            ok: false,
+            latency_ms: None,
+            error: Some(reason.clone()),
+            detail: check.detail.clone(),
+        },
+    }
+}
+
+async fn run_tcp_check(check: &Check, target: &TcpTarget, limit: Duration) -> CheckResult {
+    let target = format!("{}:{}", target.host, target.port);
     let started = std::time::Instant::now();
     match timeout(limit, TcpStream::connect(&target)).await {
         Ok(Ok(_stream)) => CheckResult {
@@ -295,30 +366,36 @@ async fn run_check(check: &Check, limit: Duration) -> CheckResult {
             env: check.env.clone(),
             service: check.service.clone(),
             instance: check.instance.clone(),
+            build: check.build.clone(),
             target,
             ok: true,
             latency_ms: Some(started.elapsed().as_millis()),
             error: None,
+            detail: check.detail.clone(),
         },
         Ok(Err(err)) => CheckResult {
             name: check.name.clone(),
             env: check.env.clone(),
             service: check.service.clone(),
             instance: check.instance.clone(),
+            build: check.build.clone(),
             target,
             ok: false,
             latency_ms: None,
             error: Some(err.to_string()),
+            detail: check.detail.clone(),
         },
         Err(_elapsed) => CheckResult {
             name: check.name.clone(),
             env: check.env.clone(),
             service: check.service.clone(),
             instance: check.instance.clone(),
+            build: check.build.clone(),
             target,
             ok: false,
             latency_ms: None,
             error: Some(format!("timeout after {}ms", limit.as_millis())),
+            detail: check.detail.clone(),
         },
     }
 }
@@ -525,7 +602,7 @@ fn render_environment(env: &EnvironmentStatus) -> String {
             .join("");
         format!(
             r#"<table>
-        <thead><tr><th>service</th><th>instance</th><th>target</th><th>state</th><th>latency</th></tr></thead>
+        <thead><tr><th>service</th><th>instance</th><th>build</th><th>target</th><th>state</th><th>result</th><th>detail</th></tr></thead>
         <tbody>{rows}</tbody>
       </table>"#,
             rows = rows
@@ -557,14 +634,18 @@ fn render_check_row(service: &ServiceStatus, check: &CheckResult) -> String {
             .clone()
             .unwrap_or_else(|| "unreachable".to_string())
     };
+    let build = check.build.as_deref().unwrap_or("unknown");
+    let extra = check.detail.as_deref().unwrap_or("");
     format!(
-        r#"<tr><td class="service-name">{service}</td><td>{instance}</td><td>{target}</td><td><span class="pill {class}">{label}</span></td><td>{detail}</td></tr>"#,
+        r#"<tr><td class="service-name">{service}</td><td>{instance}</td><td>{build}</td><td>{target}</td><td><span class="pill {class}">{label}</span></td><td>{detail}</td><td>{extra}</td></tr>"#,
         service = escape_html(&service.name),
         instance = escape_html(&check.instance),
+        build = escape_html(build),
         target = escape_html(&check.target),
         class = class,
         label = label,
-        detail = escape_html(&detail)
+        detail = escape_html(&detail),
+        extra = escape_html(extra)
     )
 }
 
@@ -727,7 +808,9 @@ th {
 }
 tr:last-child td { border-bottom: 0; }
 td:nth-child(3),
-td:nth-child(5) {
+td:nth-child(4),
+td:nth-child(6),
+td:nth-child(7) {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
@@ -785,9 +868,15 @@ mod tests {
         assert_eq!(checks[0].env, "dev");
         assert_eq!(checks[0].service, "broker");
         assert_eq!(checks[0].instance, "gateway");
-        assert_eq!(checks[0].target.host, "127.0.0.1");
-        assert_eq!(checks[0].target.port, 4000);
-        assert_eq!(checks[1].target.host, "example.com");
+        let CheckTarget::Tcp(target) = &checks[0].target else {
+            panic!("expected tcp target");
+        };
+        assert_eq!(target.host, "127.0.0.1");
+        assert_eq!(target.port, 4000);
+        let CheckTarget::Tcp(target) = &checks[1].target else {
+            panic!("expected tcp target");
+        };
+        assert_eq!(target.host, "example.com");
     }
 
     #[test]
@@ -807,6 +896,25 @@ mod tests {
     }
 
     #[test]
+    fn parses_missing_checks_with_build_metadata() {
+        let expected_envs = vec!["raft".to_string()];
+        let checks = parse_checks(
+            "raft/voter/n0=missing://no live EC2 instance;build=not running;detail=data volume available",
+            &expected_envs,
+        )
+        .expect("checks");
+        assert_eq!(checks[0].env, "raft");
+        assert_eq!(checks[0].service, "voter");
+        assert_eq!(checks[0].instance, "n0");
+        assert_eq!(checks[0].build.as_deref(), Some("not running"));
+        assert_eq!(checks[0].detail.as_deref(), Some("data volume available"));
+        assert_eq!(
+            checks[0].target,
+            CheckTarget::Missing("no live EC2 instance".to_string())
+        );
+    }
+
+    #[test]
     fn groups_checks_by_environment_and_service() {
         let expected_envs = vec!["dev".to_string(), "stg".to_string(), "prd".to_string()];
         let checks = vec![
@@ -819,6 +927,8 @@ mod tests {
                 ok: true,
                 latency_ms: Some(1),
                 error: None,
+                build: None,
+                detail: None,
             },
             CheckResult {
                 name: "sandbox/broker/gateway".to_string(),
@@ -829,6 +939,8 @@ mod tests {
                 ok: true,
                 latency_ms: Some(1),
                 error: None,
+                build: None,
+                detail: None,
             },
             CheckResult {
                 name: "prd/websocket/gateway".to_string(),
@@ -839,6 +951,8 @@ mod tests {
                 ok: false,
                 latency_ms: None,
                 error: Some("refused".to_string()),
+                build: None,
+                detail: None,
             },
         ];
         let envs = build_environments(&expected_envs, &checks);
@@ -893,6 +1007,8 @@ mod tests {
                         ok: true,
                         latency_ms: Some(0),
                         error: None,
+                        build: Some("abc123".to_string()),
+                        detail: Some("current release".to_string()),
                     }],
                 }],
             }],
@@ -902,6 +1018,8 @@ mod tests {
         assert!(html.contains("<h2>dev</h2>"));
         assert!(html.contains("broker"));
         assert!(html.contains("gateway"));
+        assert!(html.contains("abc123"));
+        assert!(html.contains("current release"));
     }
 
     #[test]
