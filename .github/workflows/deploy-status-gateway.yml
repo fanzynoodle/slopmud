@@ -29,6 +29,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ -f "$HOME/.cargo/env" ]]; then
+            # shellcheck disable=SC1090
+            source "$HOME/.cargo/env"
+          else
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
           cargo build -p slopmud_statusd -p sbc_metricsd --release
 
       - name: Install
