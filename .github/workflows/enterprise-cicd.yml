@@ -22,7 +22,7 @@ permissions:
   actions: write
 
 concurrency:
-  group: enterprise-cicd-${{ github.event_name == 'workflow_dispatch' && inputs.track || github.ref_name }}
+  group: enterprise-cicd-v2-${{ github.event_name == 'workflow_dispatch' && inputs.track || github.ref_name }}
   cancel-in-progress: true
 
 env:
