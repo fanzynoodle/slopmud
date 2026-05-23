@@ -10,7 +10,7 @@ bytes = "1.10.1"
 flatbuffers = "25.12.19"
 mudproto = { path = "../../crates/mudproto" }
 slopio = { path = "../../crates/slopio" }
-slopmud_walbackup = { path = "../../crates/walbackup" }
+slopmud_walbackup = { path = "../../crates/walbackup", default-features = false }
 tokio = { version = "1.43.0", features = ["full"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }

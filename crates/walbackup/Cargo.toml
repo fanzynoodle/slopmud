@@ -4,10 +4,15 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT OR 0BSD"
 
+[features]
+default = ["s3"]
+s3 = ["dep:aws-config", "dep:aws-sdk-s3", "dep:chrono"]
+
 [dependencies]
 anyhow = "1.0.96"
-aws-config = { version = "1.5.13", features = ["behavior-version-latest"] }
-aws-sdk-s3 = "1.74.0"
+aws-config = { version = "1.5.13", features = ["behavior-version-latest"], optional = true }
+aws-sdk-s3 = { version = "1.74.0", optional = true }
+chrono = { version = "0.4.39", default-features = false, features = ["clock", "std"], optional = true }
 serde = { version = "1.0.218", features = ["derive"] }
 serde_json = "1.0.140"
 sha2 = "0.10.8"

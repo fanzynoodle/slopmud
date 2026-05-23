@@ -3466,8 +3466,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "argon2",
- "aws-config",
- "aws-sdk-s3",
  "bytes",
  "chrono",
  "compliance",
@@ -3484,6 +3482,7 @@ dependencies = [
  "serde",
  "serde_json",
  "slopio",
+ "slopmud_walbackup",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -3510,11 +3509,23 @@ dependencies = [
  "anyhow",
  "aws-config",
  "aws-sdk-s3",
+ "chrono",
  "serde",
  "serde_json",
  "sha2",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "slopmud_walbackupd"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "slopmud_walbackup",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

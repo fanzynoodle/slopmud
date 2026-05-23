@@ -26,13 +26,26 @@ ssh_port_opt=(-p "$SSH_PORT")
 scp_port_opt=(-P "$SSH_PORT")
 
 remote_bin_dir="$(dirname "$SLOPMUD_REMOTE_BIN")"
+walbackupd_src="${SLOPMUD_WALBACKUPD_BIN_SRC:-target/release/slopmud_walbackupd}"
+walbackupd_enabled=0
+case "${SLOPMUD_EVENTLOG_UPLOAD_ENABLED:-}" in
+  1|true|TRUE|yes|YES|on|ON) walbackupd_enabled=1 ;;
+esac
 
 echo "Building slopmud (release)"
 ./scripts/build_bookworm_release.sh slopmud
+if [[ "$walbackupd_enabled" == "1" ]]; then
+  echo "Building slopmud_walbackupd (release)"
+  ./scripts/build_bookworm_release.sh slopmud_walbackupd
+fi
 
 bin_src="target/release/slopmud"
 if [[ ! -x "$bin_src" ]]; then
   echo "ERROR: expected binary at $bin_src" >&2
+  exit 2
+fi
+if [[ "$walbackupd_enabled" == "1" && ! -x "$walbackupd_src" ]]; then
+  echo "ERROR: expected walbackupd binary at $walbackupd_src" >&2
   exit 2
 fi
 
@@ -56,9 +69,14 @@ ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
 
 echo "Uploading binary -> ${SSH_USER}@${HOST}:${SLOPMUD_REMOTE_BIN}"
 scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$bin_src" "${SSH_USER}@${HOST}:/tmp/slopmud"
+if [[ "$walbackupd_enabled" == "1" ]]; then
+  scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$walbackupd_src" "${SSH_USER}@${HOST}:/tmp/slopmud_walbackupd"
+fi
 ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
   set -euo pipefail; \
   sudo install -m 0755 -o root -g root /tmp/slopmud \"${SLOPMUD_REMOTE_BIN}\"; \
+  if [[ -f /tmp/slopmud_walbackupd ]]; then sudo install -m 0755 -o root -g root /tmp/slopmud_walbackupd \"${remote_bin_dir}/slopmud_walbackupd\"; fi; \
+  sudo rm -f /tmp/slopmud_walbackupd; \
   sudo rm -f /tmp/slopmud \
 "
 

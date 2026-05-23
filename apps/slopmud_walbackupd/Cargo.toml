@@ -1,0 +1,12 @@
+[package]
+name = "slopmud_walbackupd"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR 0BSD"
+
+[dependencies]
+anyhow = "1.0.96"
+slopmud_walbackup = { path = "../../crates/walbackup", features = ["s3"] }
+tokio = { version = "1.43.0", features = ["full"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }

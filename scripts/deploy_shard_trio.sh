@@ -83,15 +83,27 @@ scp_port_opt=(-P "$SSH_PORT")
 
 remote_bin_dir="$(dirname "$SHARD_REMOTE_BIN")"
 adminctl_src="${SLOPMUD_ADMINCTL_BIN_SRC:-target/release/slopmud_adminctl}"
+walbackupd_src="${SLOPMUD_WALBACKUPD_BIN_SRC:-target/release/slopmud_walbackupd}"
 remote_adminctl_bin="${remote_bin_dir}/slopmud_adminctl"
 wal_restore_helper_src="scripts/restore_wal_backup.sh"
 wal_restore_enabled=0
 case "${SLOPMUD_WAL_RESTORE_ENABLED:-}" in
   1|true|TRUE|yes|YES|on|ON|auto) wal_restore_enabled=1 ;;
 esac
+walbackupd_enabled="$wal_restore_enabled"
+case "${SLOPMUD_WAL_BACKUP_ENABLED:-}" in
+  1|true|TRUE|yes|YES|on|ON) walbackupd_enabled=1 ;;
+esac
+if [[ -n "${SLOPMUD_WAL_BACKUP_DIR:-}" || -n "${SLOPMUD_WAL_BACKUP_S3_BUCKET:-}" ]]; then
+  walbackupd_enabled=1
+fi
 
 echo "Building shard_01 (release)"
 ./scripts/build_bookworm_release.sh shard_01
+if [[ "$walbackupd_enabled" == "1" ]]; then
+  echo "Building slopmud_walbackupd (release)"
+  ./scripts/build_bookworm_release.sh slopmud_walbackupd
+fi
 if [[ "$wal_restore_enabled" == "1" ]]; then
   echo "Building slopmud_adminctl (release)"
   ./scripts/build_bookworm_release.sh slopmud_adminctl
@@ -104,6 +116,10 @@ if [[ ! -x "$bin_src" ]]; then
 fi
 if [[ "$wal_restore_enabled" == "1" && ! -x "$adminctl_src" ]]; then
   echo "ERROR: expected adminctl binary at $adminctl_src" >&2
+  exit 2
+fi
+if [[ "$walbackupd_enabled" == "1" && ! -x "$walbackupd_src" ]]; then
+  echo "ERROR: expected walbackupd binary at $walbackupd_src" >&2
   exit 2
 fi
 if [[ "$wal_restore_enabled" == "1" && ! -x "$wal_restore_helper_src" ]]; then
@@ -131,9 +147,14 @@ ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
 
 echo "Uploading binary -> ${SSH_USER}@${HOST}:${SHARD_REMOTE_BIN}"
 scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$bin_src" "${SSH_USER}@${HOST}:/tmp/shard_01"
+if [[ "$walbackupd_enabled" == "1" ]]; then
+  scp "${ssh_opts[@]}" "${scp_port_opt[@]}" "$walbackupd_src" "${SSH_USER}@${HOST}:/tmp/slopmud_walbackupd"
+fi
 ssh "${ssh_opts[@]}" "${ssh_port_opt[@]}" "${SSH_USER}@${HOST}" "\
   set -euo pipefail; \
   sudo install -m 0755 -o root -g root /tmp/shard_01 \"${SHARD_REMOTE_BIN}\"; \
+  if [[ -f /tmp/slopmud_walbackupd ]]; then sudo install -m 0755 -o root -g root /tmp/slopmud_walbackupd \"${remote_bin_dir}/slopmud_walbackupd\"; fi; \
+  sudo rm -f /tmp/slopmud_walbackupd; \
   sudo rm -f /tmp/shard_01 \
 "
 

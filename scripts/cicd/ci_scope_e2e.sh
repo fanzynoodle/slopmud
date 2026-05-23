@@ -54,7 +54,7 @@ if [[ "$run_all" -eq 0 ]]; then
           run_core=1
           run_ws=1
           ;;
-        apps/slopmud/*|apps/shard_01/*|apps/combat_refs/*|apps/sbc_deciderd/*|apps/sbc_enforcerd/*|apps/sbc_metricsd/*|apps/sbc_raftd/*|crates/slopmud/*|crates/walbackup/*|crates/fanzylog/*|crates/compliance/*|crates/sbc_core/*|scripts/e2e_local.py|scripts/e2e_party_run.py)
+        apps/slopmud/*|apps/shard_01/*|apps/slopmud_walbackupd/*|apps/combat_refs/*|apps/sbc_deciderd/*|apps/sbc_enforcerd/*|apps/sbc_metricsd/*|apps/sbc_raftd/*|crates/slopmud/*|crates/walbackup/*|crates/fanzylog/*|crates/compliance/*|crates/sbc_core/*|scripts/e2e_local.py|scripts/e2e_party_run.py)
           run_core=1
           ;;
         apps/ws_gateway/*|scripts/e2e_ws*.py|apps/ws_gateway/src/bin/e2e_ws.rs)

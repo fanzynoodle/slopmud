@@ -996,7 +996,7 @@ fn usage_and_exit() -> ! {
         "shard_01\n\n\
 USAGE:\n  shard_01 [--bind HOST:PORT]\n\n\
 ENV:\n  SHARD_BIND                  default 127.0.0.1:5000\n  WORLD_SEED                  default 1 (deterministic; replace with raft time/seed later)\n  WORLD_TICK_MS               default 1000\n  WORLD_TIME_SCALE_PPM        default 1000000 (1000000 = real time, 500000 = half speed)\n  BARTENDER_EMOTE_MS          default 30000\n  MOB_WANDER_MS               default 15000\n  SHARD_RAFT_LOG              default var/shard_01_raft.jsonl\n  SHARD_RAFT_NODE_ID          default NODE_ID or SHARD_BIND\n  SHARD_RAFT_BIND             optional raft RPC bind address\n  SHARD_RAFT_PEERS            optional comma-separated node@host:port peers\n  SHARD_RAFT_ELECTION_MS      optional; default 450+jitter\n  SHARD_RAFT_HEARTBEAT_MS     optional; default 120\n  SHARD_RAFT_APPLICATION_MAX_FORMAT optional; default current binary max\n  SHARD_BOOTSTRAP_ADMINS      comma-separated acct names added to admin group (genesis only)\n  SHARD_BOOTSTRAP_ADMIN_SSO   comma-separated principals added to admin group (genesis only)\n                             ex: google_email:rob@caskey.org,google_sub:123,acct:rob\n",
-        "  SLOPMUD_WAL_BACKUP_ENABLED optional; enables raw WAL extent backups\n  SLOPMUD_WAL_BACKUP_DIR     local WAL backup root; default SHARD_RAFT_LOG.walbackup when enabled\n  SLOPMUD_WAL_BACKUP_INTERVAL_S default 60\n  SLOPMUD_WAL_BACKUP_MAX_SEGMENT_BYTES default 536870912\n  SLOPMUD_WAL_BACKUP_S3_BUCKET optional S3 bucket for WAL backup extents/manifests\n  SLOPMUD_WAL_BACKUP_S3_PREFIX default slopmud/wal-backups\n",
+        "  SLOPMUD_WAL_BACKUP_ENABLED optional; enables raw WAL extent backups via child walbackupd\n  SLOPMUD_WAL_BACKUP_DIR     local WAL backup root; default SHARD_RAFT_LOG.walbackup when enabled\n  SLOPMUD_WAL_BACKUP_INTERVAL_S default 60\n  SLOPMUD_WAL_BACKUP_MAX_SEGMENT_BYTES default 536870912\n  SLOPMUD_WAL_BACKUP_S3_BUCKET optional S3 bucket for WAL backup extents/manifests\n  SLOPMUD_WAL_BACKUP_S3_PREFIX default slopmud/wal-backups\n  SLOPMUD_WALBACKUPD_BIN optional; default sibling slopmud_walbackupd\n",
         "  SLOPMUD_WAL_RESTORE_ENABLED optional; restores SHARD_RAFT_LOG before startup if missing/empty\n  SLOPMUD_WAL_RESTORE_DIR    local WAL backup root for restore\n  SLOPMUD_WAL_RESTORE_S3_URI or SLOPMUD_WAL_RESTORE_S3_BUCKET/SLOPMUD_WAL_RESTORE_S3_PREFIX\n  SLOPMUD_WAL_RESTORE_CACHE_DIR optional cache for S3 restore extents\n  SLOPMUD_WAL_RESTORE_OVERWRITE optional; replace existing log when true\n"
     ));
     std::process::exit(2);
@@ -5371,8 +5371,22 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let cfg = parse_args();
+    let wal_daemon = if cfg.wal_restore.is_some() || cfg.wal_backup.is_some() {
+        Some(
+            slopmud_walbackup::daemon::WalBackupDaemonHandle::spawn_for_wal_from_env(
+                &cfg.raft_log_path,
+                &cfg.raft_consensus.node_id,
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
     if let Some(wal_restore) = cfg.wal_restore.clone() {
-        match slopmud_walbackup::restore_wal_from_backup(&wal_restore).await? {
+        let wal_daemon = wal_daemon.as_ref().ok_or_else(|| {
+            anyhow::anyhow!("WAL restore requested but walbackupd is not running")
+        })?;
+        match wal_daemon.restore_wal().await? {
             slopmud_walbackup::WalRestoreOutcome::SkippedExisting { path, bytes } => {
                 info!(path = %path.display(), bytes, "wal restore skipped; target already exists");
             }
@@ -5420,8 +5434,12 @@ async fn main() -> anyhow::Result<()> {
             s3_bucket = wal_backup.s3_bucket.as_deref().unwrap_or("-"),
             "wal backup enabled"
         );
-        tokio::spawn(slopmud_walbackup::run_backup_loop(wal_backup));
+        let wal_daemon = wal_daemon
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("WAL backup requested but walbackupd is not running"))?;
+        wal_daemon.start_wal_backup().await?;
     }
+    let _wal_daemon = wal_daemon;
 
     let rooms = rooms::Rooms::load()?;
     let world = Arc::new(Mutex::new(World::new(
@@ -8768,6 +8786,21 @@ async fn handle_broker(
                     world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
                     continue;
                 }
+                if lc == "wave" {
+                    let emote = room_emote_noarg(&p.name, "waves");
+                    world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
+                    continue;
+                }
+                if lc == "clap" {
+                    let emote = room_emote_noarg(&p.name, "claps");
+                    world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
+                    continue;
+                }
+                if lc == "cheer" {
+                    let emote = room_emote_noarg(&p.name, "cheers");
+                    world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
+                    continue;
+                }
 
                 if lc == "tell" {
                     write_resp_async(
@@ -11515,6 +11548,9 @@ laugh\r\n\
 sigh\r\n\
 wink\r\n\
 salute\r\n\
+wave\r\n\
+clap\r\n\
+cheer\r\n\
 shout <msg>\r\n\
 exit\r\n\
 ";
@@ -13232,5 +13268,8 @@ mod tests {
         assert_eq!(room_emote_noarg("Alice", "bows"), "* Alice bows");
         assert_eq!(room_emote_noarg("Alice", "laughs"), "* Alice laughs");
         assert_eq!(room_emote_noarg("Alice", "sighs"), "* Alice sighs");
+        assert_eq!(room_emote_noarg("Alice", "waves"), "* Alice waves");
+        assert_eq!(room_emote_noarg("Alice", "claps"), "* Alice claps");
+        assert_eq!(room_emote_noarg("Alice", "cheers"), "* Alice cheers");
     }
 }

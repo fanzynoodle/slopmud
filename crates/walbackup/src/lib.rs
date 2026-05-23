@@ -5,13 +5,21 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, bail};
+#[cfg(feature = "s3")]
 use aws_sdk_s3::Client as S3Client;
+#[cfg(feature = "s3")]
 use aws_sdk_s3::primitives::ByteStream;
+#[cfg(feature = "s3")]
 use aws_sdk_s3::types::ServerSideEncryption;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+#[cfg(feature = "s3")]
 use tokio::io::{AsyncWriteExt, BufWriter};
-use tracing::{info, warn};
+#[cfg(feature = "s3")]
+use tracing::info;
+use tracing::warn;
+
+pub mod daemon;
 
 pub const MANIFEST_FORMAT: u32 = 1;
 pub const DEFAULT_BACKUP_INTERVAL_S: u64 = 60;
@@ -907,18 +915,16 @@ pub async fn restore_wal_from_backup(cfg: &WalRestoreConfig) -> anyhow::Result<W
             (dir.clone(), manifest)
         }
         WalRestoreSource::S3 { uri, cache_dir } => {
-            let client = S3WalBackupClient::from_uri(uri).await?;
-            let manifests = client.list_manifests().await?;
-            let Some(manifest) = select_manifest_from_list_for_node(
-                &manifests,
+            let Some(manifest) = restore_s3_manifest_to_cache(
+                uri,
+                cache_dir,
                 cfg.manifest_unix_at_or_before,
                 cfg.node_id.as_deref(),
-            ) else {
+            )
+            .await?
+            else {
                 return Ok(WalRestoreOutcome::NoManifest);
             };
-            client
-                .download_manifest_to_cache(&manifest, cache_dir)
-                .await?;
             (cache_dir.clone(), manifest)
         }
     };
@@ -931,6 +937,36 @@ pub async fn restore_wal_from_backup(cfg: &WalRestoreConfig) -> anyhow::Result<W
         source_len: manifest.source_len,
         manifest_relpath: manifest.manifest_relpath,
     })
+}
+
+#[cfg(feature = "s3")]
+async fn restore_s3_manifest_to_cache(
+    uri: &str,
+    cache_dir: &Path,
+    manifest_unix_at_or_before: Option<u64>,
+    node_id: Option<&str>,
+) -> anyhow::Result<Option<WalBackupManifest>> {
+    let client = S3WalBackupClient::from_uri(uri).await?;
+    let manifests = client.list_manifests().await?;
+    let Some(manifest) =
+        select_manifest_from_list_for_node(&manifests, manifest_unix_at_or_before, node_id)
+    else {
+        return Ok(None);
+    };
+    client
+        .download_manifest_to_cache(&manifest, cache_dir)
+        .await?;
+    Ok(Some(manifest))
+}
+
+#[cfg(not(feature = "s3"))]
+async fn restore_s3_manifest_to_cache(
+    _uri: &str,
+    _cache_dir: &Path,
+    _manifest_unix_at_or_before: Option<u64>,
+    _node_id: Option<&str>,
+) -> anyhow::Result<Option<WalBackupManifest>> {
+    bail!("S3 WAL restore requires the slopmud_walbackup s3 feature");
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -1280,35 +1316,26 @@ fn find_json_u64_field(buf: &[u8], field: &str) -> Option<u64> {
 }
 
 pub async fn run_backup_loop(cfg: WalBackupConfig) {
-    let uploader = if cfg.upload_enabled {
-        match cfg.s3_bucket.clone() {
-            Some(bucket) => match S3WalBackupClient::new(bucket, cfg.s3_prefix.clone()).await {
-                Ok(client) => Some(client),
-                Err(err) => {
-                    warn!(err=%err, "wal backup s3 client initialization failed; s3 uploads disabled");
-                    None
-                }
-            },
-            None => {
-                warn!("wal backup upload enabled without S3 bucket; s3 uploads disabled");
-                None
-            }
-        }
-    } else {
-        None
-    };
+    #[cfg(feature = "s3")]
+    let uploader = build_wal_uploader(&cfg).await;
+    #[cfg(not(feature = "s3"))]
+    if cfg.upload_enabled {
+        warn!("wal backup upload requested but this binary was built without S3 support");
+    }
 
     let mut store = WalBackupStore::from_config(&cfg);
     let mut ticker = tokio::time::interval(cfg.interval);
     loop {
         ticker.tick().await;
         let now = unix_now_s();
+        #[cfg(feature = "s3")]
         let root = store.root().to_path_buf();
         match store.sync_once(now) {
             Ok(result) => {
                 if !result.changed {
                     continue;
                 }
+                #[cfg(feature = "s3")]
                 if let Some(client) = uploader.as_ref() {
                     if let Err(err) = client.upload_sync_result(&root, &result).await {
                         warn!(err=%err, "wal backup s3 upload failed");
@@ -1320,6 +1347,27 @@ pub async fn run_backup_loop(cfg: WalBackupConfig) {
     }
 }
 
+#[cfg(feature = "s3")]
+async fn build_wal_uploader(cfg: &WalBackupConfig) -> Option<S3WalBackupClient> {
+    if !cfg.upload_enabled {
+        return None;
+    }
+    match cfg.s3_bucket.clone() {
+        Some(bucket) => match S3WalBackupClient::new(bucket, cfg.s3_prefix.clone()).await {
+            Ok(client) => Some(client),
+            Err(err) => {
+                warn!(err=%err, "wal backup s3 client initialization failed; s3 uploads disabled");
+                None
+            }
+        },
+        None => {
+            warn!("wal backup upload enabled without S3 bucket; s3 uploads disabled");
+            None
+        }
+    }
+}
+
+#[cfg(feature = "s3")]
 #[derive(Clone)]
 pub struct S3WalBackupClient {
     client: S3Client,
@@ -1327,6 +1375,7 @@ pub struct S3WalBackupClient {
     prefix: String,
 }
 
+#[cfg(feature = "s3")]
 impl S3WalBackupClient {
     pub async fn new(bucket: String, prefix: String) -> anyhow::Result<Self> {
         let aws_cfg = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
@@ -1494,6 +1543,173 @@ impl S3WalBackupClient {
     }
 }
 
+#[cfg(feature = "s3")]
+#[derive(Clone, Debug)]
+pub struct EventLogUploadConfig {
+    pub spool_dir: PathBuf,
+    pub s3_bucket: String,
+    pub s3_prefix: String,
+    pub upload_delete_local: bool,
+}
+
+#[cfg(feature = "s3")]
+impl EventLogUploadConfig {
+    pub fn from_env() -> anyhow::Result<Option<Self>> {
+        let upload_enabled = std::env::var("SLOPMUD_EVENTLOG_UPLOAD_ENABLED")
+            .ok()
+            .is_some_and(|v| parse_bool_lossy(&v));
+        if !upload_enabled {
+            return Ok(None);
+        }
+        let Some(s3_bucket) = std::env::var("SLOPMUD_EVENTLOG_S3_BUCKET")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+        else {
+            return Ok(None);
+        };
+        let spool_dir = std::env::var("SLOPMUD_EVENTLOG_SPOOL_DIR")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("locks/eventlog"));
+        let s3_prefix = std::env::var("SLOPMUD_EVENTLOG_S3_PREFIX")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .unwrap_or_else(|| "slopmud/eventlog".to_string());
+        let upload_delete_local = !std::env::var("SLOPMUD_EVENTLOG_UPLOAD_DELETE_LOCAL")
+            .ok()
+            .is_some_and(|v| v == "0" || v.eq_ignore_ascii_case("false"));
+        Ok(Some(Self {
+            spool_dir,
+            s3_bucket,
+            s3_prefix,
+            upload_delete_local,
+        }))
+    }
+}
+
+#[cfg(feature = "s3")]
+pub async fn upload_eventlog_relpaths(
+    cfg: &EventLogUploadConfig,
+    relpaths: &[String],
+) -> anyhow::Result<usize> {
+    if relpaths.is_empty() {
+        return Ok(0);
+    }
+    let aws_cfg = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+    let s3 = S3Client::new(&aws_cfg);
+    let mut uploaded = 0usize;
+    for rel in relpaths {
+        if upload_one_eventlog_relpath(cfg, &s3, rel).await? {
+            uploaded += 1;
+        }
+    }
+    Ok(uploaded)
+}
+
+#[cfg(feature = "s3")]
+pub fn scan_eventlog_backlog(cfg: &EventLogUploadConfig) -> anyhow::Result<Vec<String>> {
+    let today = chrono::Utc::now().date_naive();
+    let mut rels = Vec::new();
+    scan_eventlog_dir(
+        cfg.spool_dir.as_path(),
+        cfg.spool_dir.as_path(),
+        today,
+        &mut rels,
+    )?;
+    Ok(rels)
+}
+
+#[cfg(feature = "s3")]
+async fn upload_one_eventlog_relpath(
+    cfg: &EventLogUploadConfig,
+    s3: &S3Client,
+    rel: &str,
+) -> anyhow::Result<bool> {
+    let path = cfg.spool_dir.join(rel);
+    if !path.is_file() {
+        return Ok(false);
+    }
+    let key = join_prefix(&cfg.s3_prefix, rel);
+    let body = ByteStream::from_path(&path).await?;
+    s3.put_object()
+        .bucket(&cfg.s3_bucket)
+        .key(&key)
+        .content_type("text/plain; charset=utf-8")
+        .server_side_encryption(ServerSideEncryption::Aes256)
+        .body(body)
+        .send()
+        .await?;
+    info!(bucket=%cfg.s3_bucket, key=%key, "eventlog uploaded");
+    if cfg.upload_delete_local {
+        let _ = std::fs::remove_file(&path);
+    }
+    Ok(true)
+}
+
+#[cfg(feature = "s3")]
+fn scan_eventlog_dir(
+    root: &Path,
+    dir: &Path,
+    today: chrono::NaiveDate,
+    out: &mut Vec<String>,
+) -> anyhow::Result<()> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e.into()),
+    };
+    for ent in entries {
+        let ent = ent?;
+        let path = ent.path();
+        let ft = ent.file_type()?;
+        if ft.is_dir() {
+            scan_eventlog_dir(root, &path, today, out)?;
+            continue;
+        }
+        if !ft.is_file() || path.extension().and_then(|e| e.to_str()) != Some("log") {
+            continue;
+        }
+        let Some(rel) = path
+            .strip_prefix(root)
+            .ok()
+            .and_then(|p| p.to_str())
+            .map(|s| s.to_string())
+        else {
+            continue;
+        };
+        if eventlog_relpath_is_today(&rel, today) {
+            continue;
+        }
+        out.push(rel);
+    }
+    Ok(())
+}
+
+#[cfg(feature = "s3")]
+fn eventlog_relpath_is_today(rel: &str, today: chrono::NaiveDate) -> bool {
+    use chrono::Datelike;
+
+    let parts = rel.split('/').collect::<Vec<_>>();
+    if parts.len() < 5 {
+        return false;
+    }
+    let Some(d_stem) = parts[parts.len() - 1].strip_suffix(".log") else {
+        return false;
+    };
+    let Ok(y) = parts[parts.len() - 3].parse::<i32>() else {
+        return false;
+    };
+    let Ok(m) = parts[parts.len() - 2].parse::<u32>() else {
+        return false;
+    };
+    let Ok(d) = d_stem.parse::<u32>() else {
+        return false;
+    };
+    y == today.year() && m == today.month() && d == today.day()
+}
+
+#[cfg(feature = "s3")]
 fn write_cache_manifest(
     cache_dir: &Path,
     manifest: &WalBackupManifest,
@@ -1582,6 +1798,14 @@ fn parse_bool(raw: &str) -> anyhow::Result<bool> {
     }
 }
 
+#[cfg(feature = "s3")]
+fn parse_bool_lossy(raw: &str) -> bool {
+    matches!(
+        raw.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "on"
+    )
+}
+
 fn parse_optional_bool_env(name: &str) -> anyhow::Result<Option<bool>> {
     std::env::var(name)
         .ok()
@@ -1654,6 +1878,7 @@ fn normalize_prefix(prefix: &str) -> String {
     prefix.trim_matches('/').to_string()
 }
 
+#[cfg(feature = "s3")]
 fn join_prefix(prefix: &str, rel: &str) -> String {
     let prefix = normalize_prefix(prefix);
     let rel = rel.trim_start_matches('/');

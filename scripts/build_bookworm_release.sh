@@ -18,11 +18,22 @@ if [[ -n "${cargo_jobs}" && ! "${cargo_jobs}" =~ ^[0-9]+$ ]]; then
   echo "ERROR: SLOPMUD_CARGO_BUILD_JOBS/CARGO_BUILD_JOBS must be an integer" >&2
   exit 2
 fi
+build_profile="${SLOPMUD_CARGO_PROFILE:-release}"
+if ! [[ "${build_profile}" =~ ^[A-Za-z0-9_-]+$ ]]; then
+  echo "ERROR: SLOPMUD_CARGO_PROFILE must contain only letters, numbers, underscore, or dash" >&2
+  exit 2
+fi
 
-build_cmd=(cargo build -p "${pkg}" --release)
+build_cmd=(cargo build -p "${pkg}")
+case "${build_profile}" in
+  dev) ;;
+  release) build_cmd+=(--release) ;;
+  *) build_cmd+=(--profile "${build_profile}") ;;
+esac
 if [[ -n "${cargo_jobs}" ]]; then
   build_cmd+=(-j "${cargo_jobs}")
 fi
+container_build_cmd=(/usr/local/cargo/bin/cargo "${build_cmd[@]:1}")
 
 if command -v podman >/dev/null 2>&1; then
   # Needs a Cargo new enough for edition=2024.
@@ -40,7 +51,7 @@ if command -v podman >/dev/null 2>&1; then
     -v "${repo_root}:/work:Z" \
     -w /work \
     "${image}" \
-    bash -lc "$(printf '/usr/local/cargo/bin/%q ' "${build_cmd[@]}")"
+    bash -lc "$(printf '%q ' "${container_build_cmd[@]}")"
 else
   echo "podman not found; falling back to local build (may produce a binary incompatible with Debian 12)" >&2
   SLOPMUD_GIT_SHA="${git_sha}" SLOPMUD_GIT_DIRTY="${git_dirty}" "${build_cmd[@]}"

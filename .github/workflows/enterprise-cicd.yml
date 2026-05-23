@@ -255,9 +255,9 @@ jobs:
           TRACK: ${{ steps.meta.outputs.deploy_env }}
           # Clean rebuild only on the stg branch/track.
           CLEAN_BUILD: ${{ steps.meta.outputs.deploy_env == 'stg' && '1' || '0' }}
-          # Dev only deploys the game broker + shard. Keep web/OIDC release
-          # binaries out of the hot branch path; staging still builds the full
-          # artifact used for prod promotion.
+          # Dev deploys the game broker + shard + stable WAL helper. Keep web/OIDC
+          # release binaries out of the hot branch path; staging still builds the
+          # full artifact used for prod promotion.
           BUILD_STATIC_WEB: ${{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}
           BUILD_SLOPMUD_WEB: ${{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}
           BUILD_INTERNAL_OIDC: ${{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}

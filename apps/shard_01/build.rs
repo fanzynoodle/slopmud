@@ -17,6 +17,14 @@ fn env_nonempty(key: &str) -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
+fn rerun_if_git_path(pathspec: &str) {
+    if let Some(path) = git(&["rev-parse", "--git-path", pathspec]) {
+        if !path.is_empty() && PathBuf::from(&path).exists() {
+            println!("cargo:rerun-if-changed={path}");
+        }
+    }
+}
+
 fn main() {
     // Capture build timestamp (UTC) and git metadata for `buildinfo`.
     let now = SystemTime::now()
@@ -73,9 +81,14 @@ fn main() {
     println!("cargo:rerun-if-env-changed=SLOPMUD_GIT_DIRTY");
     println!("cargo:rerun-if-env-changed=GITHUB_SHA");
 
-    // Ensure rebuild when HEAD changes.
-    println!("cargo:rerun-if-changed=.git/HEAD");
-    println!("cargo:rerun-if-changed=.git/index");
+    // Ensure rebuild when git metadata changes. Use `git --git-path` because
+    // worktrees store HEAD/index outside the package directory.
+    rerun_if_git_path("HEAD");
+    rerun_if_git_path("index");
+    rerun_if_git_path("packed-refs");
+    if let Some(head_ref) = git(&["symbolic-ref", "-q", "HEAD"]) {
+        rerun_if_git_path(&head_ref);
+    }
 
     // Embed all `world/areas/*.yaml` files as compile-time strings.
     //

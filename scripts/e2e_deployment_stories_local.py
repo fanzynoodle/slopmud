@@ -564,7 +564,9 @@ def test_cicd_asset_build_has_heartbeat() -> None:
 
 def test_cicd_tiny_runner_memory_guards() -> None:
     workflow = (REPO / ".github/workflows/enterprise-cicd.yml").read_text(encoding="utf-8")
+    workspace = (REPO / "Cargo.toml").read_text(encoding="utf-8")
     build_script = (REPO / "scripts/build_bookworm_release.sh").read_text(encoding="utf-8")
+    build_assets = (REPO / "scripts/cicd/build_assets.sh").read_text(encoding="utf-8")
     bootstrap = (REPO / "scripts/cicd/bootstrap_runner.sh").read_text(encoding="utf-8")
     tf_vars = (REPO / "infra/terraform/single-az-raft-us-east-1/variables.tf").read_text(
         encoding="utf-8"
@@ -573,6 +575,19 @@ def test_cicd_tiny_runner_memory_guards() -> None:
         raise AssertionError("CI asset build must force single-job release builds on tiny runners")
     if "build_cmd+=(-j" not in build_script or "CARGO_BUILD_JOBS" not in build_script:
         raise AssertionError("bookworm release builder must honor the CI cargo job limit")
+    if "[profile.devdeploy]" not in workspace or 'inherits = "dev"' not in workspace:
+        raise AssertionError("dev artifacts need a low-optimization devdeploy Cargo profile")
+    if (
+        "SLOPMUD_CARGO_PROFILE" not in build_script
+        or '--profile "${build_profile}"' not in build_script
+    ):
+        raise AssertionError("bookworm builder must support explicit Cargo profiles")
+    if (
+        'dev|sandbox) build_profile="devdeploy"' not in build_assets
+        or '*) build_profile="release"' not in build_assets
+        or 'target/${profile_target_dir}' not in build_assets
+    ):
+        raise AssertionError("asset builds must default dev/sandbox to devdeploy and keep stg/prd release")
     if "RUNNER_SWAPFILE_MB" not in bootstrap or "/sbin/mkswap" not in bootstrap:
         raise AssertionError("runner bootstrap must provision swap for tiny build hosts")
     if (
@@ -597,6 +612,16 @@ def test_cicd_tiny_runner_memory_guards() -> None:
         raise AssertionError("gateway root volume must leave room for the self-hosted runner build cache")
 
 
+def test_shard_build_script_uses_worktree_git_paths() -> None:
+    build_rs = (REPO / "apps/shard_01/build.rs").read_text(encoding="utf-8")
+    for bad_watch in ("rerun-if-changed=.git/HEAD", "rerun-if-changed=.git/index"):
+        if bad_watch in build_rs:
+            raise AssertionError(f"shard build.rs must not watch package-local git path {bad_watch}")
+    for required in ('"--git-path"', '"symbolic-ref", "-q", "HEAD"', 'rerun_if_git_path("HEAD")'):
+        if required not in build_rs:
+            raise AssertionError(f"shard build.rs lost worktree-safe git metadata watch: {required}")
+
+
 def test_cicd_e2e_scope_script_contract() -> None:
     shard = run_ci_scope_case("apps/shard_01/src/main.rs")
     if shard.get("run_e2e_core") != "1" or shard.get("run_e2e_ws") != "0":
@@ -617,6 +642,10 @@ def test_cicd_e2e_scope_script_contract() -> None:
     broker = run_ci_scope_case("crates/slopmud/src/main.rs")
     if broker.get("run_e2e_core") != "1" or broker.get("run_e2e_ws") != "0":
         raise AssertionError(f"broker-only crate changes should run core E2E only: {broker}")
+
+    walbackupd = run_ci_scope_case("apps/slopmud_walbackupd/src/main.rs")
+    if walbackupd.get("run_e2e_core") != "1" or walbackupd.get("run_e2e_ws") != "0":
+        raise AssertionError(f"walbackupd changes should run core E2E only: {walbackupd}")
 
     workflow = run_ci_scope_case(".github/workflows/enterprise-cicd.yml")
     if workflow.get("run_e2e_core") != "1" or workflow.get("run_e2e_ws") != "1":
@@ -894,13 +923,20 @@ def test_wal_restore_deploy_contract() -> None:
             "SLOPMUD_WAL_RESTORE_CACHE_DIR",
             "SLOPMUD_WAL_RESTORE_OVERWRITE",
             "SLOPMUD_WAL_RESTORE_MISSING_OK",
-            "SLOPMUD_ADMINCTL_BIN",
-            "ExecStartPre=/usr/local/bin/slopmud-wal-restore",
+            "slopmud_walbackupd",
         ):
             if needle not in text:
                 raise AssertionError(f"{label} lost WAL restore wiring: {needle}")
-    if "bin/slopmud_adminctl" not in build_assets or "scripts/restore_wal_backup.sh" not in build_assets:
-        raise AssertionError("asset bundles must include adminctl and the WAL restore helper")
+        if label != "onebox restore" and "ExecStartPre=/usr/local/bin/slopmud-wal-restore" not in text:
+            raise AssertionError(f"{label} lost legacy WAL restore pre-start hook")
+    if "ExecStartPre=/usr/local/bin/slopmud-wal-restore" in restore_onebox:
+        raise AssertionError("artifact restore path should let shard_01 manage WAL restore through walbackupd")
+    if (
+        "bin/slopmud_adminctl" not in build_assets
+        or "bin/slopmud_walbackupd" not in build_assets
+        or "scripts/restore_wal_backup.sh" not in build_assets
+    ):
+        raise AssertionError("asset bundles must include adminctl, walbackupd, and the WAL restore helper")
     if "restore_wal_backup.sh" not in rebootstrap:
         raise AssertionError("rebootstrap bundle must include the WAL restore helper")
 
@@ -1036,6 +1072,7 @@ TESTS = [
     ("CI/CD runner inventory fallback", test_cicd_runner_inventory_fallback_does_not_skip_deploy),
     ("CI/CD asset build heartbeat", test_cicd_asset_build_has_heartbeat),
     ("CI/CD tiny runner memory guards", test_cicd_tiny_runner_memory_guards),
+    ("shard build script worktree git paths", test_shard_build_script_uses_worktree_git_paths),
     ("CI/CD E2E scope script contract", test_cicd_e2e_scope_script_contract),
     ("CI/CD clean checkout asset contract", test_cicd_clean_checkout_asset_contract),
     ("rapid split Raft live upgrade", test_rapid_split_raft_live_upgrade),

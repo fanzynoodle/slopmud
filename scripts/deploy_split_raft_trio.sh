@@ -601,12 +601,20 @@ release_dir="${SLOPMUD_VERSIONED_BIN_DIR:-${remote_bin_dir}/releases}"
 remote_release_bin="${release_dir}/shard_01-${release_id}"
 bin_src="${SLOPMUD_BIN_SRC:-target/release/shard_01}"
 adminctl_src="${SLOPMUD_ADMINCTL_BIN_SRC:-target/release/slopmud_adminctl}"
+walbackupd_src="${SLOPMUD_WALBACKUPD_BIN_SRC:-target/release/slopmud_walbackupd}"
 remote_adminctl_bin="${remote_bin_dir}/slopmud_adminctl"
 wal_restore_helper_src="scripts/restore_wal_backup.sh"
 wal_restore_enabled=0
 case "${SLOPMUD_WAL_RESTORE_ENABLED:-}" in
   1|true|TRUE|yes|YES|on|ON|auto) wal_restore_enabled=1 ;;
 esac
+walbackupd_enabled="$wal_restore_enabled"
+case "${SLOPMUD_WAL_BACKUP_ENABLED:-}" in
+  1|true|TRUE|yes|YES|on|ON) walbackupd_enabled=1 ;;
+esac
+if [[ -n "${SLOPMUD_WAL_BACKUP_DIR:-}" || -n "${SLOPMUD_WAL_BACKUP_S3_BUCKET:-}" ]]; then
+  walbackupd_enabled=1
+fi
 case "${SLOPMUD_DEPLOY_FROM_S3:-0}" in
   1|true|yes|on) deploy_from_s3=1 ;;
   0|false|no|off|"") deploy_from_s3=0 ;;
@@ -621,6 +629,10 @@ if [[ "${SLOPMUD_SKIP_BUILD:-0}" == "1" ]]; then
 else
   echo "Building shard_01 (release)"
   ./scripts/build_bookworm_release.sh shard_01
+  if [[ "$walbackupd_enabled" == "1" ]]; then
+    echo "Building slopmud_walbackupd (release)"
+    ./scripts/build_bookworm_release.sh slopmud_walbackupd
+  fi
   if [[ "$wal_restore_enabled" == "1" ]]; then
     echo "Building slopmud_adminctl (release)"
     ./scripts/build_bookworm_release.sh slopmud_adminctl
@@ -633,6 +645,10 @@ if [[ ! -x "$bin_src" ]]; then
 fi
 if [[ "$wal_restore_enabled" == "1" && ! -x "$adminctl_src" ]]; then
   echo "ERROR: expected adminctl binary at $adminctl_src" >&2
+  exit 2
+fi
+if [[ "$walbackupd_enabled" == "1" && ! -x "$walbackupd_src" ]]; then
+  echo "ERROR: expected walbackupd binary at $walbackupd_src" >&2
   exit 2
 fi
 if [[ "$wal_restore_enabled" == "1" && ! -x "$wal_restore_helper_src" ]]; then
@@ -862,6 +878,16 @@ EOF
       sudo install -m 0755 -o root -g root '/tmp/slopmud_adminctl.${release_id}' '${remote_adminctl_bin}'; \
       sudo install -m 0755 -o root -g root /tmp/slopmud-wal-restore /usr/local/bin/slopmud-wal-restore; \
       sudo rm -f '/tmp/slopmud_adminctl.${release_id}' /tmp/slopmud-wal-restore \
+    "
+  fi
+
+  if [[ "$walbackupd_enabled" == "1" ]]; then
+    echo "Uploading slopmud_walbackupd to ${node_id} (${host})"
+    scp "${scp_opts[@]}" "$walbackupd_src" "${target}:/tmp/slopmud_walbackupd.${release_id}"
+    ssh "${ssh_opts[@]}" "$target" "\
+      set -euo pipefail; \
+      sudo install -m 0755 -o root -g root '/tmp/slopmud_walbackupd.${release_id}' '${remote_bin_dir}/slopmud_walbackupd'; \
+      sudo rm -f '/tmp/slopmud_walbackupd.${release_id}' \
     "
   fi
 

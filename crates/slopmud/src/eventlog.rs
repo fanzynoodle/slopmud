@@ -4,14 +4,12 @@ use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use aws_sdk_s3::Client as S3Client;
-use aws_sdk_s3::primitives::ByteStream;
-use aws_sdk_s3::types::ServerSideEncryption;
 use chrono::{Datelike, NaiveDate, Utc};
 use compliance::{LogStream, object_relpath};
+use slopmud_walbackup::daemon::{WalBackupDaemonClient, WalBackupDaemonHandle};
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
-use tracing::{info, warn};
+use tracing::warn;
 
 #[derive(Clone, Debug)]
 pub struct EventLogConfig {
@@ -46,6 +44,7 @@ pub struct EventLog {
     cfg: EventLogConfig,
     inner: Arc<Mutex<LocalWriter>>,
     upload_tx: Option<mpsc::Sender<Vec<String>>>,
+    _upload_daemon: Option<WalBackupDaemonHandle>,
 }
 
 impl EventLog {
@@ -58,22 +57,30 @@ impl EventLog {
         )));
 
         let mut upload_tx = None;
+        let mut upload_daemon = None;
         if cfg.upload_enabled {
             if cfg.s3_bucket.is_none() {
                 warn!("eventlog upload enabled but missing s3 bucket; disabling upload");
             } else {
-                let (tx, rx) = mpsc::channel::<Vec<String>>(64);
-                upload_tx = Some(tx.clone());
+                match WalBackupDaemonHandle::spawn_from_env(std::iter::empty::<(&str, &str)>())
+                    .await
+                {
+                    Ok(daemon) => {
+                        let (tx, rx) = mpsc::channel::<Vec<String>>(64);
+                        upload_tx = Some(tx.clone());
 
-                let aws_cfg =
-                    aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
-                let s3 = S3Client::new(&aws_cfg);
+                        // Best-effort periodic scan for backlog uploads.
+                        tokio::spawn(upload_scan_task(cfg.clone(), tx.clone()));
 
-                // Best-effort periodic scan for backlog uploads.
-                tokio::spawn(upload_scan_task(cfg.clone(), tx.clone()));
-
-                // Upload worker.
-                tokio::spawn(upload_worker_task(cfg.clone(), s3, rx));
+                        // Upload worker: the broker sends only path descriptors; walbackupd
+                        // streams file bodies from disk to S3 in its own process.
+                        tokio::spawn(upload_worker_task(daemon.client(), rx));
+                        upload_daemon = Some(daemon);
+                    }
+                    Err(err) => {
+                        warn!(err=%err, "eventlog upload child failed to start; disabling upload");
+                    }
+                }
             }
         }
 
@@ -97,6 +104,7 @@ impl EventLog {
             cfg,
             inner,
             upload_tx,
+            _upload_daemon: upload_daemon,
         }
     }
 
@@ -319,58 +327,12 @@ fn relpath_is_today(rel: &str, today: NaiveDate) -> bool {
     y == today.year() && m == today.month() && d == today.day()
 }
 
-async fn upload_worker_task(
-    cfg: EventLogConfig,
-    s3: S3Client,
-    mut rx: mpsc::Receiver<Vec<String>>,
-) {
-    let Some(bucket) = cfg.s3_bucket.clone() else {
-        return;
-    };
-
+async fn upload_worker_task(client: WalBackupDaemonClient, mut rx: mpsc::Receiver<Vec<String>>) {
     while let Some(batch) = rx.recv().await {
-        for rel in batch {
-            if let Err(e) = upload_one(&cfg, &s3, &bucket, &rel).await {
-                warn!(err=%e, rel=%rel, "eventlog upload failed");
-            }
+        if let Err(e) = client.enqueue_eventlog_uploads(batch).await {
+            warn!(err=%e, "eventlog upload enqueue failed");
         }
     }
-}
-
-async fn upload_one(
-    cfg: &EventLogConfig,
-    s3: &S3Client,
-    bucket: &str,
-    rel: &str,
-) -> anyhow::Result<()> {
-    let path = {
-        let mut p = cfg.spool_dir.clone();
-        p.push(rel);
-        p
-    };
-    if !path.is_file() {
-        return Ok(());
-    }
-
-    let key = join_prefix(&cfg.s3_prefix, rel);
-
-    let body = ByteStream::from_path(&path).await?;
-    s3.put_object()
-        .bucket(bucket)
-        .key(&key)
-        .content_type("text/plain; charset=utf-8")
-        .server_side_encryption(ServerSideEncryption::Aes256)
-        .body(body)
-        .send()
-        .await?;
-
-    info!(bucket=%bucket, key=%key, "eventlog uploaded");
-
-    if cfg.upload_delete_local {
-        let _ = std::fs::remove_file(&path);
-    }
-
-    Ok(())
 }
 
 fn join_prefix(prefix: &str, rel: &str) -> String {
