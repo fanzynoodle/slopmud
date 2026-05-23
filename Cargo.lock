@@ -3480,6 +3480,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "slopmud_statusd"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "serde",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "slopmud_web"
 version = "0.1.0"
 dependencies = [
