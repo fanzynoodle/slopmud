@@ -549,6 +549,7 @@ def test_cicd_runner_inventory_fallback_does_not_skip_deploy() -> None:
         "actions/runs?branch=${BRANCH_NAME}",
         ".run_number < $current_run_number",
         "actions/runs/${run_id}/cancel",
+        "actions/runs/${run_id}/force-cancel",
         'select(.status == "queued" or .status == "in_progress"',
     ):
         if required not in workflow:

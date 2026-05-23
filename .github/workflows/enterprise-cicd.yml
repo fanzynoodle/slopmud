@@ -61,6 +61,13 @@ jobs:
             echo "::notice::cancelling_older_workflow_run=${run_id}"
             gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/cancel" >/dev/null \
               || echo "::warning::Unable to cancel older workflow run ${run_id}."
+            sleep 2
+            run_status="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status' || true)"
+            if [ "$run_status" != "completed" ]; then
+              echo "::notice::force_cancelling_older_workflow_run=${run_id}"
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/force-cancel" >/dev/null \
+                || echo "::warning::Unable to force-cancel older workflow run ${run_id}."
+            fi
           done < <(
             printf "%s" "$runs_json" | jq -r \
               --arg workflow "$WORKFLOW_NAME" \
