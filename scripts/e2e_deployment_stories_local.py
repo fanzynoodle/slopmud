@@ -591,6 +591,8 @@ def test_cicd_tiny_runner_memory_guards() -> None:
         raise AssertionError("bookworm release builder must honor the CI cargo job limit")
     if "[profile.devdeploy]" not in workspace or 'inherits = "dev"' not in workspace:
         raise AssertionError("dev artifacts need a low-optimization devdeploy Cargo profile")
+    if "debug = 0" not in workspace or "codegen-units = 32" not in workspace:
+        raise AssertionError("devdeploy profile must keep tiny-runner link work bounded")
     if (
         "SLOPMUD_CARGO_PROFILE" not in build_script
         or '--profile "${build_profile}"' not in build_script

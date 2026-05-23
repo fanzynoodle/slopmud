@@ -26,6 +26,6 @@ members = [
 
 [profile.devdeploy]
 inherits = "dev"
-debug = 1
+debug = 0
 incremental = true
-codegen-units = 256
+codegen-units = 32
