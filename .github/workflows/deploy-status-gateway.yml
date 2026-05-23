@@ -16,7 +16,7 @@ concurrency:
 jobs:
   deploy:
     name: Install slopmud_statusd on gateway
-    runs-on: [self-hosted, Linux, mud]
+    runs-on: [self-hosted, Linux]
     timeout-minutes: 20
 
     steps:
