@@ -40,6 +40,41 @@ jobs:
       runner_count: ${{ steps.find_runner.outputs.runner_count }}
 
     steps:
+      - name: Cancel older same-branch workflow runs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+          CURRENT_RUN_NUMBER: ${{ github.run_number }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          if ! runs_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?branch=${BRANCH_NAME}&per_page=50")"; then
+            echo "::warning::Unable to list older workflow runs for stale-run cleanup."
+            exit 0
+          fi
+
+          while IFS= read -r run_id; do
+            [ -n "$run_id" ] || continue
+            echo "::notice::cancelling_older_workflow_run=${run_id}"
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/cancel" >/dev/null \
+              || echo "::warning::Unable to cancel older workflow run ${run_id}."
+          done < <(
+            printf "%s" "$runs_json" | jq -r \
+              --arg workflow "$WORKFLOW_NAME" \
+              --argjson current_run_id "$CURRENT_RUN_ID" \
+              --argjson current_run_number "$CURRENT_RUN_NUMBER" '
+                .workflow_runs[]
+                | select(.name == $workflow)
+                | select(.id != $current_run_id)
+                | select(.run_number < $current_run_number)
+                | select(.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "requested" or .status == "pending")
+                | .id
+              '
+          )
+
       - name: Find available mud runner
         id: find_runner
         shell: bash

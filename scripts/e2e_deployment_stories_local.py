@@ -544,6 +544,15 @@ def test_cicd_runner_inventory_fallback_does_not_skip_deploy() -> None:
         raise AssertionError("CI concurrency group should be versioned to escape orphaned pre-fix runs")
     if "cancel-in-progress: true" not in workflow:
         raise AssertionError("CI concurrency must cancel stale runs within the active generation")
+    for required in (
+        "Cancel older same-branch workflow runs",
+        "actions/runs?branch=${BRANCH_NAME}",
+        ".run_number < $current_run_number",
+        "actions/runs/${run_id}/cancel",
+        'select(.status == "queued" or .status == "in_progress"',
+    ):
+        if required not in workflow:
+            raise AssertionError(f"CI runner check must clear stale older runs before self-hosted build: {required}")
     if "runner_count=1" not in workflow:
         raise AssertionError("CI runner inventory fallback must not make build/deploy jobs skip")
     if "allowing self-hosted scheduling to proceed" not in workflow:
