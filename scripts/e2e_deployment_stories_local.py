@@ -591,6 +591,12 @@ def test_cicd_tiny_runner_memory_guards() -> None:
     if "RUNNER_SWAPFILE_MB" not in bootstrap or "/sbin/mkswap" not in bootstrap:
         raise AssertionError("runner bootstrap must provision swap for tiny build hosts")
     if (
+        "GITHUB_ACTIONS_RUNNER_CHANNEL_TIMEOUT" not in bootstrap
+        or "10-channel-timeout.conf" not in bootstrap
+        or "runner_channel_timeout_s" not in bootstrap
+    ):
+        raise AssertionError("runner bootstrap must raise GitHub worker IPC timeout on tiny hosts")
+    if (
         "Repairing direct Rust tool shims" not in bootstrap
         or "cargo install just --locked" not in bootstrap
     ):
