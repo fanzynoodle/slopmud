@@ -707,8 +707,10 @@ def test_cicd_clean_checkout_asset_contract() -> None:
         expected = f"{env_key}: ${{{{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}}}"
         if expected not in workflow:
             raise AssertionError(f"dev CI hot path must skip unused release binary: {env_key}")
-    if "cargo check --profile devdeploy -p slopmud -p shard_01 --bins" not in workflow:
-        raise AssertionError("dev validation must use the same low-memory profile as dev artifacts")
+    if "dev_validate_compile_deferred_to_build_asset=1" not in workflow:
+        raise AssertionError("dev validation should defer compile validation to the artifact build")
+    if "cargo check --profile devdeploy -p slopmud -p shard_01 --bins" in workflow:
+        raise AssertionError("dev validation must not pay for a duplicate cargo check before build")
     if 'env:\n          RUSTFLAGS: "-D warnings"' in workflow:
         raise AssertionError("dev validation must not globally set RUSTFLAGS and split Cargo caches")
     if 'RUSTFLAGS="-D warnings" cargo test' not in workflow:

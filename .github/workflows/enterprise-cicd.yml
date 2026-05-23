@@ -259,9 +259,10 @@ jobs:
           just fmt-check
           just py-check
 
-          # dev: keep this fast for iteration; stg: run the full validation suite.
+          # dev: the artifact build is the compile gate; avoid paying for a
+          # separate cold cargo check before building the same deployable bins.
           if [[ "$DEPLOY_ENV" == "dev" ]]; then
-            cargo check --profile devdeploy -p slopmud -p shard_01 --bins
+            echo "::notice::dev_validate_compile_deferred_to_build_asset=1"
           else
             RUSTFLAGS="-D warnings" cargo build --workspace --all-targets
             RUSTFLAGS="-D warnings" cargo test
