@@ -111,7 +111,7 @@ EOF
 sudo install -m 0440 "$tmp" /etc/sudoers.d/ghrunner-slopmud-shuttle-assets
 sudo visudo -cf /etc/sudoers.d/ghrunner-slopmud-shuttle-assets >/dev/null
 
-echo "Ensuring GitHub runner channel timeout (${runner_channel_timeout_s}s)"
+echo "Ensuring GitHub runner service guards (${runner_channel_timeout_s}s channel timeout)"
 mapfile -t runner_units < <(
   systemctl list-unit-files 'actions.runner.*.service' --no-legend --no-pager 2>/dev/null \
     | awk '{print $1}'
@@ -119,14 +119,14 @@ mapfile -t runner_units < <(
 if ((${#runner_units[@]} > 0)); then
   for svc in "${runner_units[@]}"; do
     sudo install -d -m 0755 "/etc/systemd/system/${svc}.d"
-    printf "[Service]\nEnvironment=GITHUB_ACTIONS_RUNNER_CHANNEL_TIMEOUT=%s\n" \
+    printf "[Service]\nEnvironment=GITHUB_ACTIONS_RUNNER_CHANNEL_TIMEOUT=%s\nKillMode=control-group\nTimeoutStopSec=20s\nSendSIGKILL=yes\n" \
       "${runner_channel_timeout_s}" \
       | sudo tee "/etc/systemd/system/${svc}.d/10-channel-timeout.conf" >/dev/null
   done
   sudo systemctl daemon-reload
   sudo systemctl try-restart "${runner_units[@]}" >/dev/null
 else
-  echo "WARN: no actions.runner.*.service units found; skipping channel timeout drop-in" >&2
+  echo "WARN: no actions.runner.*.service units found; skipping runner service guard drop-in" >&2
 fi
 
 echo "Bootstrap complete."

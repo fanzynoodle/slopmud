@@ -600,6 +600,9 @@ def test_cicd_tiny_runner_memory_guards() -> None:
         or "runner_channel_timeout_s" not in bootstrap
     ):
         raise AssertionError("runner bootstrap must raise GitHub worker IPC timeout on tiny hosts")
+    for required in ("KillMode=control-group", "TimeoutStopSec=20s", "SendSIGKILL=yes"):
+        if required not in bootstrap:
+            raise AssertionError(f"runner bootstrap must bound stale worker shutdowns: {required}")
     if (
         "Repairing direct Rust tool shims" not in bootstrap
         or "cargo install just --locked" not in bootstrap
