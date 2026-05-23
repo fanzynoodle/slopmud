@@ -3,9 +3,10 @@ use std::net::SocketAddr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, bail};
-use axum::http::{StatusCode, header};
-use axum::response::{Html, IntoResponse, Response};
-use axum::{Json, Router, extract::State, routing::get};
+use axum::extract::{Host, State};
+use axum::http::{StatusCode, Uri, header};
+use axum::response::{Html, IntoResponse, Redirect, Response};
+use axum::{Json, Router, routing::get};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 use tracing::info;
@@ -15,6 +16,7 @@ struct Config {
     bind: SocketAddr,
     title: String,
     expected_envs: Vec<String>,
+    status_hosts: Vec<String>,
     checks: Vec<Check>,
     timeout: Duration,
 }
@@ -96,6 +98,7 @@ ENV:
   SLOPMUD_STATUS_BIND    default 0.0.0.0:8080
   SLOPMUD_STATUS_TITLE   default Slopmud Status
   SLOPMUD_STATUS_ENVS    default dev,stg,prd
+  SLOPMUD_STATUS_HOSTS   comma-separated hostnames served as status page; other hosts redirect to HTTPS
   SLOPMUD_STATUS_CHECKS  comma-separated env/service/instance=tcp://host:port checks
 "
     );
@@ -127,6 +130,13 @@ fn parse_args() -> anyhow::Result<Config> {
     let expected_envs = parse_csv(
         &std::env::var("SLOPMUD_STATUS_ENVS").unwrap_or_else(|_| "dev,stg,prd".to_string()),
     );
+    let status_hosts = parse_csv(
+        &std::env::var("SLOPMUD_STATUS_HOSTS")
+            .unwrap_or_else(|_| "status.slopmud.com,localhost,127.0.0.1".to_string()),
+    )
+    .into_iter()
+    .map(|host| host.to_ascii_lowercase())
+    .collect::<Vec<_>>();
     let checks_raw = std::env::var("SLOPMUD_STATUS_CHECKS").unwrap_or_else(|_| {
         [
             "dev/broker/gateway=tcp://127.0.0.1:4000",
@@ -143,6 +153,7 @@ fn parse_args() -> anyhow::Result<Config> {
         bind,
         title,
         expected_envs,
+        status_hosts,
         checks,
         timeout: Duration::from_millis(650),
     })
@@ -371,13 +382,19 @@ async fn healthz() -> &'static str {
     "ok"
 }
 
-async fn api_status(State(st): State<AppState>) -> Json<StatusDoc> {
-    Json(collect_status(&st.cfg).await)
+async fn api_status(Host(host): Host, State(st): State<AppState>, uri: Uri) -> Response {
+    if let Some(resp) = redirect_non_status_host(&st.cfg, &host, &uri) {
+        return resp;
+    }
+    Json(collect_status(&st.cfg).await).into_response()
 }
 
-async fn index(State(st): State<AppState>) -> Html<String> {
+async fn index(Host(host): Host, State(st): State<AppState>, uri: Uri) -> Response {
+    if let Some(resp) = redirect_non_status_host(&st.cfg, &host, &uri) {
+        return resp;
+    }
     let doc = collect_status(&st.cfg).await;
-    Html(render_html(&doc))
+    Html(render_html(&doc)).into_response()
 }
 
 async fn stylesheet() -> Response {
@@ -387,6 +404,28 @@ async fn stylesheet() -> Response {
         CSS,
     )
         .into_response()
+}
+
+fn redirect_non_status_host(cfg: &Config, host: &str, uri: &Uri) -> Option<Response> {
+    if status_host_allowed(&cfg.status_hosts, host) {
+        return None;
+    }
+    let bare_host = host.split(':').next().unwrap_or(host);
+    let path = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
+    Some(Redirect::permanent(&format!("https://{bare_host}{path}")).into_response())
+}
+
+fn status_host_allowed(status_hosts: &[String], host: &str) -> bool {
+    if status_hosts.is_empty() {
+        return true;
+    }
+    let bare_host = host
+        .split(':')
+        .next()
+        .unwrap_or(host)
+        .trim_matches(['[', ']'])
+        .to_ascii_lowercase();
+    status_hosts.iter().any(|allowed| allowed == &bare_host)
 }
 
 fn render_html(doc: &StatusDoc) -> String {
@@ -863,6 +902,20 @@ mod tests {
         assert!(html.contains("<h2>dev</h2>"));
         assert!(html.contains("broker"));
         assert!(html.contains("gateway"));
+    }
+
+    #[test]
+    fn only_configured_status_hosts_are_served_as_status_page() {
+        let hosts = vec![
+            "status.slopmud.com".to_string(),
+            "localhost".to_string(),
+            "127.0.0.1".to_string(),
+        ];
+        assert!(status_host_allowed(&hosts, "status.slopmud.com"));
+        assert!(status_host_allowed(&hosts, "status.slopmud.com:80"));
+        assert!(status_host_allowed(&hosts, "LOCALHOST:8080"));
+        assert!(!status_host_allowed(&hosts, "slopmud.com"));
+        assert!(!status_host_allowed(&hosts, "www.slopmud.com"));
     }
 
     #[test]
