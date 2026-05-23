@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-pkg="${1:-}"
-if [[ -z "${pkg}" ]]; then
-  echo "USAGE: $0 <cargo-package-name>" >&2
+pkgs=("$@")
+if ((${#pkgs[@]} == 0)); then
+  echo "USAGE: $0 <cargo-package-name> [cargo-package-name ...]" >&2
   exit 2
 fi
 
@@ -24,7 +24,10 @@ if ! [[ "${build_profile}" =~ ^[A-Za-z0-9_-]+$ ]]; then
   exit 2
 fi
 
-build_cmd=(cargo build -p "${pkg}")
+build_cmd=(cargo build)
+for pkg in "${pkgs[@]}"; do
+  build_cmd+=(-p "${pkg}")
+done
 case "${build_profile}" in
   dev) ;;
   release) build_cmd+=(--release) ;;

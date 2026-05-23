@@ -507,10 +507,12 @@ jobs:
       - name: Run e2e-local (skip-build)
         id: run
         shell: bash
+        env:
+          SLOPMUD_E2E_BIN_DIR: target/devdeploy
         run: |
           set -euo pipefail
           start_ts="$(date +%s)"
-          python3 scripts/e2e_local.py --skip-build
+          python3 scripts/e2e_local.py --skip-build --bin-dir "$SLOPMUD_E2E_BIN_DIR"
           duration_s=$(( $(date +%s) - start_ts ))
           echo "::notice::e2e_local_duration_s=${duration_s}"
 
@@ -553,10 +555,12 @@ jobs:
       - name: Run e2e-party (skip-build)
         id: run
         shell: bash
+        env:
+          SLOPMUD_E2E_BIN_DIR: target/devdeploy
         run: |
           set -euo pipefail
           start_ts="$(date +%s)"
-          python3 scripts/e2e_party_run.py --skip-build
+          python3 scripts/e2e_party_run.py --skip-build --bin-dir "$SLOPMUD_E2E_BIN_DIR"
           duration_s=$(( $(date +%s) - start_ts ))
           echo "::notice::e2e_party_duration_s=${duration_s}"
 
@@ -599,11 +603,13 @@ jobs:
       - name: Build and run ws e2e
         id: run
         shell: bash
+        env:
+          SLOPMUD_E2E_BIN_DIR: target/devdeploy
         run: |
           set -euo pipefail
           start_ts="$(date +%s)"
-          cargo build -q -p shard_01 -p ws_gateway -p bot_party --bins
-          ./target/debug/e2e_ws
+          cargo build -q --profile devdeploy -p shard_01 -p ws_gateway -p bot_party --bins
+          ./target/devdeploy/e2e_ws
           duration_s=$(( $(date +%s) - start_ts ))
           echo "::notice::e2e_ws_duration_s=${duration_s}"
 

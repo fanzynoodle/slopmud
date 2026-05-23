@@ -174,8 +174,37 @@ def _parse_exits(out: bytes) -> list[str]:
     return []
 
 
-def ensure_built(env: dict[str, str], skip_build: bool = False) -> None:
-    target_root = Path("target/debug")
+def _default_cargo_profile(bin_dir: Path) -> str:
+    normalized = bin_dir.as_posix().rstrip("/")
+    if normalized == "target/debug":
+        return "dev"
+    if normalized.startswith("target/"):
+        return Path(normalized).name
+    return "dev"
+
+
+def _cargo_build(env: dict[str, str], pkgs: list[str], cargo_profile: str) -> None:
+    cmd = ["cargo", "build", "-q"]
+    if cargo_profile != "dev":
+        cmd += ["--profile", cargo_profile]
+    for pkg in pkgs:
+        cmd += ["-p", pkg]
+    cmd.append("--bins")
+    subprocess.check_call(
+        cmd,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def ensure_built(
+    env: dict[str, str],
+    skip_build: bool = False,
+    bin_dir: Path = Path("target/debug"),
+    cargo_profile: str = "dev",
+) -> None:
+    target_root = bin_dir
     missing = []
     for bin_name in ["shard_01", "slopmud"]:
         if not (target_root / bin_name).exists():
@@ -191,18 +220,13 @@ def ensure_built(env: dict[str, str], skip_build: bool = False) -> None:
             f"e2e-local: skip-build requested but missing {', '.join(missing)}; building now"
         )
 
-    subprocess.check_call(
-        ["cargo", "build", "-q", "-p", "shard_01"],
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    subprocess.check_call(
-        ["cargo", "build", "-q", "-p", "slopmud"],
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    _cargo_build(env, missing, cargo_profile)
+    still_missing = [bin_name for bin_name in missing if not (target_root / bin_name).exists()]
+    if still_missing:
+        raise FileNotFoundError(
+            f"cargo build profile {cargo_profile!r} did not create "
+            f"{', '.join(str(target_root / name) for name in still_missing)}"
+        )
 
 
 def roam_until_worm(c: Client, max_moves=60):
@@ -268,6 +292,8 @@ def main():
     ap.add_argument("--port-range", default="4950-5990")
     ap.add_argument("--stride", type=int, default=5)
     ap.add_argument("--skip-build", action="store_true")
+    ap.add_argument("--bin-dir", default=os.environ.get("SLOPMUD_E2E_BIN_DIR", "target/debug"))
+    ap.add_argument("--cargo-profile", default=os.environ.get("SLOPMUD_E2E_CARGO_PROFILE"))
     args = ap.parse_args()
 
     # Some environments disallow TCP sockets entirely (ex: sandboxed CI runners). In that
@@ -300,10 +326,12 @@ def main():
     shard_f = open(shard_log, "wb")
     broker_f = open(broker_log, "wb")
 
-    ensure_built(env, args.skip_build)
+    bin_dir = Path(args.bin_dir)
+    cargo_profile = args.cargo_profile or _default_cargo_profile(bin_dir)
+    ensure_built(env, args.skip_build, bin_dir, cargo_profile)
 
     shard = subprocess.Popen(
-        ["target/debug/shard_01"],
+        [str(bin_dir / "shard_01")],
         env=env,
         stdout=shard_f,
         stderr=shard_f,
@@ -312,7 +340,7 @@ def main():
     try:
         time.sleep(0.8)
         broker = subprocess.Popen(
-            ["target/debug/slopmud"],
+            [str(bin_dir / "slopmud")],
             env=env,
             stdout=broker_f,
             stderr=broker_f,

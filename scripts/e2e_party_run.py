@@ -136,8 +136,22 @@ def print_tail(path: Path, lines: int = 120):
         print(f"--- tail {path} failed: {e} ---", file=sys.stderr)
 
 
-def cargo_build_quiet(env, build_log: Path, pkg: str):
-    cmd = ["cargo", "build", "-q", "-p", pkg]
+def _default_cargo_profile(bin_dir: Path) -> str:
+    normalized = bin_dir.as_posix().rstrip("/")
+    if normalized == "target/debug":
+        return "dev"
+    if normalized.startswith("target/"):
+        return Path(normalized).name
+    return "dev"
+
+
+def cargo_build_quiet(env, build_log: Path, pkgs: list[str], cargo_profile: str):
+    cmd = ["cargo", "build", "-q"]
+    if cargo_profile != "dev":
+        cmd += ["--profile", cargo_profile]
+    for pkg in pkgs:
+        cmd += ["-p", pkg]
+    cmd.append("--bins")
     with open(build_log, "ab") as f:
         f.write(f"$ {' '.join(cmd)}\n".encode("utf-8"))
         p = subprocess.run(cmd, env=env, stdout=f, stderr=f)
@@ -147,8 +161,14 @@ def cargo_build_quiet(env, build_log: Path, pkg: str):
         raise subprocess.CalledProcessError(p.returncode, cmd)
 
 
-def ensure_built(env, build_log: Path, skip_build: bool = False) -> None:
-    target_root = Path("target/debug")
+def ensure_built(
+    env,
+    build_log: Path,
+    skip_build: bool = False,
+    bin_dir: Path = Path("target/debug"),
+    cargo_profile: str = "dev",
+) -> None:
+    target_root = bin_dir
     missing = []
     for pkg in ["shard_01", "slopmud"]:
         if not (target_root / pkg).exists():
@@ -165,8 +185,14 @@ def ensure_built(env, build_log: Path, skip_build: bool = False) -> None:
             f"e2e-party: skip-build requested but missing {', '.join(missing)}; building now"
         )
 
-    for pkg in missing:
-        cargo_build_quiet(env, build_log, pkg)
+    cargo_build_quiet(env, build_log, missing, cargo_profile)
+    still_missing = [pkg for pkg in missing if not (target_root / pkg).exists()]
+    if still_missing:
+        raise FileNotFoundError(
+            f"cargo build profile {cargo_profile!r} did not create "
+            f"{', '.join(str(target_root / pkg) for pkg in still_missing)}"
+        )
+
 
 def _alloc_port_block(port_range: str, stride: int, offsets: str) -> int:
     alloc = Path(__file__).with_name("alloc_port_block.py")
@@ -194,6 +220,8 @@ def main():
     ap.add_argument("--port-range", default="4950-5990")
     ap.add_argument("--stride", type=int, default=5)
     ap.add_argument("--skip-build", action="store_true")
+    ap.add_argument("--bin-dir", default=os.environ.get("SLOPMUD_E2E_BIN_DIR", "target/debug"))
+    ap.add_argument("--cargo-profile", default=os.environ.get("SLOPMUD_E2E_CARGO_PROFILE"))
     args = ap.parse_args()
 
     if not _tcp_allowed():
@@ -222,10 +250,12 @@ def main():
     shard_f = open(shard_log, "wb")
     broker_f = open(broker_log, "wb")
 
-    ensure_built(env, build_log, args.skip_build)
+    bin_dir = Path(args.bin_dir)
+    cargo_profile = args.cargo_profile or _default_cargo_profile(bin_dir)
+    ensure_built(env, build_log, args.skip_build, bin_dir, cargo_profile)
 
     shard = subprocess.Popen(
-        ["target/debug/shard_01"],
+        [str(bin_dir / "shard_01")],
         env=env,
         stdout=shard_f,
         stderr=shard_f,
@@ -234,7 +264,7 @@ def main():
     try:
         time.sleep(0.8)
         broker = subprocess.Popen(
-            ["target/debug/slopmud"],
+            [str(bin_dir / "slopmud")],
             env=env,
             stdout=broker_f,
             stderr=broker_f,

@@ -589,6 +589,8 @@ def test_cicd_tiny_runner_memory_guards() -> None:
         raise AssertionError("CI asset build must force single-job release builds on tiny runners")
     if "build_cmd+=(-j" not in build_script or "CARGO_BUILD_JOBS" not in build_script:
         raise AssertionError("bookworm release builder must honor the CI cargo job limit")
+    if 'pkgs=("$@")' not in build_script or 'for pkg in "${pkgs[@]}"' not in build_script:
+        raise AssertionError("bookworm builder must accept batched package builds")
     if "[profile.devdeploy]" not in workspace or 'inherits = "dev"' not in workspace:
         raise AssertionError("dev artifacts need a low-optimization devdeploy Cargo profile")
     if "debug = 0" not in workspace or "codegen-units = 32" not in workspace:
@@ -604,6 +606,11 @@ def test_cicd_tiny_runner_memory_guards() -> None:
         or 'target/${profile_target_dir}' not in build_assets
     ):
         raise AssertionError("asset builds must default dev/sandbox to devdeploy and keep stg/prd release")
+    if (
+        "build_packages=(slopmud)" not in build_assets
+        or './scripts/build_bookworm_release.sh "${build_packages[@]}"' not in build_assets
+    ):
+        raise AssertionError("asset builds must batch Cargo packages into one bookworm invocation")
     if "RUNNER_SWAPFILE_MB" not in bootstrap or "/sbin/mkswap" not in bootstrap:
         raise AssertionError("runner bootstrap must provision swap for tiny build hosts")
     if (
@@ -712,6 +719,9 @@ def test_cicd_clean_checkout_asset_contract() -> None:
     workflow = (REPO / ".github/workflows/enterprise-cicd.yml").read_text(encoding="utf-8")
     build_assets = (REPO / "scripts/cicd/build_assets.sh").read_text(encoding="utf-8")
     shuttle = (REPO / "scripts/cicd/slopmud-shuttle-assets").read_text(encoding="utf-8")
+    e2e_local = (REPO / "scripts/e2e_local.py").read_text(encoding="utf-8")
+    e2e_party = (REPO / "scripts/e2e_party_run.py").read_text(encoding="utf-8")
+    e2e_ws = (REPO / "apps/ws_gateway/src/bin/e2e_ws.rs").read_text(encoding="utf-8")
     for env_key in (
         "BUILD_STATIC_WEB",
         "BUILD_SLOPMUD_WEB",
@@ -738,8 +748,26 @@ def test_cicd_clean_checkout_asset_contract() -> None:
         raise AssertionError("operators need a strict env bundle switch for release builds that require env/")
     if workflow.count("sudo -n /usr/local/bin/slopmud-shuttle-assets") < 7:
         raise AssertionError("CI deploy jobs must use the sudo-installed shuttle hook")
-    if "cargo build -q -p shard_01 -p ws_gateway -p bot_party --bins" not in workflow:
-        raise AssertionError("ws E2E must build every helper binary it launches, not just e2e_ws")
+    if "SLOPMUD_E2E_BIN_DIR: target/devdeploy" not in workflow:
+        raise AssertionError("dev E2E jobs must reuse the artifact build's devdeploy binaries")
+    if '--bin-dir "$SLOPMUD_E2E_BIN_DIR"' not in workflow:
+        raise AssertionError("core E2E scripts must be pointed at the devdeploy artifact target")
+    if (
+        "cargo build -q --profile devdeploy -p shard_01 -p ws_gateway -p bot_party --bins"
+        not in workflow
+        or "./target/devdeploy/e2e_ws" not in workflow
+    ):
+        raise AssertionError("ws E2E must build and run in the devdeploy profile")
+    if "cargo build -q -p shard_01 -p ws_gateway -p bot_party --bins" in workflow:
+        raise AssertionError("ws E2E must not populate a duplicate debug target on dev CI")
+    for script_name, script_text in (
+        ("e2e_local.py", e2e_local),
+        ("e2e_party_run.py", e2e_party),
+    ):
+        if "SLOPMUD_E2E_BIN_DIR" not in script_text or "--bin-dir" not in script_text:
+            raise AssertionError(f"{script_name} must support running binaries outside target/debug")
+    if "SLOPMUD_E2E_BIN_DIR" not in e2e_ws:
+        raise AssertionError("ws E2E launcher must support running helpers outside target/debug")
     if "dev-mud.slopmud.com" not in workflow or "deploy_public_smoke" not in workflow:
         raise AssertionError("dev deploy must include a blocking outside-in public telnet smoke")
     if "asset_ready_epoch" not in workflow or "deploy_public_smoke_after_asset_ready_s" not in workflow:

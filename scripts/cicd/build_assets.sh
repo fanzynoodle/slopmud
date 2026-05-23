@@ -70,41 +70,46 @@ mkdir -p "${out_dir}/env"
 echo "Building (track=${track}, profile=${build_profile}, clean=${clean_build}, sha=${sha})" >&2
 # Keep stdout clean so callers can safely capture the artifact path.
 # Build inside Debian 12 (bookworm) so artifacts are compatible with mudbox hosts.
-./scripts/build_bookworm_release.sh slopmud 1>&2
+build_packages=(slopmud)
 
 if [[ "$build_shard" == "1" ]]; then
-  echo "Building shard_01 (track=${track}, profile=${build_profile}, clean=${clean_build}, sha=${sha})" >&2
-  ./scripts/build_bookworm_release.sh shard_01 1>&2
+  build_packages+=(shard_01)
 else
   echo "Skipping shard_01 build (BUILD_SHARD=${build_shard})" >&2
 fi
 
 if [[ "$build_walbackupd" == "1" ]]; then
-  echo "Building slopmud_walbackupd (track=${track}, profile=${build_profile}, clean=${clean_build}, sha=${sha})" >&2
-  ./scripts/build_bookworm_release.sh slopmud_walbackupd 1>&2
+  build_packages+=(slopmud_walbackupd)
 else
   echo "Skipping slopmud_walbackupd build (BUILD_WALBACKUPD=${build_walbackupd})" >&2
 fi
 
 if [[ "$build_static_web" == "1" ]]; then
-  echo "Building static_web (track=${track}, profile=${build_profile}, clean=${clean_build}, sha=${sha})" >&2
-  ./scripts/build_bookworm_release.sh static_web 1>&2
+  build_packages+=(static_web)
+else
+  echo "Skipping static_web build (BUILD_STATIC_WEB=${build_static_web})" >&2
 fi
 
 if [[ "$build_slopmud_web" == "1" ]]; then
-  echo "Building slopmud_web (track=${track}, profile=${build_profile}, clean=${clean_build}, sha=${sha})" >&2
-  ./scripts/build_bookworm_release.sh slopmud_web 1>&2
+  build_packages+=(slopmud_web)
+else
+  echo "Skipping slopmud_web build (BUILD_SLOPMUD_WEB=${build_slopmud_web})" >&2
 fi
 
 if [[ "$build_internal_oidc" == "1" ]]; then
-  echo "Building internal_oidc (track=${track}, profile=${build_profile}, clean=${clean_build}, sha=${sha})" >&2
-  ./scripts/build_bookworm_release.sh internal_oidc 1>&2
+  build_packages+=(internal_oidc)
+else
+  echo "Skipping internal_oidc build (BUILD_INTERNAL_OIDC=${build_internal_oidc})" >&2
 fi
 
 if [[ "$build_adminctl" == "1" ]]; then
-  echo "Building slopmud_adminctl (track=${track}, profile=${build_profile}, clean=${clean_build}, sha=${sha})" >&2
-  ./scripts/build_bookworm_release.sh slopmud_adminctl 1>&2
+  build_packages+=(slopmud_adminctl)
+else
+  echo "Skipping slopmud_adminctl build (BUILD_SLOPMUD_ADMINCTL=${build_adminctl})" >&2
 fi
+
+echo "Building Cargo packages: ${build_packages[*]}" >&2
+./scripts/build_bookworm_release.sh "${build_packages[@]}" 1>&2
 
 bin_src="${repo_root}/target/${profile_target_dir}/slopmud"
 if [[ ! -x "$bin_src" ]]; then

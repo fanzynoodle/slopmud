@@ -65,12 +65,13 @@ async fn main() -> anyhow::Result<()> {
     let shard_bind = format!("127.0.0.1:{shard_port}");
     let ws_bind = format!("127.0.0.1:{ws_port}");
     let ws_url = format!("ws://{ws_bind}/v1/json");
+    let bin_dir = std::env::var("SLOPMUD_E2E_BIN_DIR").unwrap_or_else(|_| "target/debug".into());
     let run_id = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)?
         .as_nanos();
     let raft_log = format!("/tmp/slopmud_e2e_ws_raft_{run_id}.jsonl");
 
-    let mut shard = Command::new("target/debug/shard_01")
+    let mut shard = Command::new(format!("{bin_dir}/shard_01"))
         .env("SHARD_BIND", &shard_bind)
         .env("SHARD_RAFT_LOG", &raft_log)
         .env("WORLD_TICK_MS", "200")
@@ -83,7 +84,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(800)).await;
     wait_tcp(&shard_bind, Duration::from_secs(10)).await?;
 
-    let mut gw = Command::new("target/debug/ws_gateway")
+    let mut gw = Command::new(format!("{bin_dir}/ws_gateway"))
         .env("WS_BIND", &ws_bind)
         .env("SHARD_ADDR", &shard_bind)
         .stdin(Stdio::null())
@@ -95,7 +96,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(800)).await;
     wait_tcp(&ws_bind, Duration::from_secs(10)).await?;
 
-    let mut bots = Command::new("target/debug/bot_party")
+    let mut bots = Command::new(format!("{bin_dir}/bot_party"))
         .env("WS_URL", &ws_url)
         .env("BOTS", "1")
         .stdin(Stdio::null())
