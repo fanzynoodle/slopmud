@@ -252,7 +252,6 @@ jobs:
         id: validate
         shell: bash
         env:
-          RUSTFLAGS: "-D warnings"
           DEPLOY_ENV: ${{ steps.meta.outputs.deploy_env }}
         run: |
           set -euo pipefail
@@ -262,10 +261,10 @@ jobs:
 
           # dev: keep this fast for iteration; stg: run the full validation suite.
           if [[ "$DEPLOY_ENV" == "dev" ]]; then
-            cargo check -p slopmud -p shard_01 --bins
+            cargo check --profile devdeploy -p slopmud -p shard_01 --bins
           else
-            cargo build --workspace --all-targets
-            cargo test
+            RUSTFLAGS="-D warnings" cargo build --workspace --all-targets
+            RUSTFLAGS="-D warnings" cargo test
             just world-validate
             just proto-lint
           fi
