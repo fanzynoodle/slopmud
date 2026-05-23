@@ -237,7 +237,7 @@ jobs:
 
           # dev: keep this fast for iteration; stg: run the full validation suite.
           if [[ "$DEPLOY_ENV" == "dev" ]]; then
-            cargo test -p slopmud --no-run
+            cargo check -p slopmud -p shard_01 --bins
           else
             cargo build --workspace --all-targets
             cargo test
@@ -255,13 +255,14 @@ jobs:
           TRACK: ${{ steps.meta.outputs.deploy_env }}
           # Clean rebuild only on the stg branch/track.
           CLEAN_BUILD: ${{ steps.meta.outputs.deploy_env == 'stg' && '1' || '0' }}
-          # Dev deploys the game broker + shard + stable WAL helper. Keep web/OIDC
-          # release binaries out of the hot branch path; staging still builds the
-          # full artifact used for prod promotion.
+          # Dev deploys the game broker + shard. Keep web/OIDC/admin/WAL helper
+          # binaries out of the hot branch path; staging still builds the full
+          # artifact used for prod promotion.
           BUILD_STATIC_WEB: ${{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}
           BUILD_SLOPMUD_WEB: ${{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}
           BUILD_INTERNAL_OIDC: ${{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}
           BUILD_SLOPMUD_ADMINCTL: ${{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}
+          BUILD_WALBACKUPD: ${{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}
           # The mud runner is intentionally tiny; keep release builds single-job.
           SLOPMUD_CARGO_BUILD_JOBS: "1"
         run: |

@@ -683,10 +683,13 @@ def test_cicd_clean_checkout_asset_contract() -> None:
         "BUILD_SLOPMUD_WEB",
         "BUILD_INTERNAL_OIDC",
         "BUILD_SLOPMUD_ADMINCTL",
+        "BUILD_WALBACKUPD",
     ):
         expected = f"{env_key}: ${{{{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}}}"
         if expected not in workflow:
             raise AssertionError(f"dev CI hot path must skip unused release binary: {env_key}")
+    if "cargo check -p slopmud -p shard_01 --bins" not in workflow:
+        raise AssertionError("dev validation must avoid linking test binaries on tiny runners")
     if "missing optional env dir for asset bundle" not in build_assets:
         raise AssertionError("CI asset bundling must tolerate clean checkouts without ignored env/")
     if "ASSETS_ENV_FILES was set" not in build_assets:
