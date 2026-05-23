@@ -220,7 +220,32 @@ jobs:
           set -euo pipefail
           ./scripts/cicd/ci_scope_e2e.sh
 
+      - name: Detect local Rust cache
+        id: local_rust_cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          target_present=0
+          cargo_present=0
+
+          if [[ -d target/debug/.fingerprint || -d target/devdeploy/.fingerprint || -d target/release/.fingerprint ]]; then
+            target_present=1
+          fi
+          if [[ -d "${CARGO_HOME:-$HOME/.cargo}/registry/src" || -d "${CARGO_HOME:-$HOME/.cargo}/git/checkouts" ]]; then
+            cargo_present=1
+          fi
+
+          if [[ "$target_present" == "1" && "$cargo_present" == "1" ]]; then
+            present=1
+          else
+            present=0
+          fi
+
+          echo "present=$present" >> "$GITHUB_OUTPUT"
+          echo "::notice::local_rust_cache_present=${present} target=${target_present} cargo=${cargo_present}"
+
       - name: Restore Rust cache
+        if: steps.local_rust_cache.outputs.present != '1'
         uses: Swatinem/rust-cache@v2
 
       - name: Validate (fast + strict)
