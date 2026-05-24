@@ -738,8 +738,6 @@ jobs:
             done
           }
 
-          smoke_telnet_with_retry 127.0.0.1 "$port" 3 1
-
           if [[ "$DEPLOY_ENV" == "dev" ]]; then
             public_host="${SLOPMUD_PUBLIC_SMOKE_HOST:-dev-mud.slopmud.com}"
             public_port="${SLOPMUD_PUBLIC_SMOKE_PORT:-4000}"
@@ -749,6 +747,8 @@ jobs:
               public_smoke_after_asset_ready_s=$(( $(date +%s) - ASSET_READY_EPOCH ))
               echo "::notice::deploy_public_smoke_after_asset_ready_s=${public_smoke_after_asset_ready_s}"
             fi
+          else
+            smoke_telnet_with_retry 127.0.0.1 "$port" 3 1
           fi
 
           duration_s=$(( $(date +%s) - start_ts ))
