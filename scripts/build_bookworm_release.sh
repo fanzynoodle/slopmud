@@ -50,6 +50,7 @@ if command -v podman >/dev/null 2>&1; then
   podman run --rm \
     --userns=keep-id \
     -e CARGO_HOME=/cargo \
+    -e RUSTC=/usr/local/cargo/bin/rustc \
     -e SLOPMUD_GIT_SHA="${git_sha}" \
     -e SLOPMUD_GIT_DIRTY="${git_dirty}" \
     "${podman_env[@]}" \
