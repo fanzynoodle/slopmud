@@ -41,6 +41,10 @@ container_build_cmd=(/usr/local/cargo/bin/cargo "${build_cmd[@]:1}")
 if command -v podman >/dev/null 2>&1; then
   # Needs a Cargo new enough for edition=2024.
   image="${SLOPMUD_BUILD_IMAGE:-docker.io/rust:1.89-bookworm}"
+  podman_env=()
+  if [[ -n "${cargo_jobs}" ]]; then
+    podman_env+=(-e "CARGO_BUILD_JOBS=${cargo_jobs}")
+  fi
   # Build inside Debian 12 (bookworm) so the produced binary runs on the mudbox
   # (Debian 12 ships an older glibc than many dev machines).
   podman run --rm \
@@ -48,7 +52,7 @@ if command -v podman >/dev/null 2>&1; then
     -e CARGO_HOME=/cargo \
     -e SLOPMUD_GIT_SHA="${git_sha}" \
     -e SLOPMUD_GIT_DIRTY="${git_dirty}" \
-    -e CARGO_BUILD_JOBS="${cargo_jobs}" \
+    "${podman_env[@]}" \
     -e PATH=/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     -v "${HOME}/.cargo:/cargo:Z" \
     -v "${repo_root}:/work:Z" \

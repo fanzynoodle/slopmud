@@ -27,7 +27,9 @@ flowchart TD
   devArtifact --> sandbox[dev sandbox deploy]
   sandbox --> sandboxSmoke[sandbox smoke]
   sandboxSmoke --> devDeploy[dev deploy]
-  devDeploy --> devSmoke[dev smoke]
+  devDeploy --> roll
+  roll --> gateway[update gateway SHARD_ADDRS]
+  gateway --> devSmoke[dev smoke]
 
   stgArtifact --> stgDeploy[stg deploy]
   stgDeploy --> stgSmoke[stg smoke]
@@ -36,15 +38,18 @@ flowchart TD
   prodDeploy --> prodSmoke[prd smoke]
 
   artifact --> splitDirect[split Raft direct live upgrade]
+  artifact --> splitAsset[local CI-style artifact deploy]
   artifact --> splitS3[split Raft S3 fan-out live upgrade]
   artifact --> k8sStage[Kubernetes image staged]
+  splitAsset --> roll
   splitS3 --> prefetch[all private voters prefetch + checksum]
   splitDirect --> roll[lease/quorum guarded rolling restart]
   prefetch --> roll
   k8sStage --> roll
   roll --> raftSmoke[raft status + version smoke]
 
-  tf[Terraform apply/rebuild] --> render[render split env from recommended_env]
+  tf[Terraform apply/rebuild] --> dns[reconcile Raft DNS from ASGs]
+  dns --> render[render split env from recommended_env]
   render --> volumes[ensure gateway/Raft data volumes]
   volumes --> splitDeploy[deploy/redeploy split trio + gateway]
   splitDeploy --> raftSmoke
@@ -97,6 +102,19 @@ Path:
    timings so a slow bare-metal rollout points at the phase that needs work.
 5. Smoke through the player path with `version`, `raft status`, and a websocket
    reconnect/resume check.
+
+When the local operator wants the exact same artifact deploy primitive that CI
+uses, including the gateway `SHARD_ADDRS` update, run:
+
+```bash
+just deploy-split-raft-trio-asset /tmp/slopmud-prd-split-az1.env
+just deploy-split-raft-trio-asset /tmp/slopmud-prd-split-az1.env assets/dev/<sha>/artifact.tgz
+just deploy-split-raft-trio-asset /tmp/slopmud-prd-split-az1.env s3://bucket/dev/<sha>/artifact.tgz
+```
+
+With no artifact argument, the target builds a CI-style asset locally and then
+calls `scripts/cicd/deploy_split_raft_trio_from_asset.sh`. With an artifact
+argument, the same target deploys that exact local tarball or S3 object.
 
 Local regression:
 
@@ -163,7 +181,8 @@ Dev path:
 2. CI builds one artifact.
 3. CI publishes the artifact to the dev track when S3 is available.
 4. CI deploys the same artifact to sandbox and smokes sandbox.
-5. CI deploys the same artifact to dev and smokes dev.
+5. CI deploys the same artifact to the dev Raft trio with the quorum guarded
+   rolling restart path, then rewrites/restarts the gateway with `SHARD_ADDRS`.
 6. CI connects to `dev-mud.slopmud.com:4000` from outside the service host.
    Loopback smoke alone is not sufficient for a successful dev promotion.
 
@@ -211,27 +230,30 @@ Local regression:
 
 ## Instance Replacement
 
-Use this when Terraform replaces the gateway or one or more Spot Raft nodes and
-private IPs may have changed.
+Use this when Terraform replaces the gateway or one or more Spot Raft nodes.
+Raft runtime addresses are stable DNS names; Terraform private IP outputs are
+debug-only and must not enter `SHARD_ADDRS`.
 
 Path:
 
 1. Apply Terraform for `infra/terraform/single-az-raft-us-east-1`.
-2. Render a fresh split env:
+2. Reconcile Raft DNS from live ASG membership:
+   `just reconcile-raft-dns infra/terraform/single-az-raft-us-east-1`
+3. Render a fresh split env:
    `just render-single-az-raft-env /tmp/slopmud-prd-split-az1.env /home/rob/slopmud/env/prd.env`
-3. Mount or remount the persistent data volumes:
+4. Mount or remount the persistent data volumes:
    `just ensure-data-volumes /tmp/slopmud-prd-split-az1.env all`
-4. Redeploy shard trio units using regenerated private IPs and Raft peer
-   addresses.
-5. Redeploy gateway broker/web if `HOST`, `GATEWAY_HOST`, or `SHARD_ADDRS`
-   changed.
-6. Smoke `version`, `raft status`, telnet, and websocket resume.
+5. Redeploy shard trio units using stable DNS Raft peer addresses.
+6. Redeploy gateway broker/web if `HOST`, `GATEWAY_HOST`, or service units are
+   stale.
+7. Smoke `version`, `raft status`, telnet, and websocket resume.
 
 Local regression:
 
 - `just e2e-deployment-stories`
 - Scenario: `node replacement env render and mount targets`
-- Assertions: Terraform `recommended_env` fully replaces `SHARD_ADDRS` and
-  `SHARD_NODE_HOSTS`, the rendered env is private mode `0600`, data-volume mount
-  checks hit the gateway directly, and Raft node checks go through the
-  regenerated gateway `ProxyJump`.
+- Assertions: Terraform `recommended_env` renders stable DNS `SHARD_ADDRS` and
+  `SHARD_NODE_HOSTS`, never current private IPs, the DNS reconciler reads ASG
+  membership instead of Terraform IP outputs, the rendered env is private mode
+  `0600`, data-volume mount checks hit the gateway directly, and Raft node
+  checks go through the gateway `ProxyJump`.

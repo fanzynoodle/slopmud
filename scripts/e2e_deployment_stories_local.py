@@ -145,7 +145,7 @@ def main():
     save(state)
 
     if "sudo ss -Htnp" in command:
-        active = state.get("active_host", "10.0.0.1")
+        active = state.get("active_host", "dev-raft-n0.slopmud.test")
         shard_port = state.get("shard_port", "5000")
         print(f"{active}:{shard_port}")
         return 0
@@ -238,8 +238,8 @@ import json
 print(json.dumps({
     "HOST": "54.0.0.10",
     "GATEWAY_HOST": "54.0.0.10",
-    "SHARD_ADDRS": "10.10.0.11:5000,10.10.0.12:5000,10.10.0.13:5000",
-    "SHARD_NODE_HOSTS": "10.10.0.11,10.10.0.12,10.10.0.13",
+    "SHARD_ADDRS": "dev-raft-n0.slopmud.test:5000,dev-raft-n1.slopmud.test:5000,dev-raft-n2.slopmud.test:5000",
+    "SHARD_NODE_HOSTS": "dev-raft-n0.slopmud.test,dev-raft-n1.slopmud.test,dev-raft-n2.slopmud.test",
     "SHARD_NODE_IDS": "n0,n1,n2",
     "SHARD_RAFT_NODE_IDS": "n0,n1,n2",
     "SHARD_PORT": "5000",
@@ -315,7 +315,7 @@ def split_env_file(tmp: Path) -> Path:
                 "SSH_PORT=2222",
                 "REMOTE_ROOT=/opt/slopmud",
                 "SHARD_REMOTE_BIN=/opt/slopmud/bin/shard_01",
-                "SHARD_NODE_HOSTS=10.0.0.1,10.0.0.2,10.0.0.3",
+                "SHARD_NODE_HOSTS=dev-raft-n0.slopmud.test,dev-raft-n1.slopmud.test,dev-raft-n2.slopmud.test",
                 "SHARD_NODE_IDS=n0,n1,n2",
                 "SHARD_RAFT_NODE_IDS=n0,n1,n2",
                 "SHARD_PORT=5000",
@@ -334,6 +334,18 @@ def fake_shard_binary(tmp: Path) -> Path:
     bin_path.write_text("#!/usr/bin/env sh\nexit 0\n", encoding="utf-8")
     bin_path.chmod(0o755)
     return bin_path
+
+
+def fake_split_asset_dir(tmp: Path) -> Path:
+    asset_dir = tmp / "asset"
+    bin_dir = asset_dir / "bin"
+    bin_dir.mkdir(parents=True)
+    for name in ("slopmud", "shard_01", "slopmud_adminctl", "slopmud_walbackupd"):
+        bin_path = bin_dir / name
+        bin_path.write_text("#!/usr/bin/env sh\nexit 0\n", encoding="utf-8")
+        bin_path.chmod(0o755)
+    (asset_dir / "BUILD_INFO.txt").write_text("sha=fakeassetsha\ntrack=dev\n", encoding="utf-8")
+    return asset_dir
 
 
 def fake_adminctl_binary(tmp: Path, args_path: Path) -> Path:
@@ -361,12 +373,12 @@ def fake_adminctl_binary(tmp: Path, args_path: Path) -> Path:
 def base_cluster_state() -> dict:
     return {
         "leader": "n1",
-        "active_host": "10.0.0.1",
+        "active_host": "dev-raft-n0.slopmud.test",
         "shard_port": "5000",
         "host_to_node": {
-            "10.0.0.1": "n0",
-            "10.0.0.2": "n1",
-            "10.0.0.3": "n2",
+            "dev-raft-n0.slopmud.test": "n0",
+            "dev-raft-n1.slopmud.test": "n1",
+            "dev-raft-n2.slopmud.test": "n2",
         },
         "events": [],
     }
@@ -473,6 +485,7 @@ def test_deployment_dag_invariants() -> None:
 def test_deployment_dag_workflow_coverage() -> None:
     expected = {
         "local_split_direct",
+        "local_split_asset",
         "local_split_s3",
         "onebox_current_public",
         "cicd_dev",
@@ -506,7 +519,13 @@ def test_deployment_dag_quorum_contract() -> None:
         "cluster_ready",
         "release_lease",
     )
-    for workflow_id in ("local_split_direct", "local_split_s3", "k8s_statefulset"):
+    for workflow_id in (
+        "local_split_direct",
+        "local_split_asset",
+        "local_split_s3",
+        "k8s_statefulset",
+        "cicd_dev",
+    ):
         workflow = workflow_by_id(workflow_id)
         if not workflow.quorum_guarded:
             raise AssertionError(f"{workflow_id} must be marked quorum guarded")
@@ -519,7 +538,7 @@ def test_deployment_dag_quorum_contract() -> None:
 
 
 def test_deployment_dag_promotion_contracts() -> None:
-    for workflow_id in ("cicd_dev", "cicd_stg_to_prod"):
+    for workflow_id in ("local_split_asset", "cicd_dev", "cicd_stg_to_prod"):
         workflow = workflow_by_id(workflow_id)
         if not workflow.exact_artifact:
             raise AssertionError(f"{workflow_id} must preserve exact artifact identity")
@@ -582,9 +601,24 @@ def test_cicd_tiny_runner_memory_guards() -> None:
     build_script = (REPO / "scripts/build_bookworm_release.sh").read_text(encoding="utf-8")
     build_assets = (REPO / "scripts/cicd/build_assets.sh").read_text(encoding="utf-8")
     bootstrap = (REPO / "scripts/cicd/bootstrap_runner.sh").read_text(encoding="utf-8")
+    render_env = (REPO / "scripts/render_single_az_raft_env.py").read_text(encoding="utf-8")
+    split_deploy = (REPO / "scripts/deploy_split_raft_trio.sh").read_text(encoding="utf-8")
+    split_asset_deploy = (REPO / "scripts/cicd/deploy_split_raft_trio_from_asset.sh").read_text(
+        encoding="utf-8"
+    )
+    ensure_mounts = (REPO / "scripts/ensure_data_volume_mounts.sh").read_text(encoding="utf-8")
     tf_vars = (REPO / "infra/terraform/single-az-raft-us-east-1/variables.tf").read_text(
         encoding="utf-8"
     )
+    tf_main = (REPO / "infra/terraform/single-az-raft-us-east-1/main.tf").read_text(
+        encoding="utf-8"
+    )
+    tf_outputs = (REPO / "infra/terraform/single-az-raft-us-east-1/outputs.tf").read_text(
+        encoding="utf-8"
+    )
+    raft_userdata = (
+        REPO / "infra/terraform/single-az-raft-us-east-1/userdata_raft_node.sh.tftpl"
+    ).read_text(encoding="utf-8")
     if 'SLOPMUD_CARGO_BUILD_JOBS: "1"' not in workflow:
         raise AssertionError("CI asset build must force single-job release builds on tiny runners")
     if "build_cmd+=(-j" not in build_script or "CARGO_BUILD_JOBS" not in build_script:
@@ -649,8 +683,43 @@ def test_cicd_tiny_runner_memory_guards() -> None:
     for required in ("build-essential", "git", "jq", "pkg-config", "python3", "awscli", "ripgrep"):
         if required not in bootstrap:
             raise AssertionError(f"runner bootstrap must install {required}")
-    if 'variable "gateway_root_volume_gib"' not in tf_vars or "default     = 24" not in tf_vars:
+    if 'variable "gateway_root_volume_gib"' not in tf_vars or "default     = 34" not in tf_vars:
         raise AssertionError("gateway root volume must leave room for the self-hosted runner build cache")
+    if 'variable "gateway_bind_port"' not in tf_vars or 'SLOPMUD_BIND                      = "0.0.0.0:${var.gateway_bind_port}"' not in tf_outputs:
+        raise AssertionError("split Terraform env must render the environment-specific gateway broker port")
+    if "ignore_changes = [" not in tf_main or "user_data" not in tf_main or "root_block_device" not in tf_main:
+        raise AssertionError("gateway Terraform resource must not be replaced during routine Raft topology applies")
+    if "raft_asg_does_not_pin_private_ips" not in tf_main or "private_ip_address" in tf_main:
+        raise AssertionError("Raft ASG topology must fail closed instead of trying to pin private IPs")
+    recommended_env = tf_outputs.split('output "recommended_env"', 1)[1].split('output "ssh_examples"', 1)[0]
+    if "local.raft_dns_names" not in recommended_env:
+        raise AssertionError("Terraform recommended_env must render stable Raft DNS names")
+    if "local.raft_current_private_ips" in recommended_env:
+        raise AssertionError("Terraform recommended_env must not render current private IPs")
+    dns_reconciler = (REPO / "scripts/cicd/reconcile_raft_dns.sh").read_text(encoding="utf-8")
+    for required in (
+        "output -json raft_autoscaling_group_names",
+        "output -json raft_dns_names",
+        "autoscaling describe-auto-scaling-groups",
+        "route53 change-resource-record-sets",
+    ):
+        if required not in dns_reconciler:
+            raise AssertionError(f"Raft DNS reconciler lost discovery contract: {required}")
+    if "raft_private_ips" in dns_reconciler:
+        raise AssertionError("Raft DNS reconciler must not read Terraform-rendered private IP outputs")
+    if "reject_ip_runtime_addresses(env)" not in render_env:
+        raise AssertionError("rendered split env must reject Terraform IP addresses in runtime fields")
+    for path, text in (
+        ("deploy_split_raft_trio.sh", split_deploy),
+        ("deploy_split_raft_trio_from_asset.sh", split_asset_deploy),
+        ("ensure_data_volume_mounts.sh", ensure_mounts),
+    ):
+        if "UserKnownHostsFile=/dev/null" not in text:
+            raise AssertionError(f"{path} must tolerate host-key churn for replaceable Raft DNS slots")
+    if "aws_vpc_endpoint\" \"ec2\"" not in tf_main or "ec2_interface_endpoint_id" not in tf_outputs:
+        raise AssertionError("private Raft nodes need an EC2 Interface endpoint for EBS attach without NAT")
+    if "apt-get update" in raft_userdata or "apt-get install" in raft_userdata:
+        raise AssertionError("private Raft user-data must not block on public apt repositories")
 
 
 def test_shard_build_script_uses_worktree_git_paths() -> None:
@@ -719,6 +788,7 @@ def test_cicd_clean_checkout_asset_contract() -> None:
     workflow = (REPO / ".github/workflows/enterprise-cicd.yml").read_text(encoding="utf-8")
     build_assets = (REPO / "scripts/cicd/build_assets.sh").read_text(encoding="utf-8")
     shuttle = (REPO / "scripts/cicd/slopmud-shuttle-assets").read_text(encoding="utf-8")
+    hot_deploy = (REPO / "scripts/cicd/hot_deploy_slopmud.sh").read_text(encoding="utf-8")
     e2e_local = (REPO / "scripts/e2e_local.py").read_text(encoding="utf-8")
     e2e_party = (REPO / "scripts/e2e_party_run.py").read_text(encoding="utf-8")
     e2e_ws = (REPO / "apps/ws_gateway/src/bin/e2e_ws.rs").read_text(encoding="utf-8")
@@ -726,12 +796,13 @@ def test_cicd_clean_checkout_asset_contract() -> None:
         "BUILD_STATIC_WEB",
         "BUILD_SLOPMUD_WEB",
         "BUILD_INTERNAL_OIDC",
-        "BUILD_SLOPMUD_ADMINCTL",
-        "BUILD_WALBACKUPD",
     ):
         expected = f"{env_key}: ${{{{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}}}"
         if expected not in workflow:
             raise AssertionError(f"dev CI hot path must skip unused release binary: {env_key}")
+    for env_key in ("BUILD_SLOPMUD_ADMINCTL", "BUILD_WALBACKUPD"):
+        if f'{env_key}: "1"' not in workflow:
+            raise AssertionError(f"dev split Raft deploy must include required helper binary: {env_key}")
     if "dev_validate_compile_deferred_to_build_asset=1" not in workflow:
         raise AssertionError("dev validation should defer compile validation to the artifact build")
     if "cargo check --profile devdeploy -p slopmud -p shard_01 --bins" in workflow:
@@ -789,12 +860,26 @@ def test_cicd_clean_checkout_asset_contract() -> None:
         raise AssertionError("shuttle helper should allow non-root --help while keeping deploy operations root-only")
     if 'shard_service_name="shard-01-sandbox"' not in shuttle or 'shard_bind="127.0.0.1:5009"' not in shuttle:
         raise AssertionError("sandbox deploy must define its own shard service when artifacts include shard_01")
-    if 'shard_service_name="shard-01-dev"' not in shuttle or 'shard_bind="127.0.0.1:4941"' not in shuttle:
-        raise AssertionError("dev deploy shard must not collide with prod shard port 5000")
+    if "dev deploys must use scripts/cicd/deploy_split_raft_trio_from_asset.sh" not in shuttle:
+        raise AssertionError("legacy one-box shuttle must refuse dev deploys")
+    if "dev deploys use scripts/cicd/deploy_split_raft_trio_from_asset.sh" not in hot_deploy:
+        raise AssertionError("one-box hot deploy wrapper must refuse dev deploys")
+    if 'shard_service_name="shard-01-dev"' in shuttle or 'shard_bind="127.0.0.1:4941"' in shuttle:
+        raise AssertionError("dev deploy must not be wired to a legacy one-box shard in the shuttle")
     if 'if [[ "$shard_unit_exists" == "1" && "$rewrite_unit" != "1" ]]; then' not in shuttle:
         raise AssertionError("--rewrite-unit must use desired shard defaults, not stale unit env")
     if 'systemctl is-active --quiet "${shard_service_name}"' not in shuttle:
         raise AssertionError("CI deploy must fail when the shard service fails after restart")
+    if "deploy_split_raft_trio_from_asset.sh" not in workflow:
+        raise AssertionError("dev CI deploy must use the split Raft artifact deploy wrapper")
+    if "reconcile_raft_dns.sh --terraform-dir" not in workflow:
+        raise AssertionError("dev CI deploy must refresh stable Raft DNS before using the split env")
+    if 'if [[ "$DEPLOY_ENV" == "dev" ]]; then' not in workflow:
+        raise AssertionError("dev CI deploy must branch away from the legacy one-box shuttle")
+    if "dev split Raft env file not found" not in workflow:
+        raise AssertionError("dev CI deploy must fail clearly when the split Raft env is missing")
+    if "env/dev-split.env" not in workflow:
+        raise AssertionError("dev CI deploy must look for the rendered split Raft env, not the legacy one-box env")
 
 
 def test_rapid_split_raft_live_upgrade() -> None:
@@ -868,6 +953,10 @@ def test_kubernetes_and_bare_metal_restart_budget_contract() -> None:
     ):
         if needle not in docs:
             raise AssertionError(f"deployment docs lost restart budget contract: {needle}")
+    if 'deploy-split-raft-trio-asset env="prd-split" artifact=""' not in justfile:
+        raise AssertionError("Justfile must expose the shared local split Raft artifact deploy path")
+    if 'deploy_split_raft_trio_from_asset.sh "$env_file" "$artifact_path"' not in justfile:
+        raise AssertionError("local split Raft artifact deploy must reuse the CI artifact deploy wrapper")
 
 
 def test_current_public_onebox_shard_deploy() -> None:
@@ -1000,6 +1089,8 @@ def test_wal_restore_deploy_contract() -> None:
                 raise AssertionError(f"{label} lost WAL restore wiring: {needle}")
         if label != "onebox restore" and "ExecStartPre=/usr/local/bin/slopmud-wal-restore" not in text:
             raise AssertionError(f"{label} lost legacy WAL restore pre-start hook")
+    if "remote_walbackupd_bin=" not in split or "Environment=SLOPMUD_WALBACKUPD_BIN=${remote_walbackupd_bin}" not in split:
+        raise AssertionError("split deploy must point shard_01 at the versioned walbackupd binary")
     if "ExecStartPre=/usr/local/bin/slopmud-wal-restore" in restore_onebox:
         raise AssertionError("artifact restore path should let shard_01 manage WAL restore through walbackupd")
     if (
@@ -1037,6 +1128,120 @@ def test_split_raft_s3_fanout_upgrade() -> None:
         binary_scps = [e for e in scp_events if any("shard_01.testrelease" in a for a in e["argv"])]
         if binary_scps:
             raise AssertionError(f"S3 fanout should not scp the binary: {binary_scps}")
+
+
+def test_cicd_dev_split_raft_asset_deploy() -> None:
+    wrapper = (REPO / "scripts/cicd/deploy_split_raft_trio_from_asset.sh").read_text(encoding="utf-8")
+    for needle in (
+        "./scripts/deploy_split_raft_trio.sh",
+        'Environment=SHARD_ADDR=${shard_addrs[0]}',
+        'Environment=SHARD_ADDRS=${SHARD_ADDRS}',
+        "SLOPMUD_ALLOW_UNGRACEFUL_LEADER_RESTART",
+        "SLOPMUD_RAFT_RESTART_LEASE",
+        "WAL restore is enabled but artifact is missing bin/slopmud_adminctl",
+        "Gateway listening check",
+        "Verifying Raft voter status on all three nodes",
+        "Disabling legacy gateway-local shard unit",
+        "Updating status dashboard checks",
+        "dev/raft-voter/${status_node_ids[0]}=tcp://${shard_hosts[0]}:${raft_port}",
+    ):
+        if needle not in wrapper:
+            raise AssertionError(f"split Raft asset deploy wrapper lost contract: {needle}")
+
+    with tempfile.TemporaryDirectory(prefix="slopmud_deploy_story_") as d:
+        tmp = Path(d)
+        state_path, env = make_fake_env(tmp, base_cluster_state())
+        env_file = tmp / "dev-split.env"
+        env_file.write_text(
+            "\n".join(
+                [
+                    "ENV_NAME=dev",
+                    "HOST=gateway.example",
+                    "GATEWAY_HOST=gateway.example",
+                    "SSH_USER=admin",
+                    "SSH_PORT=2222",
+                    "REMOTE_ROOT=/opt/slopmud",
+                    "SLOPMUD_APP_NAME=slopmud-dev",
+                    "SLOPMUD_REMOTE_BIN=/opt/slopmud/bin/slopmud-dev",
+                    "SLOPMUD_BIND=0.0.0.0:4000",
+                    "SHARD_APP_NAME=shard-01-dev",
+                    "SHARD_REMOTE_BIN=/opt/slopmud/bin/shard-01-dev",
+                    "SHARD_ADDRS=dev-raft-n0.slopmud.test:5000,dev-raft-n1.slopmud.test:5000,dev-raft-n2.slopmud.test:5000",
+                    "SHARD_NODE_HOSTS=dev-raft-n0.slopmud.test,dev-raft-n1.slopmud.test,dev-raft-n2.slopmud.test",
+                    "SHARD_NODE_IDS=n0,n1,n2",
+                    "SHARD_RAFT_NODE_IDS=n0,n1,n2",
+                    "SHARD_PORT=5000",
+                    "SHARD_RAFT_PORT=5100",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        proc = run(
+            [
+                "bash",
+                "scripts/cicd/deploy_split_raft_trio_from_asset.sh",
+                str(env_file),
+                str(fake_split_asset_dir(tmp)),
+            ],
+            env=env,
+        )
+        assert_ok(proc)
+        state = read_state(state_path)
+        raft_restarts = [e["node"] for e in state["events"] if e["kind"] == "restart" and e.get("node")]
+        if raft_restarts != ["n2", "n0", "n1"]:
+            raise AssertionError(f"dev asset deploy did not perform guarded raft trio restart: {raft_restarts}")
+        commands = "\n".join(e.get("command", "") for e in state["events"] if e["kind"] == "ssh")
+        if "slopmud-dev.service" not in commands or "systemctl show -p Environment --value" not in commands:
+            raise AssertionError(f"gateway was not restarted and verified with SHARD_ADDRS\n{commands}")
+        if "systemctl disable --now 'shard-01-dev.service'" not in commands:
+            raise AssertionError(f"split dev deploy did not disable the gateway-local shard unit\n{commands}")
+        if "slopmud-statusd.service" not in commands:
+            raise AssertionError(f"split dev deploy did not refresh status dashboard checks\n{commands}")
+        voter_status_checks = [
+            e for e in state["events"] if e["kind"] == "ssh" and "PAYLOAD_B64=" in e.get("command", "")
+        ]
+        if len(voter_status_checks) < 3:
+            raise AssertionError(f"dev asset deploy did not verify all three Raft voters\n{voter_status_checks}")
+        if "Deploying split Raft trio from artifact" not in proc.stdout:
+            raise AssertionError(f"wrapper did not announce split raft deployment\n{proc.stdout}")
+        if "OK: split Raft trio and gateway deployed" not in proc.stdout:
+            raise AssertionError(f"wrapper did not complete gateway deploy\n{proc.stdout}")
+
+
+def test_cicd_dev_split_raft_env_fail_closed() -> None:
+    with tempfile.TemporaryDirectory(prefix="slopmud_deploy_story_") as d:
+        tmp = Path(d)
+        _state_path, env = make_fake_env(tmp, base_cluster_state())
+        env_file = tmp / "legacy-dev.env"
+        env_file.write_text(
+            "\n".join(
+                [
+                    "ENV_NAME=dev",
+                    "HOST=gateway.example",
+                    "SSH_USER=admin",
+                    "SSH_PORT=2222",
+                    "REMOTE_ROOT=/opt/slopmud",
+                    "SLOPMUD_BIND=0.0.0.0:4000",
+                    "SHARD_BIND=127.0.0.1:4941",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        proc = run(
+            [
+                "bash",
+                "scripts/cicd/deploy_split_raft_trio_from_asset.sh",
+                str(env_file),
+                str(fake_split_asset_dir(tmp)),
+            ],
+            env=env,
+        )
+        if proc.returncode == 0:
+            raise AssertionError("split Raft asset deploy must reject legacy one-box dev envs")
+        if "missing SHARD_ADDRS" not in proc.stdout:
+            raise AssertionError(f"missing fail-closed SHARD_ADDRS error\n{proc.stdout}")
 
 
 def test_cicd_s3_redeploy_wrapper() -> None:
@@ -1107,10 +1312,10 @@ def test_node_replacement_env_render_and_mount_targets() -> None:
         )
         assert_ok(proc)
         text = rendered.read_text(encoding="utf-8")
-        if "SHARD_NODE_HOSTS=10.10.0.11,10.10.0.12,10.10.0.13" not in text:
-            raise AssertionError(f"rendered env did not carry replacement node hosts\n{text}")
-        if "SHARD_ADDRS=10.10.0.11:5000,10.10.0.12:5000,10.10.0.13:5000" not in text:
-            raise AssertionError(f"rendered env did not carry replacement shard addrs\n{text}")
+        if "SHARD_NODE_HOSTS=dev-raft-n0.slopmud.test,dev-raft-n1.slopmud.test,dev-raft-n2.slopmud.test" not in text:
+            raise AssertionError(f"rendered env did not carry stable Raft DNS node hosts\n{text}")
+        if "SHARD_ADDRS=dev-raft-n0.slopmud.test:5000,dev-raft-n1.slopmud.test:5000,dev-raft-n2.slopmud.test:5000" not in text:
+            raise AssertionError(f"rendered env did not carry stable Raft DNS shard addrs\n{text}")
         for required in (
             "SLOPMUD_WAL_BACKUP_ENABLED=1",
             "SLOPMUD_WAL_BACKUP_S3_BUCKET=slopmud-assets-test",
@@ -1128,7 +1333,7 @@ def test_node_replacement_env_render_and_mount_targets() -> None:
         state = read_state(state_path)
         mounts = [e for e in state["events"] if e["kind"] == "ensure_mount"]
         hosts = [e["host"] for e in mounts]
-        if hosts != ["54.0.0.10", "10.10.0.11", "10.10.0.12", "10.10.0.13"]:
+        if hosts != ["54.0.0.10", "dev-raft-n0.slopmud.test", "dev-raft-n1.slopmud.test", "dev-raft-n2.slopmud.test"]:
             raise AssertionError(f"unexpected mount targets after node replacement: {hosts}")
         raft_mounts = mounts[1:]
         if not all(any(opt == "ProxyJump=admin@54.0.0.10:2222" for opt in e["opts"]) for e in raft_mounts):
@@ -1152,6 +1357,8 @@ TESTS = [
     ("WAL restore helper contract", test_wal_restore_helper_noop_and_s3_recover_contract),
     ("WAL restore deploy contract", test_wal_restore_deploy_contract),
     ("split Raft S3 fanout upgrade", test_split_raft_s3_fanout_upgrade),
+    ("CI/CD dev split Raft asset deploy", test_cicd_dev_split_raft_asset_deploy),
+    ("CI/CD dev split Raft env fail closed", test_cicd_dev_split_raft_env_fail_closed),
     ("CI/CD S3 redeploy wrapper", test_cicd_s3_redeploy_wrapper),
     ("node replacement env render and mount targets", test_node_replacement_env_render_and_mount_targets),
 ]

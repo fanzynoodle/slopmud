@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+NODE_ID="${node_id}"
+REGION="${region}"
+DATA_VOLUME_ENABLED="${data_volume_enabled}"
+DATA_VOLUME_ID="${data_volume_id}"
+MOUNT_PATH="${mount_path}"
+DEVICE_NAME="/dev/sdf"
+LOG_TAG="slopmud-raft-$NODE_ID"
+
+log() {
+  echo "[$LOG_TAG] $*"
+}
+
+if ! id -u slopmud >/dev/null 2>&1; then
+  useradd --system --home /opt/slopmud --create-home --shell /usr/sbin/nologin slopmud
+fi
+
+install -d -m 0755 -o slopmud -g slopmud /opt/slopmud /opt/slopmud/bin
+
+if [ "$DATA_VOLUME_ENABLED" != "1" ]; then
+  install -d -m 0755 -o slopmud -g slopmud "$MOUNT_PATH"
+  exit 0
+fi
+
+if ! command -v aws >/dev/null 2>&1; then
+  log "aws cli unavailable; cannot attach data volume"
+  exit 1
+fi
+
+token="$(curl -fsS -m 2 -X PUT \
+  "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")"
+
+instance_id="$(curl -fsS -m 2 \
+  -H "X-aws-ec2-metadata-token: $token" \
+  "http://169.254.169.254/latest/meta-data/instance-id")"
+
+attached="false"
+for _ in $(seq 1 60); do
+  state="$(aws ec2 describe-volumes \
+    --region "$REGION" \
+    --volume-ids "$DATA_VOLUME_ID" \
+    --query 'Volumes[0].State' \
+    --output text)"
+
+  current_instance="$(aws ec2 describe-volumes \
+    --region "$REGION" \
+    --volume-ids "$DATA_VOLUME_ID" \
+    --query 'Volumes[0].Attachments[0].InstanceId' \
+    --output text 2>/dev/null || true)"
+
+  if [ "$state" = "available" ]; then
+    log "attaching $DATA_VOLUME_ID to $instance_id"
+    aws ec2 attach-volume \
+      --region "$REGION" \
+      --volume-id "$DATA_VOLUME_ID" \
+      --instance-id "$instance_id" \
+      --device "$DEVICE_NAME" >/dev/null
+  elif [ "$state" = "in-use" ] && [ "$current_instance" = "$instance_id" ]; then
+    attached="true"
+    break
+  else
+    log "waiting for $DATA_VOLUME_ID state=$state attached_to=$current_instance"
+  fi
+
+  sleep 5
+done
+
+if [ "$attached" != "true" ]; then
+  for _ in $(seq 1 60); do
+    current_instance="$(aws ec2 describe-volumes \
+      --region "$REGION" \
+      --volume-ids "$DATA_VOLUME_ID" \
+      --query 'Volumes[0].Attachments[0].InstanceId' \
+      --output text 2>/dev/null || true)"
+
+    if [ "$current_instance" = "$instance_id" ]; then
+      attached="true"
+      break
+    fi
+
+    sleep 2
+  done
+fi
+
+if [ "$attached" != "true" ]; then
+  log "volume $DATA_VOLUME_ID did not attach to $instance_id"
+  exit 1
+fi
+
+udevadm settle || true
+
+volume_serial="$(printf '%s' "$DATA_VOLUME_ID" | tr -d '-')"
+candidate_paths=(
+  "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_$volume_serial"
+  "$DEVICE_NAME"
+  "/dev/xvdf"
+  "/dev/sdf"
+)
+
+volume_device=""
+for _ in $(seq 1 60); do
+  for candidate in "$${candidate_paths[@]}"; do
+    if [ -b "$candidate" ]; then
+      volume_device="$candidate"
+      break
+    fi
+  done
+
+  if [ -n "$volume_device" ]; then
+    break
+  fi
+
+  sleep 2
+done
+
+if [ -z "$volume_device" ]; then
+  log "attached volume block device was not found"
+  exit 1
+fi
+
+if ! blkid "$volume_device" >/dev/null 2>&1; then
+  log "formatting $volume_device"
+  mkfs.ext4 -F "$volume_device"
+fi
+
+install -d -m 0755 -o slopmud -g slopmud "$MOUNT_PATH"
+
+if ! mountpoint -q "$MOUNT_PATH"; then
+  mount "$volume_device" "$MOUNT_PATH"
+fi
+
+uuid="$(blkid -s UUID -o value "$volume_device")"
+if ! grep -q "UUID=$uuid " /etc/fstab; then
+  printf 'UUID=%s %s ext4 defaults,nofail,x-systemd.device-timeout=30 0 2\n' "$uuid" "$MOUNT_PATH" >>/etc/fstab
+fi
+
+chown -R slopmud:slopmud "$MOUNT_PATH"
+printf '%s\n' "$NODE_ID" >"$MOUNT_PATH/node_id"
+log "mounted $DATA_VOLUME_ID at $MOUNT_PATH for $NODE_ID"

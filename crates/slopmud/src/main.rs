@@ -188,8 +188,8 @@ impl LoginThrottle {
 struct ServerInfo {
     started_instant: std::time::Instant,
     started_unix: u64,
-    shard_addr: SocketAddr,
-    shard_addrs: Vec<SocketAddr>,
+    shard_addr: String,
+    shard_addrs: Vec<String>,
     bind: SocketAddr,
 }
 
@@ -280,33 +280,42 @@ ENV:\n  SLOPMUD_BIND               default 0.0.0.0:4000\n  SHARD_ADDR           
     std::process::exit(2);
 }
 
-fn parse_shard_addrs_env(primary: SocketAddr) -> Vec<SocketAddr> {
-    let Some(raw) = std::env::var("SHARD_ADDRS")
-        .ok()
-        .map(|v| v.trim().to_string())
-        .filter(|v| !v.is_empty())
-    else {
-        return vec![primary];
+fn parse_shard_target(raw: &str) -> String {
+    let target = raw.trim().to_string();
+    if target.is_empty() {
+        usage_and_exit();
+    }
+    target
+}
+
+fn parse_shard_addrs(primary: &str, raw: Option<&str>) -> Vec<String> {
+    let Some(raw) = raw.map(str::trim).filter(|v| !v.is_empty()) else {
+        return vec![primary.to_string()];
     };
     let mut out = Vec::new();
     for part in raw.split(',') {
-        let part = part.trim();
-        if part.is_empty() {
-            continue;
-        }
-        let addr: SocketAddr = part.parse().unwrap_or_else(|_| usage_and_exit());
-        if !out.contains(&addr) {
-            out.push(addr);
+        let target = parse_shard_target(part);
+        if !out.contains(&target) {
+            out.push(target);
         }
     }
-    if out.is_empty() { vec![primary] } else { out }
+    if out.is_empty() {
+        vec![primary.to_string()]
+    } else {
+        out
+    }
+}
+
+fn parse_shard_addrs_env(primary: &str) -> Vec<String> {
+    let raw = std::env::var("SHARD_ADDRS").ok();
+    parse_shard_addrs(primary, raw.as_deref())
 }
 
 #[derive(Clone, Debug)]
 struct Config {
     bind: SocketAddr,
-    shard_addr: SocketAddr,
-    shard_addrs: Vec<SocketAddr>,
+    shard_addr: String,
+    shard_addrs: Vec<String>,
     node_id: Option<String>,
     // Accounts DB (stores only password hashes, never raw passwords).
     accounts_path: String,
@@ -345,11 +354,10 @@ fn parse_args() -> Config {
         .parse()
         .unwrap_or_else(|_| usage_and_exit());
 
-    let mut shard_addr: SocketAddr = std::env::var("SHARD_ADDR")
-        .unwrap_or_else(|_| "127.0.0.1:5000".to_string())
-        .parse()
-        .unwrap_or_else(|_| usage_and_exit());
-    let mut shard_addrs = parse_shard_addrs_env(shard_addr);
+    let mut shard_addr = parse_shard_target(
+        &std::env::var("SHARD_ADDR").unwrap_or_else(|_| "127.0.0.1:5000".to_string()),
+    );
+    let mut shard_addrs = parse_shard_addrs_env(&shard_addr);
 
     let node_id = std::env::var("NODE_ID").ok();
     let accounts_path =
@@ -468,8 +476,8 @@ fn parse_args() -> Config {
             }
             "--shard-addr" => {
                 let v = it.next().unwrap_or_else(|| usage_and_exit());
-                shard_addr = v.parse().unwrap_or_else(|_| usage_and_exit());
-                shard_addrs = vec![shard_addr];
+                shard_addr = parse_shard_target(&v);
+                shard_addrs = vec![shard_addr.clone()];
             }
             "-h" | "--help" => usage_and_exit(),
             _ => usage_and_exit(),
@@ -2219,7 +2227,7 @@ async fn main() -> anyhow::Result<()> {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs(),
-        shard_addr: cfg.shard_addr,
+        shard_addr: cfg.shard_addr.clone(),
         shard_addrs: cfg.shard_addrs.clone(),
         bind: cfg.bind,
     });
@@ -2318,7 +2326,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn shard_manager_task(
-    shard_addrs: Vec<SocketAddr>,
+    shard_addrs: Vec<String>,
     sessions: Arc<tokio::sync::Mutex<HashMap<SessionId, SessionInfo>>>,
     line_ids: Arc<tokio::sync::Mutex<LineIdGen>>,
     nearline: Arc<nearline::NearlineRing>,
@@ -2335,8 +2343,8 @@ async fn shard_manager_task(
     let mut inflight: VecDeque<ShardMsg> = VecDeque::new();
 
     loop {
-        let shard_addr = shard_addrs[addr_i % shard_addrs.len()];
-        match TcpStream::connect(shard_addr).await {
+        let shard_addr = shard_addrs[addr_i % shard_addrs.len()].clone();
+        match TcpStream::connect(shard_addr.as_str()).await {
             Ok(stream) => {
                 info!(shard_addr = %shard_addr, "connected to shard");
 
@@ -6535,9 +6543,9 @@ mod tests {
         AccountRec, COC_ACK_VERSION, ConnState, LineId, PUBLIC_ACK_VERSION, REQ_DETACH, REQ_INPUT,
         REQ_INPUT_IDEMPOTENT, Scrollback, ShardMsg, ack_inflight_for_response,
         build_input_idempotent_body, extract_scrollback_lines, normalize_email, parse_sayblob_len,
-        prepare_existing_account_onboarding, redact_pii, requeue_inflight, seed_account_onboarding,
-        shard_msg_expects_response, store_account_onboarding, stored_account_onboarding,
-        trim_ascii_ws,
+        parse_shard_addrs, prepare_existing_account_onboarding, redact_pii, requeue_inflight,
+        seed_account_onboarding, shard_msg_expects_response, store_account_onboarding,
+        stored_account_onboarding, trim_ascii_ws,
     };
     use bytes::Bytes;
     use mudproto::session::SessionId;
@@ -6916,6 +6924,31 @@ mod tests {
             parse_sayblob_len("sayblob 10 extra"),
             Some(Err(_))
         ));
+    }
+
+    #[test]
+    fn shard_addr_parser_preserves_dns_targets() {
+        assert_eq!(
+            parse_shard_addrs(
+                "dev-raft-n0.slopmud.com:5000",
+                Some(
+                    "dev-raft-n0.slopmud.com:5000, dev-raft-n1.slopmud.com:5000,dev-raft-n2.slopmud.com:5000"
+                )
+            ),
+            vec![
+                "dev-raft-n0.slopmud.com:5000".to_string(),
+                "dev-raft-n1.slopmud.com:5000".to_string(),
+                "dev-raft-n2.slopmud.com:5000".to_string(),
+            ]
+        );
+        assert_eq!(
+            parse_shard_addrs("127.0.0.1:5000", Some("127.0.0.1:5000,127.0.0.1:5000")),
+            vec!["127.0.0.1:5000".to_string()]
+        );
+        assert_eq!(
+            parse_shard_addrs("dev-raft-n0.slopmud.com:5000", None),
+            vec!["dev-raft-n0.slopmud.com:5000".to_string()]
+        );
     }
 
     #[test]

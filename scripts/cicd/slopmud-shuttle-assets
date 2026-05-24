@@ -8,9 +8,9 @@ export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-$AWS_REGION}"
 usage() {
   cat >&2 <<'EOF'
 USAGE:
-  slopmud-shuttle-assets --env <dev|stg|prd|sandbox> --from-s3 s3://BUCKET/KEY
-  slopmud-shuttle-assets --env <dev|stg|prd|sandbox> --from-file /path/to/artifact.tgz
-  slopmud-shuttle-assets --env <dev|stg|prd|sandbox> --rewrite-unit --from-file /path/to/artifact.tgz
+  slopmud-shuttle-assets --env <stg|prd|sandbox> --from-s3 s3://BUCKET/KEY
+  slopmud-shuttle-assets --env <stg|prd|sandbox> --from-file /path/to/artifact.tgz
+  slopmud-shuttle-assets --env <stg|prd|sandbox> --rewrite-unit --from-file /path/to/artifact.tgz
 
 This script:
 - copies the asset tarball into /opt/slopmud/assets/<env>/<sha>/
@@ -96,13 +96,8 @@ fi
 
 case "$env_name" in
   dev)
-    service_name="slopmud-dev"
-    node_id="2"
-    bind="0.0.0.0:4000"
-    bin_dst="/opt/slopmud/bin/slopmud-dev"
-    shard_service_name="shard-01-dev"
-    shard_bind="127.0.0.1:4941"
-    shard_bin_dst="/opt/slopmud/bin/shard-01-dev"
+    echo "ERROR: dev deploys must use scripts/cicd/deploy_split_raft_trio_from_asset.sh, not the legacy one-box shuttle" >&2
+    exit 2
     ;;
   sandbox)
     service_name="slopmud-sandbox"
@@ -132,7 +127,7 @@ case "$env_name" in
     shard_bin_dst="/opt/slopmud/bin/shard-01-prd"
     ;;
   *)
-    echo "ERROR: invalid --env: $env_name (expected dev|stg|prd|sandbox)" >&2
+    echo "ERROR: invalid --env: $env_name (expected stg|prd|sandbox)" >&2
     exit 2
     ;;
 esac

@@ -47,16 +47,19 @@ Shared deploy entrypoint (local + CI):
 
 ## Fast Deploys (Code Only)
 
-For quick "hot" deploys that reuse the same asset tarball + install logic as CI (broker + shard), use:
+For quick "hot" deploys that reuse the same asset tarball + install logic as CI
+on legacy one-box targets, use:
 
 ```bash
-just hot-deploy-slopmud dev
 just hot-deploy-slopmud stg
 just hot-deploy-slopmud prd
 ```
 
 This relies on `scripts/cicd/slopmud-shuttle-assets`, which installs the new broker binary and restarts the
 systemd unit without overwriting an existing unit file by default.
+`dev` is intentionally excluded from that helper: CI deploys dev through
+`scripts/cicd/deploy_split_raft_trio_from_asset.sh` so the public gateway always
+uses the three Raft voters via `SHARD_ADDRS`.
 
 ## Low-Cost Single-AZ Raft Topology
 
@@ -67,9 +70,12 @@ The economical split-prod shape lives in `infra/terraform/single-az-raft-us-east
 - no public IPv4 on Raft nodes
 - broker-to-shard and Raft replication traffic stays on private VPC addresses
 
-After applying Terraform, combine `terraform output recommended_env` with the usual secret/env values and deploy the private Raft nodes through the gateway:
+After applying Terraform, reconcile the stable Raft DNS records from current
+ASG membership, then combine `terraform output recommended_env` with the usual
+secret/env values and deploy the private Raft nodes through the gateway:
 
 ```bash
+just reconcile-raft-dns infra/terraform/single-az-raft-us-east-1
 just render-single-az-raft-env /tmp/slopmud-prd-split-az1.env /home/rob/slopmud/env/prd.env
 just ensure-data-volumes /tmp/slopmud-prd-split-az1.env all
 just deploy-split-raft-trio prd-split
@@ -83,6 +89,11 @@ The Terraform stack attaches tiny encrypted data EBS volumes and the render help
 
 For the smallest gateway shape, set `SLOPMUD_SBC_ENABLED=0` unless the SBC sidecar services are also deployed. The render helper sets that by default, which keeps the broker from repeatedly trying to subscribe to a local SBC event socket that intentionally does not exist on the tiny gateway.
 
+For a local deployment that follows the same artifact path as CI, use
+`just deploy-split-raft-trio-asset /tmp/slopmud-prd-split-az1.env`. Passing a
+second argument deploys that exact local tarball or S3 artifact instead of
+building a fresh asset.
+
 Fresh gateways can restore cached cert material with `scripts/tls_cache_restore.sh /path/to/env.env` when the env defines `TLS_CACHE_FULLCHAIN_SSM` and `TLS_CACHE_PRIVKEY_SSM`. That gives the rebuilt gateway valid TLS before DNS is moved; verify with `curl --resolve mud.slopmud.com:4242:<gateway-ip> https://mud.slopmud.com:4242/healthz`.
 
 ## How to verify a `dev` push reaches mud.slopmud.com
@@ -92,7 +103,7 @@ For this repo, a push to `dev` should trigger `.github/workflows/enterprise-cicd
 1. `build` (artifact generation)
 2. `deploy_sandbox` (deploy artifact to sandbox on port `4500`)
 3. smoke test against `127.0.0.1:4500`
-4. `deploy` (promote the same artifact to `dev` on `4000`)
+4. `deploy` (promote the same artifact to the dev Raft trio, then update the gateway on `4000`)
 5. public smoke test against `dev-mud.slopmud.com:4000`
 
 If any sandbox step fails, the `dev` deploy is blocked and `deploy` does not run.

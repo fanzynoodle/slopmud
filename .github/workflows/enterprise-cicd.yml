@@ -322,14 +322,14 @@ jobs:
           TRACK: ${{ steps.meta.outputs.deploy_env }}
           # Clean rebuild only on the stg branch/track.
           CLEAN_BUILD: ${{ steps.meta.outputs.deploy_env == 'stg' && '1' || '0' }}
-          # Dev deploys the game broker + shard. Keep web/OIDC/admin/WAL helper
-          # binaries out of the hot branch path; staging still builds the full
-          # artifact used for prod promotion.
+          # Dev deploys the game broker + split Raft trio. Keep web/OIDC out of
+          # the hot branch path, but include adminctl/WAL helpers because the
+          # trio restore/backup path needs them during node replacement.
           BUILD_STATIC_WEB: ${{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}
           BUILD_SLOPMUD_WEB: ${{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}
           BUILD_INTERNAL_OIDC: ${{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}
-          BUILD_SLOPMUD_ADMINCTL: ${{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}
-          BUILD_WALBACKUPD: ${{ steps.meta.outputs.deploy_env == 'dev' && '0' || '1' }}
+          BUILD_SLOPMUD_ADMINCTL: "1"
+          BUILD_WALBACKUPD: "1"
           # The mud runner is intentionally tiny; keep release builds single-job.
           SLOPMUD_CARGO_BUILD_JOBS: "1"
         run: |
@@ -422,11 +422,12 @@ jobs:
         with:
           clean: false
 
-      - name: Sync local shuttle helper
+      - name: Sync local deploy helpers
         shell: bash
         run: |
           set -euo pipefail
           chmod +x scripts/cicd/slopmud-shuttle-assets
+          chmod +x scripts/cicd/deploy_split_raft_trio_from_asset.sh
 
       - name: Assert Deploy Hook Installed
         shell: bash
@@ -638,11 +639,12 @@ jobs:
         with:
           clean: false
 
-      - name: Sync local shuttle helper
+      - name: Sync local deploy helpers
         shell: bash
         run: |
           set -euo pipefail
           chmod +x scripts/cicd/slopmud-shuttle-assets
+          chmod +x scripts/cicd/deploy_split_raft_trio_from_asset.sh
 
       - name: Assert Deploy Hook Installed
         shell: bash
@@ -658,11 +660,41 @@ jobs:
           ARTIFACT_PATH: ${{ needs.build.outputs.artifact_path }}
           BUCKET: ${{ needs.build.outputs.bucket }}
           KEY: ${{ needs.build.outputs.key }}
+          SLOPMUD_DEV_RAFT_ENV_FILE: ${{ vars.SLOPMUD_DEV_RAFT_ENV_FILE }}
+          SLOPMUD_DEV_RAFT_TERRAFORM_DIR: ${{ vars.SLOPMUD_DEV_RAFT_TERRAFORM_DIR }}
+          SLOPMUD_DEV_RAFT_FAST_RESTART_BUDGET_MS: ${{ vars.SLOPMUD_DEV_RAFT_FAST_RESTART_BUDGET_MS }}
         run: |
           set -euo pipefail
           start_ts="$(date +%s)"
-
+          artifact_ref="$ARTIFACT_PATH"
           if [[ -n "${BUCKET}" && -n "${KEY}" ]]; then
+            artifact_ref="s3://${BUCKET}/${KEY}"
+          fi
+
+          if [[ "$DEPLOY_ENV" == "dev" ]]; then
+            env_file="${SLOPMUD_DEV_RAFT_ENV_FILE:-}"
+            if [[ -z "$env_file" ]]; then
+              for candidate in env/dev-split.env /home/rob/slopmud/env/dev-split.env; do
+                if [[ -f "$candidate" ]]; then
+                  env_file="$candidate"
+                  break
+                fi
+              done
+            fi
+            if [[ ! -f "$env_file" ]]; then
+              echo "ERROR: dev split Raft env file not found" >&2
+              echo "Set SLOPMUD_DEV_RAFT_ENV_FILE or provision env/dev-split.env on the self-hosted runner." >&2
+              exit 2
+            fi
+            tf_dir="${SLOPMUD_DEV_RAFT_TERRAFORM_DIR:-infra/terraform/single-az-raft-us-east-1}"
+            if [[ -d "$tf_dir" ]]; then
+              ./scripts/cicd/reconcile_raft_dns.sh --terraform-dir "$tf_dir"
+            fi
+            export SLOPMUD_FAST_ROLLING_RESTART="${SLOPMUD_FAST_ROLLING_RESTART:-1}"
+            export SLOPMUD_ROLLING_RESTART_BUDGET_MS="${SLOPMUD_DEV_RAFT_FAST_RESTART_BUDGET_MS:-${SLOPMUD_ROLLING_RESTART_BUDGET_MS:-5000}}"
+            export SLOPMUD_STRICT_LIVE_UPGRADE="${SLOPMUD_STRICT_LIVE_UPGRADE:-1}"
+            ./scripts/cicd/deploy_split_raft_trio_from_asset.sh "$env_file" "$artifact_ref"
+          elif [[ -n "${BUCKET}" && -n "${KEY}" ]]; then
             sudo -n /usr/local/bin/slopmud-shuttle-assets \
               --env "$DEPLOY_ENV" \
               --from-s3 "s3://${BUCKET}/${KEY}"

@@ -580,8 +580,9 @@ if [[ "$SSH_PORT" != "22" ]]; then
   proxy_jump="${proxy_jump}:${SSH_PORT}"
 fi
 
-ssh_opts=(-o StrictHostKeyChecking=accept-new -o "ProxyJump=${proxy_jump}" -p "$raft_ssh_port")
-scp_opts=(-o StrictHostKeyChecking=accept-new -o "ProxyJump=${proxy_jump}" -P "$raft_ssh_port")
+raft_hostkey_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+ssh_opts=("${raft_hostkey_opts[@]}" -o "ProxyJump=${proxy_jump}" -p "$raft_ssh_port")
+scp_opts=("${raft_hostkey_opts[@]}" -o "ProxyJump=${proxy_jump}" -P "$raft_ssh_port")
 gateway_ssh_opts=(-o StrictHostKeyChecking=accept-new -p "$SSH_PORT")
 if [[ "$ssh_multiplex" == "1" ]]; then
   ssh_control_dir="${tmp_dir}/ssh"
@@ -602,6 +603,7 @@ remote_release_bin="${release_dir}/shard_01-${release_id}"
 bin_src="${SLOPMUD_BIN_SRC:-target/release/shard_01}"
 adminctl_src="${SLOPMUD_ADMINCTL_BIN_SRC:-target/release/slopmud_adminctl}"
 walbackupd_src="${SLOPMUD_WALBACKUPD_BIN_SRC:-target/release/slopmud_walbackupd}"
+remote_walbackupd_bin="${release_dir}/slopmud_walbackupd-${release_id}"
 remote_adminctl_bin="${remote_bin_dir}/slopmud_adminctl"
 wal_restore_helper_src="scripts/restore_wal_backup.sh"
 wal_restore_enabled=0
@@ -822,6 +824,9 @@ EOF
   if [[ "$wal_restore_enabled" == "1" ]]; then
     echo "Environment=SLOPMUD_ADMINCTL_BIN=${remote_adminctl_bin}" >>"$tmp_unit"
   fi
+  if [[ "$walbackupd_enabled" == "1" ]]; then
+    echo "Environment=SLOPMUD_WALBACKUPD_BIN=${remote_walbackupd_bin}" >>"$tmp_unit"
+  fi
   if [[ -n "${WORLD_TICK_MS:-}" ]]; then
     echo "Environment=WORLD_TICK_MS=${WORLD_TICK_MS}" >>"$tmp_unit"
   fi
@@ -886,7 +891,9 @@ EOF
     scp "${scp_opts[@]}" "$walbackupd_src" "${target}:/tmp/slopmud_walbackupd.${release_id}"
     ssh "${ssh_opts[@]}" "$target" "\
       set -euo pipefail; \
-      sudo install -m 0755 -o root -g root '/tmp/slopmud_walbackupd.${release_id}' '${remote_bin_dir}/slopmud_walbackupd'; \
+      sudo install -m 0755 -o root -g root '/tmp/slopmud_walbackupd.${release_id}' '${remote_walbackupd_bin}'; \
+      sudo ln -sfn '${remote_walbackupd_bin}' '${remote_bin_dir}/slopmud_walbackupd.next'; \
+      sudo mv -Tf '${remote_bin_dir}/slopmud_walbackupd.next' '${remote_bin_dir}/slopmud_walbackupd'; \
       sudo rm -f '/tmp/slopmud_walbackupd.${release_id}' \
     "
   fi

@@ -11,6 +11,7 @@ members = [
   "apps/sbc_enforcerd",
   "apps/sbc_metricsd",
   "apps/sbc_deciderd",
+  "apps/slopmud_statusd",
   "apps/ws_gateway",
   "apps/bot_party",
   "apps/e2e_shard_raft_trio",

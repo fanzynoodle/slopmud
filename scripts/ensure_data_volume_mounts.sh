@@ -158,7 +158,7 @@ ensure_raft() {
   raft_ssh_port="${RAFT_SSH_PORT:-22}"
   for host in "${node_hosts[@]}"; do
     echo "Ensuring Raft data volume mount on ${host}"
-    ssh -o StrictHostKeyChecking=accept-new -o "ProxyJump=${proxy_jump}" -p "$raft_ssh_port" "${raft_ssh_user}@${host}" \
+    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o "ProxyJump=${proxy_jump}" -p "$raft_ssh_port" "${raft_ssh_user}@${host}" \
       "SLOPMUD_STATE_DIR=$(shell_quote "$state_dir") REMOTE_ROOT=$(shell_quote "$REMOTE_ROOT") bash -se" \
       <<<"$remote_script"
   done

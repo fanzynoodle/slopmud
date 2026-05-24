@@ -8,6 +8,7 @@ of copying secrets into a new artifact.
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import os
 import shlex
@@ -35,6 +36,20 @@ def write_private(path: Path, lines: list[str]) -> None:
     tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
     os.chmod(tmp, 0o600)
     tmp.replace(path)
+
+
+def reject_ip_runtime_addresses(env: dict[str, str]) -> None:
+    for key in ("SHARD_NODE_HOSTS", "SHARD_ADDRS"):
+        for raw in env.get(key, "").split(","):
+            value = raw.strip()
+            if not value:
+                continue
+            host = value.rsplit(":", 1)[0] if key == "SHARD_ADDRS" else value
+            try:
+                ipaddress.ip_address(host)
+            except ValueError:
+                continue
+            raise SystemExit(f"{key} must use stable DNS names, not Terraform-rendered IPs: {host}")
 
 
 def main() -> int:
@@ -74,6 +89,7 @@ def main() -> int:
     missing = [k for k in required if not env.get(k)]
     if missing:
         raise SystemExit(f"missing Terraform env keys: {', '.join(missing)}")
+    reject_ip_runtime_addresses(env)
     optional = [
         "ASSETS_BUCKET",
         "SLOPMUD_WAL_BACKUP_ENABLED",

@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat >&2 <<'EOF'
 USAGE:
-  hot_deploy_slopmud.sh /path/to/env/<dev|stg|prd>.env
+  hot_deploy_slopmud.sh /path/to/env/<stg|prd>.env
 
 Builds the same slopmud "asset" tarball as CI and deploys it to the target host by:
 - scp'ing the tarball to /tmp
@@ -42,9 +42,13 @@ if [[ "${ENABLED:-1}" != "1" ]]; then
 fi
 
 case "$ENV_NAME" in
-  dev|stg|prd) ;;
+  stg|prd) ;;
+  dev)
+    echo "ERROR: dev deploys use scripts/cicd/deploy_split_raft_trio_from_asset.sh, not the one-box shuttle hot deploy" >&2
+    exit 2
+    ;;
   *)
-    echo "ERROR: unsupported ENV_NAME for hot deploy: $ENV_NAME (expected dev|stg|prd)" >&2
+    echo "ERROR: unsupported ENV_NAME for hot deploy: $ENV_NAME (expected stg|prd)" >&2
     exit 2
     ;;
 esac

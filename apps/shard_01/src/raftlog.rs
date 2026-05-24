@@ -2169,6 +2169,66 @@ mod tests {
         addr
     }
 
+    fn unused_local_addr() -> SocketAddr {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.local_addr().unwrap()
+    }
+
+    fn fake_voter_server(addr: SocketAddr, node_id: &'static str) {
+        let listener = TcpListener::bind(addr).unwrap();
+        thread::Builder::new()
+            .name(format!("raft-test-voter-{node_id}"))
+            .spawn(move || {
+                for stream in listener.incoming() {
+                    let Ok(mut stream) = stream else { continue };
+                    let Ok(reader_stream) = stream.try_clone() else {
+                        continue;
+                    };
+                    let mut rd = BufReader::new(reader_stream);
+                    let mut line = String::new();
+                    if rd.read_line(&mut line).is_err() {
+                        continue;
+                    }
+                    let Ok(req) = serde_json::from_str::<RaftRpc<String>>(line.trim()) else {
+                        continue;
+                    };
+                    let resp: RaftRpc<String> = match req {
+                        RaftRpc::RequestVote { term, .. } => RaftRpc::VoteResp {
+                            term,
+                            vote_granted: true,
+                        },
+                        RaftRpc::AppendEntries {
+                            term,
+                            prev_log_index,
+                            entries,
+                            ..
+                        } => RaftRpc::AppendResp {
+                            term,
+                            success: true,
+                            match_index: entries.last().map(|e| e.index).unwrap_or(prev_log_index),
+                        },
+                        RaftRpc::StatusReq => RaftRpc::StatusResp {
+                            term: 0,
+                            node_id: node_id.to_string(),
+                            role: "Follower".to_string(),
+                            leader_id: None,
+                            commit_index: 0,
+                            last_index: 0,
+                            last_log_term: 0,
+                            quorum_recent: false,
+                            application_max_format: 1,
+                            restart_lease: None,
+                        },
+                        _ => continue,
+                    };
+                    let _ = serde_json::to_writer(&mut stream, &resp);
+                    let _ = stream.write_all(b"\n");
+                    let _ = stream.flush();
+                }
+            })
+            .unwrap();
+    }
+
     fn leader_consensus_with_peers(
         label: &str,
         peers: Vec<ConsensusPeer>,
@@ -2650,6 +2710,142 @@ mod tests {
         let (_log, replay) = RaftLog::<String>::open_with_consensus(path.clone(), cfg).unwrap();
         assert_eq!(replay.len(), 1);
         assert_eq!(replay[0].entry, "legacy");
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn cold_start_without_quorum_replays_committed_entries_and_blocks_writes_until_quorum_returns()
+    {
+        let (path, state_path) = temp_raft_path("cold_start_no_quorum");
+        let peer_addrs = [unused_local_addr(), unused_local_addr()];
+        {
+            let mut inner = RaftLogInner::<String>::new(path.clone());
+            inner.set_term_vote(3, Some("n0".to_string())).unwrap();
+            inner
+                .append_replicated(RaftEnvelope {
+                    index: 1,
+                    term: 3,
+                    ms: 10,
+                    entry: "before-cold-start-a".to_string(),
+                })
+                .unwrap();
+            inner
+                .append_replicated(RaftEnvelope {
+                    index: 2,
+                    term: 3,
+                    ms: 20,
+                    entry: "before-cold-start-b".to_string(),
+                })
+                .unwrap();
+            inner.set_commit_index(2).unwrap();
+        }
+
+        let cfg = ConsensusConfig {
+            node_id: "n0".to_string(),
+            bind: Some("127.0.0.1:0".parse().unwrap()),
+            peers: vec![
+                ConsensusPeer {
+                    node_id: "n1".to_string(),
+                    addr: peer_addrs[0].to_string(),
+                },
+                ConsensusPeer {
+                    node_id: "n2".to_string(),
+                    addr: peer_addrs[1].to_string(),
+                },
+            ],
+            election_timeout_ms: 60_000,
+            heartbeat_ms: 60_000,
+            application_max_format: 1,
+        };
+        let (mut log, replay) = RaftLog::<String>::open_with_consensus(path.clone(), cfg).unwrap();
+        assert_eq!(
+            replay.iter().map(|e| e.entry.as_str()).collect::<Vec<_>>(),
+            vec!["before-cold-start-a", "before-cold-start-b"]
+        );
+        assert!(log.consensus_enabled());
+        assert!(!log.accepts_client_writes());
+
+        let consensus = log.consensus.as_ref().unwrap();
+        match consensus.handle_status() {
+            RaftRpc::StatusResp {
+                role,
+                commit_index,
+                last_index,
+                quorum_recent,
+                ..
+            } => {
+                assert_ne!(role, "Leader");
+                assert_eq!(commit_index, 2);
+                assert_eq!(last_index, 2);
+                assert!(!quorum_recent);
+            }
+            _ => panic!("unexpected raft status response"),
+        }
+
+        let blocked = log
+            .append(30, "must-not-commit-alone".to_string())
+            .unwrap_err();
+        assert!(
+            blocked.to_string().contains("raft not leader")
+                || blocked.to_string().contains("raft quorum unavailable"),
+            "{blocked}"
+        );
+
+        let no_quorum_term = match log.consensus.as_ref().unwrap().handle_status() {
+            RaftRpc::StatusResp { term, .. } => term,
+            _ => panic!("unexpected raft status response"),
+        };
+        match log
+            .consensus
+            .as_ref()
+            .unwrap()
+            .handle_timeout_now(no_quorum_term, "n9".to_string())
+        {
+            RaftRpc::TimeoutNowResp {
+                started, reason, ..
+            } => {
+                assert!(!started);
+                assert_eq!(reason, "election did not reach quorum");
+            }
+            _ => panic!("unexpected timeout-now response"),
+        }
+        assert!(!log.accepts_client_writes());
+
+        fake_voter_server(peer_addrs[0], "n1");
+        fake_voter_server(peer_addrs[1], "n2");
+
+        let restored_term = match log.consensus.as_ref().unwrap().handle_status() {
+            RaftRpc::StatusResp { term, .. } => term,
+            _ => panic!("unexpected raft status response"),
+        };
+        match log
+            .consensus
+            .as_ref()
+            .unwrap()
+            .handle_timeout_now(restored_term, "n9".to_string())
+        {
+            RaftRpc::TimeoutNowResp {
+                started, leader_id, ..
+            } => {
+                assert!(started);
+                assert_eq!(leader_id.as_deref(), Some("n0"));
+            }
+            _ => panic!("unexpected timeout-now response"),
+        }
+        assert!(log.accepts_client_writes());
+
+        let committed = log.append(40, "after-quorum-returns".to_string()).unwrap();
+        assert_eq!(committed.index, 3);
+        let inner = log.inner.lock().unwrap();
+        assert_eq!(inner.commit_index, 3);
+        assert_eq!(inner.last_index(), 3);
+        assert_eq!(
+            inner.entries.last().map(|e| e.entry.as_str()),
+            Some("after-quorum-returns")
+        );
+        drop(inner);
 
         let _ = std::fs::remove_file(path);
         let _ = std::fs::remove_file(state_path);

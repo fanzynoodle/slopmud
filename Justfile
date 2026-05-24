@@ -698,6 +698,37 @@ deploy-split-raft-trio env="prd-split":
     ./scripts/deploy_split_raft_trio.sh "env/{{env}}.env"; \
   '
 
+# Reuse the CI artifact deploy primitive locally. If artifact is omitted, build
+# a local CI-style asset first; otherwise pass a local artifact path or s3:// URI.
+deploy-split-raft-trio-asset env="prd-split" artifact="":
+  bash -ceu ' \
+    set -o pipefail; \
+    env_file="{{env}}"; \
+    env_default="env/{{env}}.env"; \
+    case "$env_file" in */*) env_default="";; esac; \
+    if [ -f "$env_file" ]; then :; elif [ -n "$env_default" ] && [ -f "$env_default" ]; then env_file="$env_default"; else echo "env file not found: {{env}}${env_default:+ or $env_default}" >&2; exit 2; fi; \
+    set -a; source "$env_file"; set +a; \
+    if [ "${ENABLED:-1}" != "1" ]; then echo "{{env}} disabled (ENABLED=${ENABLED:-})"; exit 0; fi; \
+    artifact_path="{{artifact}}"; \
+    if [ -z "$artifact_path" ]; then \
+      track="${SLOPMUD_ASSET_TRACK:-${ENV_NAME:-{{env}}}}"; \
+      case "$track" in \
+        dev) \
+          export BUILD_STATIC_WEB="${BUILD_STATIC_WEB:-0}"; \
+          export BUILD_SLOPMUD_WEB="${BUILD_SLOPMUD_WEB:-0}"; \
+          export BUILD_INTERNAL_OIDC="${BUILD_INTERNAL_OIDC:-0}"; \
+          export BUILD_SLOPMUD_ADMINCTL="${BUILD_SLOPMUD_ADMINCTL:-1}"; \
+          export BUILD_WALBACKUPD="${BUILD_WALBACKUPD:-1}"; \
+          ;; \
+      esac; \
+      artifact_path="$(TRACK="$track" CLEAN_BUILD="${CLEAN_BUILD:-0}" ASSETS_ROOT="${ASSETS_ROOT:-assets}" ./scripts/cicd/build_assets.sh)"; \
+    fi; \
+    SLOPMUD_FAST_ROLLING_RESTART="${SLOPMUD_FAST_ROLLING_RESTART:-1}" \
+    SLOPMUD_ROLLING_RESTART_BUDGET_MS="${SLOPMUD_ROLLING_RESTART_BUDGET_MS:-5000}" \
+    SLOPMUD_STRICT_LIVE_UPGRADE="${SLOPMUD_STRICT_LIVE_UPGRADE:-1}" \
+      ./scripts/cicd/deploy_split_raft_trio_from_asset.sh "$env_file" "$artifact_path"; \
+  '
+
 live-upgrade-split-raft-trio env="prd-split":
   bash -ceu ' \
     set -o pipefail; \
@@ -783,6 +814,9 @@ k8s-raft-fast-restart namespace="slopmud" statefulset="":
 
 render-single-az-raft-env out="/tmp/slopmud-prd-split-az1.env" base="/home/rob/slopmud/env/prd.env" tfdir="infra/terraform/single-az-raft-us-east-1" env_name="prd-split-az1":
   python3 scripts/render_single_az_raft_env.py --terraform-dir "{{tfdir}}" --base-env "{{base}}" --out "{{out}}" --env-name "{{env_name}}"
+
+reconcile-raft-dns tfdir="infra/terraform/single-az-raft-us-east-1":
+  ./scripts/cicd/reconcile_raft_dns.sh --terraform-dir "{{tfdir}}"
 
 ensure-data-volumes env_file="/tmp/slopmud-prd-split-az1.env" mode="all":
   ./scripts/ensure_data_volume_mounts.sh "{{env_file}}" "{{mode}}"

@@ -2380,6 +2380,75 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn restore_from_specified_backup_snapshot_can_rebuild_zero_replicas() {
+        let dir = temp_dir("restore_zero_replicas");
+        let source_root = dir.join("source");
+        let backup_root = dir.join("backup");
+        let restore_root = dir.join("restored-trio");
+        let mut expected = Vec::new();
+
+        for node_id in ["n0", "n1", "n2"] {
+            let source = source_root.join(format!("{node_id}.jsonl"));
+            append_wal(&source, &[(1, 10, "before-cutoff")]);
+            let mut store = WalBackupStore::new(
+                source.clone(),
+                backup_root.clone(),
+                node_id.to_string(),
+                1024,
+                10,
+            );
+            let cutoff_manifest = store.sync_once(100).unwrap().manifest.unwrap();
+
+            append_wal(&source, &[(2, 20, "after-cutoff")]);
+            let later_manifest = store.sync_once(200).unwrap().manifest.unwrap();
+            assert!(later_manifest.source_len > cutoff_manifest.source_len);
+
+            expected.push((
+                node_id.to_string(),
+                source,
+                cutoff_manifest.source_len,
+                cutoff_manifest.manifest_relpath,
+            ));
+        }
+
+        // Zero replicas: none of the target WAL files exist before bootstrap restore.
+        for (node_id, _, _, _) in &expected {
+            assert!(!restore_root.join(format!("{node_id}.jsonl")).exists());
+        }
+
+        for (node_id, source, source_len_at_cutoff, manifest_relpath) in expected {
+            let target = restore_root.join(format!("{node_id}.jsonl"));
+            let cfg = WalRestoreConfig {
+                target_path: target.clone(),
+                source: WalRestoreSource::Local(backup_root.clone()),
+                node_id: Some(node_id),
+                target: RecoveryTarget::Latest,
+                manifest_unix_at_or_before: Some(100),
+                overwrite_existing: false,
+                missing_manifest_ok: false,
+            };
+
+            let outcome = restore_wal_from_backup(&cfg).await.unwrap();
+            assert_eq!(
+                outcome,
+                WalRestoreOutcome::Restored {
+                    path: target.clone(),
+                    bytes: source_len_at_cutoff,
+                    source_len: source_len_at_cutoff,
+                    manifest_relpath,
+                }
+            );
+
+            let current_source = std::fs::read(source).unwrap();
+            assert!(String::from_utf8_lossy(&current_source).contains("\"index\":2"));
+            assert_eq!(
+                std::fs::read(target).unwrap(),
+                current_source[..source_len_at_cutoff as usize].to_vec()
+            );
+        }
+    }
+
     #[test]
     fn parse_s3_uri_normalizes_prefix() {
         let (bucket, prefix) = parse_s3_uri("s3://bucket/a/b/").unwrap();
