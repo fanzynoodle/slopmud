@@ -661,6 +661,10 @@ fi
 release_sha256="$(sha256sum "$bin_src" | awk '{print $1}')"
 aws_region="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
 release_s3_uri="${SLOPMUD_RELEASE_S3_URI:-}"
+adminctl_s3_uri="${SLOPMUD_ADMINCTL_S3_URI:-}"
+adminctl_sha256="${SLOPMUD_ADMINCTL_SHA256:-}"
+walbackupd_s3_uri="${SLOPMUD_WALBACKUPD_S3_URI:-}"
+walbackupd_sha256="${SLOPMUD_WALBACKUPD_SHA256:-}"
 s3_prefetch_timeout_s="${SLOPMUD_S3_PREFETCH_TIMEOUT_S:-60}"
 if ! [[ "$s3_prefetch_timeout_s" =~ ^[0-9]+$ ]] || [[ "$s3_prefetch_timeout_s" == "0" ]]; then
   echo "ERROR: SLOPMUD_S3_PREFETCH_TIMEOUT_S must be a positive integer" >&2
@@ -707,6 +711,32 @@ stage_release_from_s3_node() {
   "
 }
 
+stage_helper_from_s3_node() {
+  local i="$1"
+  local uri="$2"
+  local expected_sha="$3"
+  local label="$4"
+  local remote_path="$5"
+  local uri_b64
+  uri_b64="$(printf '%s' "$uri" | base64 | tr -d '\n')"
+  echo "Pulling ${label} from S3 on ${node_ids[$i]} (${node_hosts[$i]}) -> ${remote_path}"
+  ssh_node "$i" "\
+    set -euo pipefail; \
+    helper_uri=\$(printf %s '${uri_b64}' | base64 -d); \
+    if ! command -v aws >/dev/null 2>&1; then echo 'aws CLI is required for S3 helper deploys' >&2; exit 1; fi; \
+    tmp='/tmp/${label}.${release_id}'; \
+    AWS_REGION='${aws_region}' AWS_DEFAULT_REGION='${aws_region}' timeout '${s3_prefetch_timeout_s}' aws s3 cp \"\$helper_uri\" \"\$tmp\" --only-show-errors; \
+    actual=\$(sha256sum \"\$tmp\" | awk '{print \$1}'); \
+    if [ \"\$actual\" != '${expected_sha}' ]; then \
+      echo \"checksum mismatch for \$helper_uri: expected ${expected_sha}, got \$actual\" >&2; \
+      rm -f \"\$tmp\"; \
+      exit 1; \
+    fi; \
+    sudo install -m 0755 -o root -g root \"\$tmp\" '${remote_path}'; \
+    rm -f \"\$tmp\" \
+  "
+}
+
 if [[ "$deploy_from_s3" == "1" ]]; then
   if ! command -v aws >/dev/null 2>&1; then
     echo "ERROR: aws CLI is required locally for SLOPMUD_DEPLOY_FROM_S3=1" >&2
@@ -739,6 +769,23 @@ if [[ "$deploy_from_s3" == "1" ]]; then
   aws s3 cp "$bin_src" "$release_s3_uri" --only-show-errors
   printf '%s  shard_01\n' "$release_sha256" >"${tmp_dir}/shard_01.sha256"
   aws s3 cp "${tmp_dir}/shard_01.sha256" "${release_s3_uri}.sha256" --only-show-errors
+
+  if [[ "$wal_restore_enabled" == "1" ]]; then
+    adminctl_s3_uri="${adminctl_s3_uri:-${release_s3_uri}.slopmud_adminctl}"
+    adminctl_sha256="$(sha256sum "$adminctl_src" | awk '{print $1}')"
+    echo "Uploading slopmud_adminctl helper -> ${adminctl_s3_uri}"
+    aws s3 cp "$adminctl_src" "$adminctl_s3_uri" --only-show-errors
+    printf '%s  slopmud_adminctl\n' "$adminctl_sha256" >"${tmp_dir}/slopmud_adminctl.sha256"
+    aws s3 cp "${tmp_dir}/slopmud_adminctl.sha256" "${adminctl_s3_uri}.sha256" --only-show-errors
+  fi
+  if [[ "$walbackupd_enabled" == "1" ]]; then
+    walbackupd_s3_uri="${walbackupd_s3_uri:-${release_s3_uri}.slopmud_walbackupd}"
+    walbackupd_sha256="$(sha256sum "$walbackupd_src" | awk '{print $1}')"
+    echo "Uploading slopmud_walbackupd helper -> ${walbackupd_s3_uri}"
+    aws s3 cp "$walbackupd_src" "$walbackupd_s3_uri" --only-show-errors
+    printf '%s  slopmud_walbackupd\n' "$walbackupd_sha256" >"${tmp_dir}/slopmud_walbackupd.sha256"
+    aws s3 cp "${tmp_dir}/slopmud_walbackupd.sha256" "${walbackupd_s3_uri}.sha256" --only-show-errors
+  fi
 
   echo "Prefetching release from S3 on all Raft nodes"
   pids=()
@@ -875,27 +922,46 @@ EOF
   "
 
   if [[ "$wal_restore_enabled" == "1" ]]; then
-    echo "Uploading wal restore helper + adminctl to ${node_id} (${host})"
-    scp "${scp_opts[@]}" "$adminctl_src" "${target}:/tmp/slopmud_adminctl.${release_id}"
-    scp "${scp_opts[@]}" "$wal_restore_helper_src" "${target}:/tmp/slopmud-wal-restore"
-    ssh "${ssh_opts[@]}" "$target" "\
-      set -euo pipefail; \
-      sudo install -m 0755 -o root -g root '/tmp/slopmud_adminctl.${release_id}' '${remote_adminctl_bin}'; \
-      sudo install -m 0755 -o root -g root /tmp/slopmud-wal-restore /usr/local/bin/slopmud-wal-restore; \
-      sudo rm -f '/tmp/slopmud_adminctl.${release_id}' /tmp/slopmud-wal-restore \
-    "
+    echo "Uploading wal restore helper + installing adminctl on ${node_id} (${host})"
+    if [[ -n "$adminctl_s3_uri" ]]; then
+      stage_helper_from_s3_node "$i" "$adminctl_s3_uri" "$adminctl_sha256" "slopmud_adminctl" "$remote_adminctl_bin"
+      scp "${scp_opts[@]}" "$wal_restore_helper_src" "${target}:/tmp/slopmud-wal-restore"
+      ssh "${ssh_opts[@]}" "$target" "\
+        set -euo pipefail; \
+        sudo install -m 0755 -o root -g root /tmp/slopmud-wal-restore /usr/local/bin/slopmud-wal-restore; \
+        sudo rm -f /tmp/slopmud-wal-restore \
+      "
+    else
+      scp "${scp_opts[@]}" "$adminctl_src" "${target}:/tmp/slopmud_adminctl.${release_id}"
+      scp "${scp_opts[@]}" "$wal_restore_helper_src" "${target}:/tmp/slopmud-wal-restore"
+      ssh "${ssh_opts[@]}" "$target" "\
+        set -euo pipefail; \
+        sudo install -m 0755 -o root -g root '/tmp/slopmud_adminctl.${release_id}' '${remote_adminctl_bin}'; \
+        sudo install -m 0755 -o root -g root /tmp/slopmud-wal-restore /usr/local/bin/slopmud-wal-restore; \
+        sudo rm -f '/tmp/slopmud_adminctl.${release_id}' /tmp/slopmud-wal-restore \
+      "
+    fi
   fi
 
   if [[ "$walbackupd_enabled" == "1" ]]; then
-    echo "Uploading slopmud_walbackupd to ${node_id} (${host})"
-    scp "${scp_opts[@]}" "$walbackupd_src" "${target}:/tmp/slopmud_walbackupd.${release_id}"
-    ssh "${ssh_opts[@]}" "$target" "\
-      set -euo pipefail; \
-      sudo install -m 0755 -o root -g root '/tmp/slopmud_walbackupd.${release_id}' '${remote_walbackupd_bin}'; \
-      sudo ln -sfn '${remote_walbackupd_bin}' '${remote_bin_dir}/slopmud_walbackupd.next'; \
-      sudo mv -Tf '${remote_bin_dir}/slopmud_walbackupd.next' '${remote_bin_dir}/slopmud_walbackupd'; \
-      sudo rm -f '/tmp/slopmud_walbackupd.${release_id}' \
-    "
+    if [[ -n "$walbackupd_s3_uri" ]]; then
+      stage_helper_from_s3_node "$i" "$walbackupd_s3_uri" "$walbackupd_sha256" "slopmud_walbackupd" "$remote_walbackupd_bin"
+      ssh "${ssh_opts[@]}" "$target" "\
+        set -euo pipefail; \
+        sudo ln -sfn '${remote_walbackupd_bin}' '${remote_bin_dir}/slopmud_walbackupd.next'; \
+        sudo mv -Tf '${remote_bin_dir}/slopmud_walbackupd.next' '${remote_bin_dir}/slopmud_walbackupd' \
+      "
+    else
+      echo "Uploading slopmud_walbackupd to ${node_id} (${host})"
+      scp "${scp_opts[@]}" "$walbackupd_src" "${target}:/tmp/slopmud_walbackupd.${release_id}"
+      ssh "${ssh_opts[@]}" "$target" "\
+        set -euo pipefail; \
+        sudo install -m 0755 -o root -g root '/tmp/slopmud_walbackupd.${release_id}' '${remote_walbackupd_bin}'; \
+        sudo ln -sfn '${remote_walbackupd_bin}' '${remote_bin_dir}/slopmud_walbackupd.next'; \
+        sudo mv -Tf '${remote_bin_dir}/slopmud_walbackupd.next' '${remote_bin_dir}/slopmud_walbackupd'; \
+        sudo rm -f '/tmp/slopmud_walbackupd.${release_id}' \
+      "
+    fi
   fi
 
   if [[ "$deploy_from_s3" == "1" ]]; then

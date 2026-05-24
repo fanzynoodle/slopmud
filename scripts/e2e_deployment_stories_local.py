@@ -1113,13 +1113,28 @@ def test_split_raft_s3_fanout_upgrade() -> None:
     with tempfile.TemporaryDirectory(prefix="slopmud_deploy_story_") as d:
         tmp = Path(d)
         state_path, env = deploy_env(tmp, base_cluster_state(), s3=True)
+        helper_dir = tmp / "helpers"
+        helper_dir.mkdir()
+        for helper in ("slopmud_adminctl", "slopmud_walbackupd"):
+            helper_path = helper_dir / helper
+            helper_path.write_text("#!/usr/bin/env sh\nexit 0\n", encoding="utf-8")
+            helper_path.chmod(0o755)
+        env["SLOPMUD_ADMINCTL_BIN_SRC"] = str(helper_dir / "slopmud_adminctl")
+        env["SLOPMUD_WALBACKUPD_BIN_SRC"] = str(helper_dir / "slopmud_walbackupd")
+        env["SLOPMUD_WAL_RESTORE_ENABLED"] = "auto"
+        env["SLOPMUD_WAL_BACKUP_ENABLED"] = "1"
         proc = run(["bash", "scripts/deploy_split_raft_trio.sh", str(split_env_file(tmp))], env=env)
         assert_ok(proc)
         state = read_state(state_path)
         events = state["events"]
         remote_pulls = [e for e in events if e["kind"] == "remote_s3_pull"]
-        if sorted(e["node"] for e in remote_pulls) != ["n0", "n1", "n2"]:
-            raise AssertionError(f"expected every raft node to prefetch from S3, got {remote_pulls}")
+        shard_pulls = [e for e in remote_pulls if "shard_01" in e["command"]]
+        if sorted(e["node"] for e in shard_pulls) != ["n0", "n1", "n2"]:
+            raise AssertionError(f"expected every raft node to prefetch shard_01 from S3, got {remote_pulls}")
+        for helper in ("slopmud_adminctl", "slopmud_walbackupd"):
+            helper_pulls = [e for e in remote_pulls if helper in e["command"]]
+            if sorted(e["node"] for e in helper_pulls) != ["n0", "n1", "n2"]:
+                raise AssertionError(f"expected every raft node to prefetch {helper} from S3, got {remote_pulls}")
         if not all("timeout '60' aws s3 cp" in e["command"] for e in remote_pulls):
             raise AssertionError(f"S3 prefetch must have a bounded timeout: {remote_pulls}")
         first_restart = next(i for i, e in enumerate(events) if e["kind"] == "restart")
@@ -1127,13 +1142,25 @@ def test_split_raft_s3_fanout_upgrade() -> None:
         if not last_pull < first_restart:
             raise AssertionError("S3 prefetch must complete before process restarts")
         aws_cps = [e for e in events if e["kind"] == "aws" and e["argv"][:2] == ["s3", "cp"]]
-        cp_targets = [e["argv"][2] if len(e["argv"]) > 2 else "" for e in aws_cps]
+        cp_targets = [e["argv"][3] if len(e["argv"]) > 3 else "" for e in aws_cps]
         if not any(t.endswith("/shard_01") for t in cp_targets) or not any(t.endswith("/shard_01.sha256") for t in cp_targets):
             raise AssertionError(f"missing shard binary or checksum upload: {aws_cps}")
+        for helper in ("slopmud_adminctl", "slopmud_walbackupd"):
+            if not any(t.endswith(f"/shard_01.{helper}") for t in cp_targets) or not any(t.endswith(f"/shard_01.{helper}.sha256") for t in cp_targets):
+                raise AssertionError(f"missing {helper} helper or checksum upload: {aws_cps}")
         scp_events = [e for e in events if e["kind"] == "scp"]
-        binary_scps = [e for e in scp_events if any("shard_01.testrelease" in a for a in e["argv"])]
+        binary_scps = [
+            e
+            for e in scp_events
+            if any(
+                "shard_01.testrelease" in a
+                or "slopmud_adminctl" in a
+                or "slopmud_walbackupd" in a
+                for a in e["argv"]
+            )
+        ]
         if binary_scps:
-            raise AssertionError(f"S3 fanout should not scp the binary: {binary_scps}")
+            raise AssertionError(f"S3 fanout should not scp release/helper binaries: {binary_scps}")
 
 
 def test_cicd_dev_split_raft_asset_deploy() -> None:
