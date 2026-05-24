@@ -283,7 +283,7 @@ ssh "${gateway_ssh_opts[@]}" "${SSH_USER}@${gateway_host}" "\
   set -euo pipefail; \
   if ! id -u slopmud >/dev/null 2>&1; then sudo useradd --system --home '${REMOTE_ROOT}' --create-home --shell /usr/sbin/nologin slopmud; fi; \
   sudo mkdir -p '${REMOTE_ROOT}' '${remote_bin_dir}' '${release_dir}' '${REMOTE_ROOT}/var'; \
-  sudo chown -R slopmud:slopmud '${REMOTE_ROOT}' \
+  sudo chown slopmud:slopmud '${REMOTE_ROOT}' '${REMOTE_ROOT}/var' \
 "
 
 if [[ "$walbackupd_needed" == "1" ]]; then

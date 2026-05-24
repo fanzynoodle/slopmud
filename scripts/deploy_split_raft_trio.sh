@@ -680,7 +680,7 @@ stage_release_from_s3_node() {
     release_uri=\$(printf %s '${uri_b64}' | base64 -d); \
     if ! id -u slopmud >/dev/null 2>&1; then sudo useradd --system --home '${REMOTE_ROOT}' --create-home --shell /usr/sbin/nologin slopmud; fi; \
     sudo mkdir -p '${REMOTE_ROOT}' '${remote_bin_dir}' '${release_dir}' '${REMOTE_ROOT}/var'; \
-    sudo chown -R slopmud:slopmud '${REMOTE_ROOT}'; \
+    sudo chown slopmud:slopmud '${REMOTE_ROOT}' '${REMOTE_ROOT}/var'; \
     if ! command -v aws >/dev/null 2>&1; then \
       if command -v apt-get >/dev/null 2>&1; then \
         sudo DEBIAN_FRONTEND=noninteractive apt-get update -y >/dev/null; \
@@ -871,7 +871,7 @@ EOF
     set -euo pipefail; \
     if ! id -u slopmud >/dev/null 2>&1; then sudo useradd --system --home '${REMOTE_ROOT}' --create-home --shell /usr/sbin/nologin slopmud; fi; \
     sudo mkdir -p '${REMOTE_ROOT}' '${remote_bin_dir}' '${release_dir}' '${REMOTE_ROOT}/var'; \
-    sudo chown -R slopmud:slopmud '${REMOTE_ROOT}' \
+    sudo chown slopmud:slopmud '${REMOTE_ROOT}' '${REMOTE_ROOT}/var' \
   "
 
   if [[ "$wal_restore_enabled" == "1" ]]; then

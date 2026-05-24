@@ -1138,6 +1138,9 @@ def test_split_raft_s3_fanout_upgrade() -> None:
 
 def test_cicd_dev_split_raft_asset_deploy() -> None:
     wrapper = (REPO / "scripts/cicd/deploy_split_raft_trio_from_asset.sh").read_text(encoding="utf-8")
+    split = (REPO / "scripts/deploy_split_raft_trio.sh").read_text(encoding="utf-8")
+    if "chown -R slopmud:slopmud '${REMOTE_ROOT}'" in wrapper or "chown -R slopmud:slopmud '${REMOTE_ROOT}'" in split:
+        raise AssertionError("split Raft deploy must not recursively chown REMOTE_ROOT during routine rollouts")
     for needle in (
         "./scripts/deploy_split_raft_trio.sh",
         'Environment=SHARD_ADDR=${shard_addrs[0]}',
