@@ -702,6 +702,7 @@ jobs:
               ./scripts/cicd/reconcile_raft_dns.sh --terraform-dir "$tf_dir"
             fi
             export SLOPMUD_FAST_ROLLING_RESTART="${SLOPMUD_FAST_ROLLING_RESTART:-1}"
+            export SLOPMUD_SSH_MULTIPLEX="${SLOPMUD_SSH_MULTIPLEX:-0}"
             export SLOPMUD_ROLLING_RESTART_BUDGET_MS="${SLOPMUD_DEV_RAFT_FAST_RESTART_BUDGET_MS:-${SLOPMUD_ROLLING_RESTART_BUDGET_MS:-15000}}"
             export SLOPMUD_STRICT_LIVE_UPGRADE="${SLOPMUD_STRICT_LIVE_UPGRADE:-1}"
             ./scripts/cicd/deploy_split_raft_trio_from_asset.sh "$env_file" "$artifact_ref"
