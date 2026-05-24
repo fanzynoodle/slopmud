@@ -79,6 +79,14 @@ SHARD_APP_NAME="${SHARD_APP_NAME:-shard-01-${ENV_NAME}}"
 SHARD_REMOTE_BIN="${SHARD_REMOTE_BIN:-${REMOTE_ROOT}/bin/shard_01-${ENV_NAME}}"
 export ENV_NAME HOST GATEWAY_HOST SLOPMUD_APP_NAME SLOPMUD_REMOTE_BIN NODE_ID SHARD_APP_NAME SHARD_REMOTE_BIN
 
+ssh_connect_timeout_s="${SLOPMUD_SSH_CONNECT_TIMEOUT_S:-10}"
+if ! [[ "$ssh_connect_timeout_s" =~ ^[0-9]+$ ]] || [[ "$ssh_connect_timeout_s" == "0" ]]; then
+  echo "ERROR: SLOPMUD_SSH_CONNECT_TIMEOUT_S must be a positive integer" >&2
+  exit 2
+fi
+hostkey_churn_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+ssh_liveness_opts=(-o BatchMode=yes -o "ConnectTimeout=${ssh_connect_timeout_s}" -o ServerAliveInterval=5 -o ServerAliveCountMax=2)
+
 split_csv() {
   local raw="$1"
   local -n out_ref="$2"
@@ -180,8 +188,8 @@ fi
 echo "Deploying split Raft trio from artifact (env=${ENV_NAME}, release=${release_id})"
 ./scripts/deploy_split_raft_trio.sh "$env_file"
 
-gateway_ssh_opts=(-o StrictHostKeyChecking=accept-new -p "$SSH_PORT")
-gateway_scp_opts=(-o StrictHostKeyChecking=accept-new -P "$SSH_PORT")
+gateway_ssh_opts=("${hostkey_churn_opts[@]}" "${ssh_liveness_opts[@]}" -p "$SSH_PORT")
+gateway_scp_opts=("${hostkey_churn_opts[@]}" "${ssh_liveness_opts[@]}" -P "$SSH_PORT")
 remote_bin_dir="$(dirname "$SLOPMUD_REMOTE_BIN")"
 release_dir="${SLOPMUD_VERSIONED_BIN_DIR:-${remote_bin_dir}/releases}"
 remote_release_bin="${release_dir}/slopmud-${release_id}"
@@ -394,7 +402,8 @@ EOF
 esac
 
 echo "Verifying Raft voter status on all three nodes"
-raft_ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o "ProxyJump=${SSH_USER}@${gateway_host}:${SSH_PORT}" -p "$raft_ssh_port")
+raft_proxy_command="ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=${ssh_connect_timeout_s} -p ${SSH_PORT} -W %h:%p ${SSH_USER}@${gateway_host}"
+raft_ssh_opts=("${hostkey_churn_opts[@]}" "${ssh_liveness_opts[@]}" -o "ProxyCommand=${raft_proxy_command}" -p "$raft_ssh_port")
 status_payload_b64="$(printf '%s' '{"t":"StatusReq"}' | base64 | tr -d '\n')"
 for host in "${shard_hosts[@]}"; do
   ssh "${raft_ssh_opts[@]}" "${raft_ssh_user}@${host}" "\

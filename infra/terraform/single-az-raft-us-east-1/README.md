@@ -28,7 +28,9 @@ The current one-box mud host can remain the build/deploy runner. Deploy to the p
 - Region: `us-east-1`
 - Gateway AZ: `us-east-1a`
 - Raft AZs: default to the gateway AZ for cost compatibility; set `raft_availability_zones` or `raft_subnet_ids` to place each slot in a distinct AZ.
-- Gateway: `t3a.nano`, on-demand, public IPv4
+- Gateway: `t3a.micro`, on-demand, public IPv4. The previous `t3a.nano`
+  target is too memory-constrained once the gateway, status page, runner, and
+  web surfaces are active.
 - Raft nodes: 3x `t3a.nano`, Spot, private IPv4 only
 - Public dev telnet: `dev-mud.slopmud.com:4000` on the gateway
 - Public prod telnet: `mud.slopmud.com:4200` on the gateway

@@ -78,7 +78,7 @@ variable "os" {
 variable "gateway_instance_type" {
   type        = string
   description = "Tiny non-Spot public gateway for telnet, web, websocket, and broker."
-  default     = "t3a.nano"
+  default     = "t3a.micro"
 }
 
 variable "raft_instance_type" {

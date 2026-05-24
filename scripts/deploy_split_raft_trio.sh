@@ -49,6 +49,7 @@ Optional env:
   SLOPMUD_NODE_PORT_WAIT_TRIES default 40 in fast mode, 80 otherwise
   SLOPMUD_NODE_PORT_WAIT_SLEEP_S default 0.05 in fast mode, 0.25 otherwise
   SLOPMUD_SKIP_SYSTEMD_STATUS default 1 in fast mode, 0 otherwise
+  SLOPMUD_SSH_CONNECT_TIMEOUT_S default 10; bounds gateway/jump SSH handshakes
 EOF
 }
 
@@ -148,6 +149,11 @@ if [[ -n "$rolling_restart_budget_ms" ]]; then
     echo "ERROR: SLOPMUD_ROLLING_RESTART_BUDGET_MS must be a positive integer when set" >&2
     exit 2
   fi
+fi
+ssh_connect_timeout_s="${SLOPMUD_SSH_CONNECT_TIMEOUT_S:-10}"
+if ! [[ "$ssh_connect_timeout_s" =~ ^[0-9]+$ ]] || [[ "$ssh_connect_timeout_s" == "0" ]]; then
+  echo "ERROR: SLOPMUD_SSH_CONNECT_TIMEOUT_S must be a positive integer" >&2
+  exit 2
 fi
 
 now_ms() {
@@ -580,10 +586,12 @@ if [[ "$SSH_PORT" != "22" ]]; then
   proxy_jump="${proxy_jump}:${SSH_PORT}"
 fi
 
-raft_hostkey_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
-ssh_opts=("${raft_hostkey_opts[@]}" -o "ProxyJump=${proxy_jump}" -p "$raft_ssh_port")
-scp_opts=("${raft_hostkey_opts[@]}" -o "ProxyJump=${proxy_jump}" -P "$raft_ssh_port")
-gateway_ssh_opts=(-o StrictHostKeyChecking=accept-new -p "$SSH_PORT")
+hostkey_churn_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+ssh_liveness_opts=(-o BatchMode=yes -o "ConnectTimeout=${ssh_connect_timeout_s}" -o ServerAliveInterval=5 -o ServerAliveCountMax=2)
+jump_proxy_command="ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=${ssh_connect_timeout_s} -p ${SSH_PORT} -W %h:%p ${SSH_USER}@${gateway_host}"
+ssh_opts=("${hostkey_churn_opts[@]}" "${ssh_liveness_opts[@]}" -o "ProxyCommand=${jump_proxy_command}" -p "$raft_ssh_port")
+scp_opts=("${hostkey_churn_opts[@]}" "${ssh_liveness_opts[@]}" -o "ProxyCommand=${jump_proxy_command}" -P "$raft_ssh_port")
+gateway_ssh_opts=("${hostkey_churn_opts[@]}" "${ssh_liveness_opts[@]}" -p "$SSH_PORT")
 if [[ "$ssh_multiplex" == "1" ]]; then
   ssh_control_dir="${tmp_dir}/ssh"
   mkdir -p "$ssh_control_dir"

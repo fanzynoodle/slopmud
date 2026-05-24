@@ -685,6 +685,8 @@ def test_cicd_tiny_runner_memory_guards() -> None:
             raise AssertionError(f"runner bootstrap must install {required}")
     if 'variable "gateway_root_volume_gib"' not in tf_vars or "default     = 34" not in tf_vars:
         raise AssertionError("gateway root volume must leave room for the self-hosted runner build cache")
+    if 'variable "gateway_instance_type"' not in tf_vars or 'default     = "t3a.micro"' not in tf_vars:
+        raise AssertionError("gateway default must have enough memory for gateway, statusd, web, and runner services")
     if 'variable "gateway_bind_port"' not in tf_vars or 'SLOPMUD_BIND                      = "0.0.0.0:${var.gateway_bind_port}"' not in tf_outputs:
         raise AssertionError("split Terraform env must render the environment-specific gateway broker port")
     if "ignore_changes = [" not in tf_main or "user_data" not in tf_main or "root_block_device" not in tf_main:
@@ -716,6 +718,14 @@ def test_cicd_tiny_runner_memory_guards() -> None:
     ):
         if "UserKnownHostsFile=/dev/null" not in text:
             raise AssertionError(f"{path} must tolerate host-key churn for replaceable Raft DNS slots")
+    for path, text in (
+        ("deploy_split_raft_trio.sh", split_deploy),
+        ("deploy_split_raft_trio_from_asset.sh", split_asset_deploy),
+    ):
+        if "SLOPMUD_SSH_CONNECT_TIMEOUT_S" not in text or "ConnectTimeout=" not in text:
+            raise AssertionError(f"{path} must bound gateway SSH connection setup")
+        if "ProxyCommand=" not in text:
+            raise AssertionError(f"{path} must pass host-key churn options through the gateway jump")
     if "aws_vpc_endpoint\" \"ec2\"" not in tf_main or "ec2_interface_endpoint_id" not in tf_outputs:
         raise AssertionError("private Raft nodes need an EC2 Interface endpoint for EBS attach without NAT")
     if "apt-get update" in raft_userdata or "apt-get install" in raft_userdata:
