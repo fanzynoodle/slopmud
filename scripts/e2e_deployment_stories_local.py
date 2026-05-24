@@ -867,8 +867,8 @@ def test_cicd_clean_checkout_asset_contract() -> None:
         raise AssertionError("dev deploy must include a blocking outside-in public telnet smoke")
     if "asset_ready_epoch" not in workflow or "deploy_public_smoke_after_asset_ready_s" not in workflow:
         raise AssertionError("dev deploy must report public-smoke latency excluding build time")
-    if 'SLOPMUD_DEV_RAFT_FAST_RESTART_BUDGET_MS:-${SLOPMUD_ROLLING_RESTART_BUDGET_MS:-15000}' not in workflow:
-        raise AssertionError("dev CI split Raft rollout must have a realistic AWS default budget while allowing repo/env overrides")
+    if 'SLOPMUD_DEV_RAFT_FAST_RESTART_BUDGET_MS:-${SLOPMUD_ROLLING_RESTART_BUDGET_MS:-90000}' not in workflow:
+        raise AssertionError("dev CI split Raft rollout must have an AWS-tolerant default budget while allowing repo/env overrides")
     if 'SLOPMUD_SSH_MULTIPLEX="${SLOPMUD_SSH_MULTIPLEX:-0}"' not in workflow:
         raise AssertionError("dev CI split Raft rollout must avoid ProxyJump SSH multiplex hangs unless explicitly enabled")
     if 'if [[ -f "$ARTIFACT_PATH" ]]; then' not in workflow:
