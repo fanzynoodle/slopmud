@@ -677,12 +677,17 @@ def test_cicd_tiny_runner_memory_guards() -> None:
     ):
         if required not in workflow:
             raise AssertionError(f"CI must restore remote Rust cache only when local cache is absent: {required}")
-    dep_line = "for c in gcc git jq make pkg-config just python3 tar; do"
+    dep_line = "for c in aws gcc git jq make pkg-config just python3 tar; do"
     if dep_line not in workflow:
         raise AssertionError("CI runner dependency preflight must cover the full tiny-runner toolchain")
     for required in ("build-essential", "git", "jq", "pkg-config", "python3", "awscli", "ripgrep"):
         if required not in bootstrap:
             raise AssertionError(f"runner bootstrap must install {required}")
+    if "gateway_asset_publish" not in tf_main or "PublishCiArtifacts" not in tf_main:
+        raise AssertionError("gateway-hosted CI runners must be allowed to publish release artifacts")
+    for required in ("s3:PutObject", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"):
+        if required not in tf_main:
+            raise AssertionError(f"gateway artifact publish policy lost {required}")
     if 'variable "gateway_root_volume_gib"' not in tf_vars or "default     = 34" not in tf_vars:
         raise AssertionError("gateway root volume must leave room for the self-hosted runner build cache")
     if 'variable "gateway_instance_type"' not in tf_vars or 'default     = "t3a.micro"' not in tf_vars:
@@ -691,6 +696,15 @@ def test_cicd_tiny_runner_memory_guards() -> None:
         raise AssertionError("split Terraform env must render the environment-specific gateway broker port")
     if "ignore_changes = [" not in tf_main or "user_data" not in tf_main or "root_block_device" not in tf_main:
         raise AssertionError("gateway Terraform resource must not be replaced during routine Raft topology applies")
+    gateway_resource = tf_main.split('resource "aws_instance" "gateway"', 1)[1].split(
+        'resource "aws_ebs_volume" "gateway_data"', 1
+    )[0]
+    if "prevent_destroy = true" not in gateway_resource:
+        raise AssertionError("gateway Terraform resource must prevent accidental player-facing replacement")
+    for resource_name in ('resource "aws_key_pair" "deploy"', 'resource "aws_iam_policy" "gateway_ssm_read"'):
+        resource_body = tf_main.split(resource_name, 1)[1].split("\nresource ", 1)[0]
+        if "prevent_destroy = true" not in resource_body:
+            raise AssertionError(f"{resource_name} must prevent accidental variable-omission destruction")
     if "raft_asg_does_not_pin_private_ips" not in tf_main or "private_ip_address" in tf_main:
         raise AssertionError("Raft ASG topology must fail closed instead of trying to pin private IPs")
     recommended_env = tf_outputs.split('output "recommended_env"', 1)[1].split('output "ssh_examples"', 1)[0]
@@ -859,12 +873,12 @@ def test_cicd_clean_checkout_asset_contract() -> None:
         raise AssertionError("dev CI split Raft rollout must avoid ProxyJump SSH multiplex hangs unless explicitly enabled")
     if 'if [[ -f "$ARTIFACT_PATH" ]]; then' not in workflow:
         raise AssertionError("sandbox deploy must prefer same-runner local artifacts before S3")
-    if "if command -v aws >/dev/null 2>&1; then" not in workflow:
-        raise AssertionError("dev artifact upload must tolerate runners without aws CLI")
-    if "dev track continues with the local artifact" not in workflow:
-        raise AssertionError("dev missing-aws fallback should be explicit in CI logs")
+    if "for c in aws gcc git jq make pkg-config just python3 tar; do" not in workflow:
+        raise AssertionError("CI build runners must have aws CLI so cross-runner deploys can use S3 artifacts")
+    if "dev track continues" in workflow or "continues without S3" in workflow:
+        raise AssertionError("dev CI must not silently continue without S3 artifacts across self-hosted runners")
     if "aws CLI is required for ${TRACK} artifact upload" not in workflow:
-        raise AssertionError("non-dev artifact upload must fail clearly when aws CLI is missing")
+        raise AssertionError("artifact upload must fail clearly when aws CLI is missing")
     if "always() &&" not in workflow or "needs.build.result == 'success'" not in workflow:
         raise AssertionError("deploy must evaluate its explicit gates even when optional E2Es are skipped")
     for job in ("e2e-core-local", "e2e-core-party", "e2e-ws"):

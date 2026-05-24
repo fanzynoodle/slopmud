@@ -126,6 +126,10 @@ resource "aws_key_pair" "deploy" {
   key_name_prefix = "${var.name_prefix}-"
   public_key      = file(var.ssh_public_key_path)
 
+  lifecycle {
+    prevent_destroy = true
+  }
+
   tags = local.tags
 }
 
@@ -314,6 +318,31 @@ resource "aws_iam_role_policy_attachment" "gateway_assets" {
   policy_arn = aws_iam_policy.gateway_assets.arn
 }
 
+data "aws_iam_policy_document" "gateway_asset_publish" {
+  statement {
+    sid    = "PublishCiArtifacts"
+    effect = "Allow"
+    actions = [
+      "s3:PutObject",
+      "s3:AbortMultipartUpload",
+      "s3:ListMultipartUploadParts",
+    ]
+    resources = ["arn:aws:s3:::${local.assets_bucket_name}/*"]
+  }
+}
+
+resource "aws_iam_policy" "gateway_asset_publish" {
+  name_prefix = "${var.name_prefix}-assets-publish-"
+  description = "Allow gateway-hosted CI runners to publish release artifacts."
+  policy      = data.aws_iam_policy_document.gateway_asset_publish.json
+  tags        = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "gateway_asset_publish" {
+  role       = aws_iam_role.gateway.name
+  policy_arn = aws_iam_policy.gateway_asset_publish.arn
+}
+
 resource "aws_iam_role_policy_attachment" "raft_assets" {
   role       = aws_iam_role.raft.name
   policy_arn = aws_iam_policy.gateway_assets.arn
@@ -439,6 +468,10 @@ resource "aws_iam_policy" "gateway_ssm_read" {
   description = "Allow gateway to read app secrets from SSM."
   policy      = data.aws_iam_policy_document.gateway_ssm_read[0].json
   tags        = local.tags
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "gateway_ssm_read" {
@@ -623,6 +656,8 @@ resource "aws_instance" "gateway" {
   }
 
   lifecycle {
+    prevent_destroy = true
+
     # The gateway is the stable player-facing endpoint. Node replacement and
     # AMI refreshes happen through the Raft ASGs; do not roll this instance as a
     # side effect of unrelated topology applies.

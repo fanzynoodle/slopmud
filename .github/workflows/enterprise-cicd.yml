@@ -217,18 +217,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for c in gcc git jq make pkg-config just python3 tar; do
+          for c in aws gcc git jq make pkg-config just python3 tar; do
             command -v "$c" >/dev/null 2>&1 || {
               echo "missing build dependency: $c" >&2
               echo "bootstrap the runner once (as admin on the host) using scripts/cicd/bootstrap_runner.sh" >&2
               exit 2
             }
           done
-
-          # Only required for the S3 artifact path; dev track can fall back to local artifacts.
-          command -v aws >/dev/null 2>&1 || {
-            echo "WARN: aws CLI is missing; S3 upload will fail (dev continues, stg/prod requires aws)" >&2
-          }
 
       - name: Rust Toolchain On PATH
         shell: bash
@@ -384,21 +379,11 @@ jobs:
             rc=$?
             set -e
             if [[ $rc -ne 0 ]]; then
-              if [[ "$TRACK" == "dev" ]]; then
-                echo "WARN: S3 upload failed (dev track continues without S3). Apply terraform to create/permit the assets bucket." >&2
-                bucket=""
-                key=""
-              else
-                exit $rc
-              fi
+              exit $rc
             fi
           else
-            if [[ "$TRACK" == "dev" ]]; then
-              echo "WARN: aws CLI is missing; dev track continues with the local artifact." >&2
-            else
-              echo "ERROR: aws CLI is required for ${TRACK} artifact upload." >&2
-              exit 2
-            fi
+            echo "ERROR: aws CLI is required for ${TRACK} artifact upload." >&2
+            exit 2
           fi
 
           echo "bucket=$bucket" >> "$GITHUB_OUTPUT"
