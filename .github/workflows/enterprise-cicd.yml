@@ -721,12 +721,29 @@ jobs:
             *) echo "unknown deploy env: $DEPLOY_ENV" >&2; exit 2 ;;
           esac
 
-          python3 ./scripts/cicd/smoke_telnet.py --host 127.0.0.1 --port "$port"
+          smoke_telnet_with_retry() {
+            local host="$1"
+            local port="$2"
+            local attempts="${3:-10}"
+            local sleep_s="${4:-1}"
+            local attempt
+            for attempt in $(seq 1 "$attempts"); do
+              if python3 ./scripts/cicd/smoke_telnet.py --host "$host" --port "$port" --timeout-s 10; then
+                return 0
+              fi
+              if [[ "$attempt" == "$attempts" ]]; then
+                return 1
+              fi
+              sleep "$sleep_s"
+            done
+          }
+
+          smoke_telnet_with_retry 127.0.0.1 "$port" 3 1
 
           if [[ "$DEPLOY_ENV" == "dev" ]]; then
             public_host="${SLOPMUD_PUBLIC_SMOKE_HOST:-dev-mud.slopmud.com}"
             public_port="${SLOPMUD_PUBLIC_SMOKE_PORT:-4000}"
-            python3 ./scripts/cicd/smoke_telnet.py --host "$public_host" --port "$public_port" --timeout-s 10
+            smoke_telnet_with_retry "$public_host" "$public_port" 15 1
             echo "::notice::deploy_public_smoke=${public_host}:${public_port}"
             if [[ "${ASSET_READY_EPOCH:-}" =~ ^[0-9]+$ ]]; then
               public_smoke_after_asset_ready_s=$(( $(date +%s) - ASSET_READY_EPOCH ))
