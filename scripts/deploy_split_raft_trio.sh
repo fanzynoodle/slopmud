@@ -50,6 +50,8 @@ Optional env:
   SLOPMUD_NODE_PORT_WAIT_SLEEP_S default 0.05 in fast mode, 0.25 otherwise
   SLOPMUD_SKIP_SYSTEMD_STATUS default 1 in fast mode, 0 otherwise
   SLOPMUD_SSH_CONNECT_TIMEOUT_S default 10; bounds gateway/jump SSH handshakes
+  SLOPMUD_SSH_RETRY_ATTEMPTS default 3; retries idempotent SSH/SCP deploy transfers
+  SLOPMUD_SSH_RETRY_SLEEP_S default 1; sleep between transfer retries
 EOF
 }
 
@@ -155,6 +157,12 @@ if ! [[ "$ssh_connect_timeout_s" =~ ^[0-9]+$ ]] || [[ "$ssh_connect_timeout_s" =
   echo "ERROR: SLOPMUD_SSH_CONNECT_TIMEOUT_S must be a positive integer" >&2
   exit 2
 fi
+ssh_retry_attempts="${SLOPMUD_SSH_RETRY_ATTEMPTS:-3}"
+if ! [[ "$ssh_retry_attempts" =~ ^[0-9]+$ ]] || [[ "$ssh_retry_attempts" == "0" ]]; then
+  echo "ERROR: SLOPMUD_SSH_RETRY_ATTEMPTS must be a positive integer" >&2
+  exit 2
+fi
+ssh_retry_sleep_s="${SLOPMUD_SSH_RETRY_SLEEP_S:-1}"
 
 now_ms() {
   date +%s%3N
@@ -600,6 +608,40 @@ if [[ "$ssh_multiplex" == "1" ]]; then
   gateway_ssh_opts+=(-o ControlMaster=auto -o ControlPersist=20s -o "ControlPath=${ssh_control_dir}/gateway-%C")
 fi
 
+retry_deploy_command() {
+  local label="$1"
+  shift
+  local attempt rc
+  attempt=1
+  while true; do
+    if "$@"; then
+      return 0
+    fi
+    rc="$?"
+    if (( attempt >= ssh_retry_attempts )); then
+      echo "ERROR: ${label} failed after ${attempt} attempts (rc=${rc})" >&2
+      return "$rc"
+    fi
+    echo "WARN: ${label} failed attempt ${attempt}/${ssh_retry_attempts} (rc=${rc}); retrying" >&2
+    sleep "$ssh_retry_sleep_s"
+    attempt=$((attempt + 1))
+  done
+}
+
+retry_ssh() {
+  local label="$1"
+  local target="$2"
+  shift 2
+  retry_deploy_command "$label" ssh "${ssh_opts[@]}" "$target" "$@"
+}
+
+retry_scp() {
+  local label="$1"
+  local src="$2"
+  local dest="$3"
+  retry_deploy_command "$label" scp "${scp_opts[@]}" "$src" "$dest"
+}
+
 remote_bin_dir="$(dirname "$SHARD_REMOTE_BIN")"
 release_id="${SLOPMUD_RELEASE_ID:-$(git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)}"
 if ! [[ "$release_id" =~ ^[A-Za-z0-9._-]+$ ]]; then
@@ -687,7 +729,7 @@ stage_release_from_s3_node() {
   local uri_b64
   uri_b64="$(printf '%s' "$release_s3_uri" | base64 | tr -d '\n')"
   echo "Pulling shard_01 from S3 on ${node_id} (${host}) -> ${remote_release_bin}"
-  ssh "${ssh_opts[@]}" "$target" "\
+  retry_ssh "pull shard_01 from S3 on ${node_id}" "$target" "\
     set -euo pipefail; \
     release_uri=\$(printf %s '${uri_b64}' | base64 -d); \
     if ! id -u slopmud >/dev/null 2>&1; then sudo useradd --system --home '${REMOTE_ROOT}' --create-home --shell /usr/sbin/nologin slopmud; fi; \
@@ -728,7 +770,7 @@ stage_helper_from_s3_node() {
   local uri_b64
   uri_b64="$(printf '%s' "$uri" | base64 | tr -d '\n')"
   echo "Pulling ${label} from S3 on ${node_ids[$i]} (${node_hosts[$i]}) -> ${remote_path}"
-  ssh_node "$i" "\
+  retry_ssh "pull ${label} from S3 on ${node_ids[$i]}" "${raft_ssh_user}@${node_hosts[$i]}" "\
     set -euo pipefail; \
     helper_uri=\$(printf %s '${uri_b64}' | base64 -d); \
     if ! command -v aws >/dev/null 2>&1; then echo 'aws CLI is required for S3 helper deploys' >&2; exit 1; fi; \
@@ -922,7 +964,7 @@ WantedBy=multi-user.target
 EOF
 
   echo "Provisioning ${node_id} (${host})"
-  ssh "${ssh_opts[@]}" "$target" "\
+  retry_ssh "provision ${node_id}" "$target" "\
     set -euo pipefail; \
     if ! id -u slopmud >/dev/null 2>&1; then sudo useradd --system --home '${REMOTE_ROOT}' --create-home --shell /usr/sbin/nologin slopmud; fi; \
     sudo mkdir -p '${REMOTE_ROOT}' '${remote_bin_dir}' '${release_dir}' '${REMOTE_ROOT}/var'; \
@@ -933,16 +975,16 @@ EOF
     echo "Uploading wal restore helper + installing adminctl on ${node_id} (${host})"
     if [[ -n "$adminctl_s3_uri" ]]; then
       stage_helper_from_s3_node "$i" "$adminctl_s3_uri" "$adminctl_sha256" "slopmud_adminctl" "$remote_adminctl_bin"
-      scp "${scp_opts[@]}" "$wal_restore_helper_src" "${target}:/tmp/slopmud-wal-restore"
-      ssh "${ssh_opts[@]}" "$target" "\
+      retry_scp "upload wal restore helper to ${node_id}" "$wal_restore_helper_src" "${target}:/tmp/slopmud-wal-restore"
+      retry_ssh "install wal restore helper on ${node_id}" "$target" "\
         set -euo pipefail; \
         sudo install -m 0755 -o root -g root /tmp/slopmud-wal-restore /usr/local/bin/slopmud-wal-restore; \
         sudo rm -f /tmp/slopmud-wal-restore \
       "
     else
-      scp "${scp_opts[@]}" "$adminctl_src" "${target}:/tmp/slopmud_adminctl.${release_id}"
-      scp "${scp_opts[@]}" "$wal_restore_helper_src" "${target}:/tmp/slopmud-wal-restore"
-      ssh "${ssh_opts[@]}" "$target" "\
+      retry_scp "upload adminctl to ${node_id}" "$adminctl_src" "${target}:/tmp/slopmud_adminctl.${release_id}"
+      retry_scp "upload wal restore helper to ${node_id}" "$wal_restore_helper_src" "${target}:/tmp/slopmud-wal-restore"
+      retry_ssh "install wal restore helper on ${node_id}" "$target" "\
         set -euo pipefail; \
         sudo install -m 0755 -o root -g root '/tmp/slopmud_adminctl.${release_id}' '${remote_adminctl_bin}'; \
         sudo install -m 0755 -o root -g root /tmp/slopmud-wal-restore /usr/local/bin/slopmud-wal-restore; \
@@ -954,15 +996,15 @@ EOF
   if [[ "$walbackupd_enabled" == "1" ]]; then
     if [[ -n "$walbackupd_s3_uri" ]]; then
       stage_helper_from_s3_node "$i" "$walbackupd_s3_uri" "$walbackupd_sha256" "slopmud_walbackupd" "$remote_walbackupd_bin"
-      ssh "${ssh_opts[@]}" "$target" "\
+      retry_ssh "activate walbackupd on ${node_id}" "$target" "\
         set -euo pipefail; \
         sudo ln -sfn '${remote_walbackupd_bin}' '${remote_bin_dir}/slopmud_walbackupd.next'; \
         sudo mv -Tf '${remote_bin_dir}/slopmud_walbackupd.next' '${remote_bin_dir}/slopmud_walbackupd' \
       "
     else
       echo "Uploading slopmud_walbackupd to ${node_id} (${host})"
-      scp "${scp_opts[@]}" "$walbackupd_src" "${target}:/tmp/slopmud_walbackupd.${release_id}"
-      ssh "${ssh_opts[@]}" "$target" "\
+      retry_scp "upload walbackupd to ${node_id}" "$walbackupd_src" "${target}:/tmp/slopmud_walbackupd.${release_id}"
+      retry_ssh "install walbackupd on ${node_id}" "$target" "\
         set -euo pipefail; \
         sudo install -m 0755 -o root -g root '/tmp/slopmud_walbackupd.${release_id}' '${remote_walbackupd_bin}'; \
         sudo ln -sfn '${remote_walbackupd_bin}' '${remote_bin_dir}/slopmud_walbackupd.next'; \
@@ -976,8 +1018,8 @@ EOF
     echo "Using S3-prefetched shard_01 on ${node_id} (${host}) at ${remote_release_bin}"
   elif [[ "${SLOPMUD_ATOMIC_BIN_SWAP:-1}" == "1" ]]; then
     echo "Uploading shard_01 -> ${target}:${remote_release_bin}"
-    scp "${scp_opts[@]}" "$bin_src" "${target}:/tmp/shard_01.${release_id}"
-    ssh "${ssh_opts[@]}" "$target" "\
+    retry_scp "upload shard_01 to ${node_id}" "$bin_src" "${target}:/tmp/shard_01.${release_id}"
+    retry_ssh "install shard_01 on ${node_id}" "$target" "\
       set -euo pipefail; \
       sudo install -m 0755 -o root -g root '/tmp/shard_01.${release_id}' '${remote_release_bin}'; \
       sudo ln -sfn '${remote_release_bin}' '${SHARD_REMOTE_BIN}.next'; \
@@ -986,8 +1028,8 @@ EOF
     "
   else
     echo "Uploading shard_01 -> ${target}:${SHARD_REMOTE_BIN}"
-    scp "${scp_opts[@]}" "$bin_src" "${target}:/tmp/shard_01"
-    ssh "${ssh_opts[@]}" "$target" "\
+    retry_scp "upload shard_01 to ${node_id}" "$bin_src" "${target}:/tmp/shard_01"
+    retry_ssh "install shard_01 on ${node_id}" "$target" "\
       set -euo pipefail; \
       sudo install -m 0755 -o root -g root /tmp/shard_01 '${SHARD_REMOTE_BIN}'; \
       sudo rm -f /tmp/shard_01 \
@@ -995,8 +1037,8 @@ EOF
   fi
 
   echo "Installing ${unit_name}.service"
-  scp "${scp_opts[@]}" "$tmp_unit" "${target}:/tmp/${unit_name}.service"
-  ssh "${ssh_opts[@]}" "$target" "\
+  retry_scp "upload ${unit_name}.service to ${node_id}" "$tmp_unit" "${target}:/tmp/${unit_name}.service"
+  retry_ssh "install ${unit_name}.service on ${node_id}" "$target" "\
     set -euo pipefail; \
     sudo mv '/tmp/${unit_name}.service' '/etc/systemd/system/${unit_name}.service'; \
     sudo systemctl daemon-reload; \
