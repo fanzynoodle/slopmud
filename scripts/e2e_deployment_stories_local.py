@@ -874,6 +874,8 @@ def test_cicd_clean_checkout_asset_contract() -> None:
         raise AssertionError("CI deploy must fail when the shard service fails after restart")
     if "deploy_split_raft_trio_from_asset.sh" not in workflow:
         raise AssertionError("dev CI deploy must use the split Raft artifact deploy wrapper")
+    if 'terraform -chdir="$tf_dir" init -input=false -reconfigure' not in workflow:
+        raise AssertionError("dev CI deploy must initialize Terraform before DNS reconciliation")
     if "reconcile_raft_dns.sh --terraform-dir" not in workflow:
         raise AssertionError("dev CI deploy must refresh stable Raft DNS before using the split env")
     if 'if [[ "$DEPLOY_ENV" == "dev" ]]; then' not in workflow:

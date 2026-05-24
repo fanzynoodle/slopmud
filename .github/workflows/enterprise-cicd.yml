@@ -692,6 +692,13 @@ jobs:
             fi
             tf_dir="${SLOPMUD_DEV_RAFT_TERRAFORM_DIR:-infra/terraform/single-az-raft-us-east-1}"
             if [[ -d "$tf_dir" ]]; then
+              tf_account_id="$(aws sts get-caller-identity --query Account --output text)"
+              tf_backend_bucket="${SLOPMUD_TFSTATE_BUCKET:-tfstate-${tf_account_id}-${AWS_REGION}-slopmud}"
+              tf_backend_key="${SLOPMUD_DEV_RAFT_TFSTATE_KEY:-single-az-raft-us-east-1/terraform.tfstate}"
+              terraform -chdir="$tf_dir" init -input=false -reconfigure \
+                -backend-config="bucket=${tf_backend_bucket}" \
+                -backend-config="key=${tf_backend_key}" \
+                -backend-config="region=${AWS_REGION}"
               ./scripts/cicd/reconcile_raft_dns.sh --terraform-dir "$tf_dir"
             fi
             export SLOPMUD_FAST_ROLLING_RESTART="${SLOPMUD_FAST_ROLLING_RESTART:-1}"
