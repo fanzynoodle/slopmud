@@ -8776,6 +8776,11 @@ async fn handle_broker(
                     world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
                     continue;
                 }
+                if lc == "shrug" {
+                    let emote = room_emote_noarg(&p.name, "shrugs");
+                    world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
+                    continue;
+                }
                 if lc == "wink" {
                     let emote = room_emote_noarg(&p.name, "winks");
                     world.broadcast_room(&mut fw, &p.room_id, &emote).await?;
@@ -11546,6 +11551,7 @@ nod\r\n\
 bow\r\n\
 laugh\r\n\
 sigh\r\n\
+shrug\r\n\
 wink\r\n\
 salute\r\n\
 wave\r\n\
@@ -13268,6 +13274,7 @@ mod tests {
         assert_eq!(room_emote_noarg("Alice", "bows"), "* Alice bows");
         assert_eq!(room_emote_noarg("Alice", "laughs"), "* Alice laughs");
         assert_eq!(room_emote_noarg("Alice", "sighs"), "* Alice sighs");
+        assert_eq!(room_emote_noarg("Alice", "shrugs"), "* Alice shrugs");
         assert_eq!(room_emote_noarg("Alice", "waves"), "* Alice waves");
         assert_eq!(room_emote_noarg("Alice", "claps"), "* Alice claps");
         assert_eq!(room_emote_noarg("Alice", "cheers"), "* Alice cheers");
